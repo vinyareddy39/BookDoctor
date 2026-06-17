@@ -46,9 +46,14 @@ export const getAppointments = async (req, res) => {
 // UPDATE APPOINTMENT STATUS (doctor or admin)
 export const updateAppointment = async (req, res) => {
   try {
+    const updateData = { ...req.body };
+    // Auto-mark payment as paid when appointment is completed
+    if (updateData.status === "completed") {
+      updateData.paymentStatus = "paid";
+    }
     const appointment = await Appointment.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       { new: true }
     );
     if (!appointment) return req.http.notFound("Appointment not found");

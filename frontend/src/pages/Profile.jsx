@@ -35,7 +35,7 @@ export default function Profile() {
     setError("");
     setLoading(true);
     try {
-      const res = await API.put("/user/profile", { name, phone });
+      const res = await API.put("/users/profile", { name, phone });
       const updatedUser = res.data?.data || res.data;
       if (updatedUser) {
         setSuccess("Profile updated successfully!");

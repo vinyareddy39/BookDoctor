@@ -110,7 +110,11 @@ export default function DoctorDashboard() {
     try {
       await API.put(`/appointments/${id}`, { status });
       setAppts((prev) =>
-        prev.map((a) => (a._id === id ? { ...a, status } : a))
+        prev.map((a) =>
+          a._id === id
+            ? { ...a, status, paymentStatus: status === "completed" ? "paid" : a.paymentStatus }
+            : a
+        )
       );
     } catch (err) {
       console.error(err);
@@ -219,47 +223,69 @@ export default function DoctorDashboard() {
                   day: "numeric", month: "short", year: "numeric",
                 });
                 return (
-                  <div key={a._id} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-primary-100 text-primary-600 flex items-center justify-center text-xl font-bold flex-shrink-0">
-                        {patient?.name?.charAt(0) || "P"}
+                  <div key={a._id} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-primary-100 text-primary-600 flex items-center justify-center text-xl font-bold flex-shrink-0">
+                          {patient?.name?.charAt(0) || "P"}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800">{patient?.name || "Patient"}</p>
+                          <p className="text-sm text-slate-500">{patient?.email}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">{date} · {a.appointmentTime}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-bold text-slate-800">{patient?.name || "Patient"}</p>
-                        <p className="text-sm text-slate-500">{patient?.email}</p>
-                        <p className="text-xs text-slate-400 mt-0.5">{date} · {a.appointmentTime}</p>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span className="text-sm font-bold text-slate-700">₹{a.amount}</span>
+                        <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${STATUS_COLORS[a.status]}`}>
+                          {a.status}
+                        </span>
+                        {a.paymentStatus === "paid" && (
+                          <span className="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700 border border-green-200">
+                            ✓ Paid
+                          </span>
+                        )}
+                        {a.status === "pending" && (
+                          <>
+                            <button
+                              onClick={() => updateStatus(a._id, "confirmed")}
+                              className="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg font-semibold transition-all"
+                            >
+                              ✓ Accept
+                            </button>
+                            <button
+                              onClick={() => updateStatus(a._id, "cancelled")}
+                              className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg font-semibold transition-all"
+                            >
+                              ✗ Cancel
+                            </button>
+                          </>
+                        )}
+                        {a.status === "confirmed" && (
+                          <button
+                            onClick={() => updateStatus(a._id, "completed")}
+                            className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold transition-all"
+                          >
+                            ✓ Mark Complete
+                          </button>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <span className="text-sm font-bold text-slate-700">₹{a.amount}</span>
-                      <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${STATUS_COLORS[a.status]}`}>
-                        {a.status}
-                      </span>
-                      {a.status === "pending" && (
-                        <>
-                          <button
-                            onClick={() => updateStatus(a._id, "confirmed")}
-                            className="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg font-semibold transition-all"
-                          >
-                            ✓ Accept
-                          </button>
-                          <button
-                            onClick={() => updateStatus(a._id, "cancelled")}
-                            className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg font-semibold transition-all"
-                          >
-                            ✗ Cancel
-                          </button>
-                        </>
-                      )}
-                      {a.status === "confirmed" && (
-                        <button
-                          onClick={() => updateStatus(a._id, "completed")}
-                          className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold transition-all"
-                        >
-                          ✓ Mark Complete
-                        </button>
-                      )}
-                    </div>
+                    {/* Patient Feedback (read-only for doctor) */}
+                    {a.status === "completed" && a.rating && (
+                      <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+                        <p className="text-xs font-semibold text-amber-700 mb-1">Patient Feedback</p>
+                        <div className="flex items-center gap-1 mb-1">
+                          {[...Array(5)].map((_, i) => (
+                            <svg key={i} className={`w-4 h-4 ${i < a.rating ? "text-amber-400 fill-current" : "text-slate-200 stroke-current"}`} viewBox="0 0 24 24">
+                              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                            </svg>
+                          ))}
+                          <span className="text-xs text-amber-700 font-semibold ml-1">{a.rating}/5</span>
+                        </div>
+                        {a.review && <p className="text-xs text-slate-600 italic">"{a.review}"</p>}
+                      </div>
+                    )}
                   </div>
                 );
               })

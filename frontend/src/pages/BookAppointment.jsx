@@ -1,6 +1,38 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import API from "../services/api";
+
+// Parse "10:00 AM - 5:00 PM" → array of "10:00 AM", "11:00 AM", ...
+function generateTimeSlots(availableTime) {
+  if (!availableTime) return [];
+  const parts = availableTime.split("-").map((s) => s.trim());
+  if (parts.length < 2) return [];
+
+  const parseTime = (str) => {
+    const match = str.match(/(\d+):?(\d*)\s*(AM|PM)/i);
+    if (!match) return null;
+    let h = parseInt(match[1]);
+    const m = parseInt(match[2] || "0");
+    const ampm = match[3].toUpperCase();
+    if (ampm === "PM" && h !== 12) h += 12;
+    if (ampm === "AM" && h === 12) h = 0;
+    return h * 60 + m;
+  };
+
+  const startMin = parseTime(parts[0]);
+  const endMin   = parseTime(parts[1]);
+  if (startMin === null || endMin === null || startMin >= endMin) return [];
+
+  const slots = [];
+  for (let m = startMin; m < endMin; m += 60) {
+    const h24 = Math.floor(m / 60);
+    const min = m % 60;
+    const ampm = h24 < 12 ? "AM" : "PM";
+    const h12  = h24 % 12 === 0 ? 12 : h24 % 12;
+    slots.push(`${h12}:${min.toString().padStart(2, "0")} ${ampm}`);
+  }
+  return slots;
+}
 
 export default function BookAppointment() {
   const { id } = useParams();
@@ -83,6 +115,7 @@ export default function BookAppointment() {
   const availableDays  = doctor.availableDays || [];
   const isAvailable    = doctor.isAvailable !== false;
   const initials       = name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+  const timeSlots      = generateTimeSlots(availableTime);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-primary-50/30 py-10 px-4">
@@ -272,13 +305,30 @@ export default function BookAppointment() {
 
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">Select Time</label>
-                    <input
-                      type="time"
-                      value={time}
-                      onChange={(e) => setTime(e.target.value)}
-                      required
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-slate-50 focus:bg-white transition-all text-sm font-medium"
-                    />
+                    {timeSlots.length > 0 ? (
+                      <select
+                        value={time}
+                        onChange={(e) => setTime(e.target.value)}
+                        required
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                      >
+                        <option value="">-- Select a time slot --</option>
+                        {timeSlots.map((slot) => (
+                          <option key={slot} value={slot}>{slot}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="time"
+                        value={time}
+                        onChange={(e) => setTime(e.target.value)}
+                        required
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                      />
+                    )}
+                    {availableTime && (
+                      <p className="text-xs text-slate-400 mt-1">🕐 Doctor available: {availableTime}</p>
+                    )}
                   </div>
 
                   <button
