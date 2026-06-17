@@ -6,12 +6,12 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 // Routes
-import authRoutes from "./routes/authRoutes.js";
-import doctorRoutes from "./routes/doctorRoutes.js";
-import appointmentRoutes from "./routes/appointmentRoutes.js";
-import userRoutes from "./routes/userRoutes.js";
-import adminRoutes from "./routes/adminRoutes.js";
-import paymentRoutes from "./routes/paymentRoutes.js";
+import authRoutes from "./routes/authroutes.js";
+import doctorRoutes from "./routes/doctorroutes.js";
+import appointmentRoutes from "./routes/appointmentroutes.js";
+import userRoutes from "./routes/userroutes.js";
+import adminRoutes from "./routes/adminroutes.js";
+import paymentRoutes from "./routes/paymentroutes.js";
 
 // Middleware
 import {
