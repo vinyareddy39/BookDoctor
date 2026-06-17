@@ -54,32 +54,32 @@ git clone https://github.com/vinyareddy39/BookDoctor.git
 cd BookDoctor
 ```
 
-### 2. Backend Setup
+### 2. Server Setup
 ```bash
-cd backend
+cd server
 npm install
 ```
-Create a `.env` file in the `backend/` folder:
+Create a `.env` file in the `server/` folder:
 ```env
 MONGO_URI=mongodb://localhost:27017/bookdoctor
 JWT_SECRET=your_jwt_secret_here
 PORT=5000
 ```
-Start the backend:
+Start the server:
 ```bash
 npm start
 ```
 
-### 3. Frontend Setup
+### 3. Client Setup
 ```bash
-cd frontend
+cd client
 npm install
 ```
-Create a `.env` file in the `frontend/` folder:
+Create a `.env` file in the `client/` folder:
 ```env
 VITE_API_URL=http://localhost:5000/api
 ```
-Start the frontend:
+Start the client:
 ```bash
 npm run dev
 ```
@@ -90,13 +90,13 @@ npm run dev
 
 ```
 BookDoctor/
-├── backend/
+├── server/
 │   ├── controllers/     # Auth, Doctor, Appointment, User controllers
-│   ├── middleware/       # Auth guard, response helpers
+│   ├── middleware/      # Auth guard, response helpers
 │   ├── models/          # User, Doctor, Appointment schemas
 │   ├── routes/          # Express route files
 │   └── server.js        # Entry point
-└── frontend/
+└── client/
     └── src/
         ├── components/  # Navbar, AppointmentCard, DoctorCard, etc.
         ├── context/     # AuthContext (JWT decode, role helpers)
@@ -112,8 +112,8 @@ BookDoctor/
 
 | Service | Platform |
 |---------|----------|
-| Frontend | [Vercel](https://vercel.com) — Root directory: `frontend` |
-| Backend  | [Render](https://render.com) — Start: `node server.js` |
+| Client   | [Vercel](https://vercel.com) — Root directory: `client` |
+| Server   | [Render](https://render.com) — Start: `node server.js` |
 | Database | [MongoDB Atlas](https://mongodb.com/cloud/atlas) |
 
 **Environment variables required on Render:**
@@ -131,3 +131,4 @@ VITE_API_URL=https://bookdoctor-9ns2.onrender.com
 
 ## 📝 License
 MIT
+
