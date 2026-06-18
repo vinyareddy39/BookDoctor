@@ -121,16 +121,23 @@ export default function BookAppointment() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-primary-50/30 py-10 px-4">
       <div className="max-w-5xl mx-auto">
 
-        {/* Back Button */}
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-slate-500 hover:text-primary-600 font-medium text-sm mb-6 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to Doctors
-        </button>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          {/* Back Button */}
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 text-slate-500 hover:text-primary-600 font-medium text-sm transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Doctors
+          </button>
+          
+          {/* Contact Support */}
+          <div className="text-xs text-slate-500 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100">
+            Have queries? Email <a href="mailto:finadoctor@gmail.com" className="font-bold text-primary-600 hover:underline">finadoctor@gmail.com</a>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 

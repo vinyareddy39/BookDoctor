@@ -30,7 +30,7 @@ export const getAppointments = async (req, res) => {
     // admin sees all
 
     const appointments = await Appointment.find(query)
-      .populate("patientId", "name email phone")
+      .populate("patientId", "name email phone dob gender bloodGroup emergencyContact profilePicture")
       .populate({
         path: "doctorId",
         populate: { path: "userId", select: "name email" },

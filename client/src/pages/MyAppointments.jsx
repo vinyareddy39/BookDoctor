@@ -25,9 +25,17 @@ export default function MyAppointments() {
       <div className="max-w-4xl mx-auto">
 
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">My Appointments</h1>
-          <p className="text-slate-500 mt-1">View and track all your scheduled appointments</p>
+        <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">My Appointments</h1>
+            <p className="text-slate-500 mt-1">View and track all your scheduled appointments</p>
+          </div>
+          {/* Support Banner */}
+          <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 text-sm">
+            <p className="text-indigo-800">
+              <span className="font-bold">Need help?</span> If you have any queries, please email us at <a href="mailto:finadoctor@gmail.com" className="font-bold underline hover:text-indigo-600 transition-colors">finadoctor@gmail.com</a> and we will respond.
+            </p>
+          </div>
         </div>
 
         {loading ? (

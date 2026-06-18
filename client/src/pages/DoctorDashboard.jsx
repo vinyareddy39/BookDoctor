@@ -288,6 +288,16 @@ export default function DoctorDashboard() {
                         <div>
                           <p className="font-bold text-slate-800 text-base">{patient?.name || "Patient"}</p>
                           <p className="text-xs text-slate-400 mt-0.5">{patient?.email} · {patient?.phone || "No phone"}</p>
+                          
+                          {(patient?.dob || patient?.gender || patient?.bloodGroup || patient?.emergencyContact) && (
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                              {patient?.dob && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded">DOB: {new Date(patient.dob).toLocaleDateString()}</span>}
+                              {patient?.gender && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-pink-50 text-pink-600 rounded capitalize">{patient.gender}</span>}
+                              {patient?.bloodGroup && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-red-50 text-red-600 rounded">Blood: {patient.bloodGroup}</span>}
+                              {patient?.emergencyContact && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded">Emergency: {patient.emergencyContact}</span>}
+                            </div>
+                          )}
+
                           <div className="flex items-center gap-2 mt-2">
                             <span className="text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
                               📅 {date}
@@ -497,6 +507,26 @@ export default function DoctorDashboard() {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Availability Toggle inside Settings */}
+              <div className="sm:col-span-2 bg-slate-50 border border-slate-100 p-5 rounded-2xl flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Currently Accepting Appointments</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Turn this off if you are on leave or fully booked.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggle}
+                  disabled={toggling}
+                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all focus:outline-none ${
+                    profile?.isAvailable ? "bg-emerald-500" : "bg-slate-300"
+                  }`}
+                >
+                  <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform ${
+                    profile?.isAvailable ? "translate-x-7" : "translate-x-1"
+                  }`}></span>
+                </button>
               </div>
 
               {/* Clinic Name */}
