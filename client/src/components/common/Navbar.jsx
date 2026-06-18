@@ -37,7 +37,6 @@ export default function Navbar() {
           {isDoctor && (
             <>
               <Link to="/doctor/dashboard" className="hover:text-secondary-600 transition-colors">My Dashboard</Link>
-              <Link to="/appointments" className="hover:text-secondary-600 transition-colors">Appointments</Link>
             </>
           )}
 
@@ -104,7 +103,6 @@ export default function Navbar() {
           </>}
           {isDoctor && <>
             <Link to="/doctor/dashboard" onClick={() => setMenuOpen(false)} className="block py-2 text-slate-700 font-medium hover:text-secondary-600">My Dashboard</Link>
-            <Link to="/appointments" onClick={() => setMenuOpen(false)} className="block py-2 text-slate-700 font-medium hover:text-secondary-600">Appointments</Link>
           </>}
           {!isLoggedIn && <Link to="/doctors" onClick={() => setMenuOpen(false)} className="block py-2 text-slate-700 font-medium hover:text-primary-600">Doctors</Link>}
           {isLoggedIn

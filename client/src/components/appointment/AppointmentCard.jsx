@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import API from "../../services/api";
 
 const STATUS_CONFIG = {
@@ -59,10 +60,10 @@ export default function AppointmentCard({ appointment }) {
           <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-lg font-extrabold text-primary-600 shadow-sm flex-shrink-0">
             {initials}
           </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="font-extrabold text-slate-800 truncate">Dr. {doctorName}</h4>
+          <Link to={`/book-appointment/${doc._id}`} className="flex-1 min-w-0 hover:opacity-80 transition-opacity">
+            <h4 className="font-extrabold text-slate-800 truncate hover:text-primary-600 transition-colors">Dr. {doctorName}</h4>
             <p className="text-sm text-secondary-600 font-medium">{specialization}</p>
-          </div>
+          </Link>
           {/* Status Badge */}
           <span className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border ${sc.bg} ${sc.text} ${sc.border} flex-shrink-0`}>
             <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`}></span>

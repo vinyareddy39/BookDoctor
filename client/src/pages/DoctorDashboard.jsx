@@ -214,12 +214,12 @@ export default function DoctorDashboard() {
             <button
               onClick={handleToggle}
               disabled={toggling}
-              className={`relative inline-flex h-7 w-13 items-center rounded-full transition-all focus:outline-none ${
-                profile?.isAvailable ? "bg-emerald-500" : "bg-slate-300"
+              className={`relative inline-flex items-center transition-colors focus:outline-none w-[50px] h-[26px] rounded-[20px] ${
+                profile?.isAvailable ? "bg-[#22c55e]" : "bg-[#e5e7eb]"
               }`}
             >
-              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform ${
-                profile?.isAvailable ? "translate-x-7" : "translate-x-1"
+              <span className={`inline-block bg-white rounded-[20px] shadow-sm transform transition-transform duration-200 ease-in-out w-[22px] h-[22px] ${
+                profile?.isAvailable ? "translate-x-[26px]" : "translate-x-[2px]"
               }`}></span>
             </button>
             <span className={`text-xs font-bold ${profile?.isAvailable ? "text-emerald-600 animate-pulse" : "text-slate-400"}`}>
@@ -519,12 +519,12 @@ export default function DoctorDashboard() {
                   type="button"
                   onClick={handleToggle}
                   disabled={toggling}
-                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all focus:outline-none ${
-                    profile?.isAvailable ? "bg-emerald-500" : "bg-slate-300"
+                  className={`relative inline-flex items-center transition-colors focus:outline-none w-[50px] h-[26px] rounded-[20px] ${
+                    profile?.isAvailable ? "bg-[#22c55e]" : "bg-[#e5e7eb]"
                   }`}
                 >
-                  <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform ${
-                    profile?.isAvailable ? "translate-x-7" : "translate-x-1"
+                  <span className={`inline-block bg-white rounded-[20px] shadow-sm transform transition-transform duration-200 ease-in-out w-[22px] h-[22px] ${
+                    profile?.isAvailable ? "translate-x-[26px]" : "translate-x-[2px]"
                   }`}></span>
                 </button>
               </div>

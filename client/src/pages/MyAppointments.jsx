@@ -33,7 +33,7 @@ export default function MyAppointments() {
           {/* Support Banner */}
           <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 text-sm">
             <p className="text-indigo-800">
-              <span className="font-bold">Need help?</span> If you have any queries, please email us at <a href="mailto:finadoctor@gmail.com" className="font-bold underline hover:text-indigo-600 transition-colors">finadoctor@gmail.com</a> and we will respond.
+              <span className="font-bold">Need help?</span> If you have any queries, please email us at <a href="mailto:findoctor@gmail.com" className="font-bold underline hover:text-indigo-600 transition-colors">findoctor@gmail.com</a> and we will respond.
             </p>
           </div>
         </div>

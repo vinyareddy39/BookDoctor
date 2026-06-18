@@ -135,7 +135,7 @@ export default function BookAppointment() {
           
           {/* Contact Support */}
           <div className="text-xs text-slate-500 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100">
-            Have queries? Email <a href="mailto:finadoctor@gmail.com" className="font-bold text-primary-600 hover:underline">finadoctor@gmail.com</a>
+            Have queries? Email <a href="mailto:findoctor@gmail.com" className="font-bold text-primary-600 hover:underline">findoctor@gmail.com</a>
           </div>
         </div>
 
