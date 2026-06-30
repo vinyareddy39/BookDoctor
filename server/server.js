@@ -4,7 +4,6 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import path from "path";
 import { fileURLToPath } from "url";
-import rateLimit from "express-rate-limit";
 
 // Routes
 import authRoutes        from "./routes/authroutes.js";
@@ -17,6 +16,7 @@ import googleRoutes      from "./routes/googleroutes.js";
 
 // Middleware
 import { response, errorHandler } from "./middleware/index.js";
+import { apiLimiter } from "./middleware/rateLimiter.js";
 import { initSocket } from "./socket.js";
 import http from "http";
 
@@ -53,26 +53,8 @@ app.use(cors({
 initSocket(server, allowedOrigins);
 
 // ===============================
-// RATE LIMITING
+// RATE LIMITING — General API
 // ===============================
-// Auth routes: max 15 requests per 15 minutes per IP (brute-force protection)
-export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 15,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: "Too many attempts. Please try again after 15 minutes." },
-});
-
-// General API limiter: 200 requests / 15 min (reasonable for normal use)
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 200,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: "Too many requests. Please slow down." },
-});
-
 app.use("/api", apiLimiter);
 
 // ===============================
