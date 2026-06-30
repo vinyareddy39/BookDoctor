@@ -16,10 +16,13 @@ import paymentRoutes     from "./routes/paymentroutes.js";
 
 // Middleware
 import { response, errorHandler } from "./middleware/index.js";
+import { initSocket } from "./socket.js";
+import http from "http";
 
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -42,6 +45,11 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
+
+// ===============================
+// SOCKET.IO INITIALIZATION
+// ===============================
+initSocket(server, allowedOrigins);
 
 // ===============================
 // RATE LIMITING
@@ -124,6 +132,6 @@ app.use(errorHandler);
 // START SERVER
 // ===============================
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT} [${process.env.NODE_ENV || "development"}]`);
 });

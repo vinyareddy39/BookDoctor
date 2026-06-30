@@ -1,6 +1,7 @@
 import Appointment from "../models/Appointment.js";
 import Doctor from "../models/Doctor.js";
 import { sendBookingConfirmation, sendCancellationEmail } from "../service/emailService.js";
+import { sendNotificationToUser } from "../socket.js";
 
 // BOOK APPOINTMENT (patient only)
 export const bookAppointment = async (req, res, next) => {
@@ -24,8 +25,17 @@ export const bookAppointment = async (req, res, next) => {
         time:         populated.appointmentTime,
         amount:       populated.amount,
       });
+
+      // Emit real-time notification to the Doctor
+      if (populated.doctorId?.userId?._id) {
+        sendNotificationToUser(populated.doctorId.userId._id, {
+          type: "NEW_APPOINTMENT",
+          title: "New Appointment Booked",
+          message: `${populated.patientId?.name || "A patient"} booked a slot on ${populated.appointmentDate} at ${populated.appointmentTime}.`
+        });
+      }
     } catch (emailErr) {
-      console.warn("[Email] Booking confirmation failed:", emailErr.message);
+      console.warn("[Email/Socket] Notification failed:", emailErr.message);
     }
 
     return req.http.created(appointment, "Appointment booked successfully");
@@ -80,7 +90,19 @@ export const updateAppointment = async (req, res, next) => {
       updateData.paymentStatus = "paid";
     }
 
-    const updated = await Appointment.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    const updated = await Appointment.findByIdAndUpdate(req.params.id, updateData, { new: true })
+      .populate("patientId", "name")
+      .populate({ path: "doctorId", populate: { path: "userId", select: "name" } });
+
+    // Emit real-time notification to the Patient if status changed
+    if (updateData.status && updated.patientId) {
+      sendNotificationToUser(updated.patientId._id, {
+        type: "STATUS_UPDATE",
+        title: `Appointment ${updated.status}`,
+        message: `Your appointment with Dr. ${updated.doctorId?.userId?.name || "your doctor"} has been ${updated.status}.`
+      });
+    }
+
     return req.http.ok(updated, "Appointment updated");
   } catch (err) {
     next(err);
@@ -128,8 +150,27 @@ export const cancelAppointment = async (req, res, next) => {
         date:         populated.appointmentDate,
         time:         populated.appointmentTime,
       });
+
+      // Emit real-time notification to the other party
+      if (req.user.role === "patient") {
+        if (populated.doctorId?.userId?._id) {
+          sendNotificationToUser(populated.doctorId.userId._id, {
+            type: "CANCEL_APPOINTMENT",
+            title: "Appointment Cancelled",
+            message: `${populated.patientId?.name || "A patient"} cancelled their appointment on ${populated.appointmentDate}.`
+          });
+        }
+      } else if (req.user.role === "doctor") {
+        if (populated.patientId?._id) {
+          sendNotificationToUser(populated.patientId._id, {
+            type: "CANCEL_APPOINTMENT",
+            title: "Appointment Cancelled",
+            message: `Dr. ${populated.doctorId?.userId?.name || "your doctor"} cancelled your appointment on ${populated.appointmentDate}.`
+          });
+        }
+      }
     } catch (emailErr) {
-      console.warn("[Email] Cancellation email failed:", emailErr.message);
+      console.warn("[Email/Socket] Notification failed:", emailErr.message);
     }
 
     return req.http.ok({ status: "cancelled" }, "Appointment cancelled successfully");
