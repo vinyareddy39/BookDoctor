@@ -20,6 +20,8 @@ const MyAppointments  = lazy(() => import("./pages/MyAppointments.jsx"));
 const DoctorDashboard = lazy(() => import("./pages/DoctorDashboard.jsx"));
 const Profile         = lazy(() => import("./pages/Profile.jsx"));
 const NotFound        = lazy(() => import("./pages/NotFound.jsx"));
+const About           = lazy(() => import("./pages/About.jsx"));
+const Contact         = lazy(() => import("./pages/Contact.jsx"));
 
 // Page loader fallback
 function PageLoader() {
@@ -84,6 +86,8 @@ function App() {
             <Route path="/doctor/login"       element={<DoctorLogin />} />
             <Route path="/doctor/register"    element={<DoctorRegister />} />
             <Route path="/doctors"            element={<Doctors />} />
+            <Route path="/about"             element={<About />} />
+            <Route path="/contact"           element={<Contact />} />
 
             {/* Patient protected */}
             <Route path="/book/:id"             element={<AuthRoute><BookAppointment /></AuthRoute>} />

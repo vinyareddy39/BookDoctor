@@ -3,11 +3,12 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 const NAV_LINKS = [
-  { label: "Home",       to: "/" },
-  { label: "Doctors",    to: "/doctors" },
-  { label: "About",      to: "#about" },
-  { label: "Contact",    to: "#contact" },
+  { label: "Home",    to: "/" },
+  { label: "Doctors", to: "/doctors" },
+  { label: "About",   to: "/about" },
+  { label: "Contact", to: "/contact" },
 ];
+
 
 export default function Navbar() {
   const { isLoggedIn, isDoctor, isPatient, user, logout } = useAuth();
