@@ -118,15 +118,66 @@ export const role = (...allowedRoles) => {
 
 
 // ===============================
-// GLOBAL ERROR HANDLER
+// GLOBAL ERROR HANDLER (production-grade)
 // ===============================
 export const errorHandler = (err, req, res, next) => {
-  console.error("ERROR:", err);
+  // Always log the full error server-side
+  console.error("[ERROR]", err.name, "—", err.message);
 
-  const statusCode = err.statusCode || 500;
+  let statusCode = err.statusCode || 500;
+  let message    = err.message || "Something went wrong";
+
+  // Mongoose bad ObjectId (e.g. /api/doctors/invalid-id)
+  if (err.name === "CastError") {
+    statusCode = 400;
+    message    = `Invalid ${err.path}: ${err.value}`;
+  }
+
+  // Mongoose duplicate key (e.g. duplicate email)
+  if (err.code === 11000) {
+    statusCode = 409;
+    const field = Object.keys(err.keyValue || {})[0] || "field";
+    message    = `${field.charAt(0).toUpperCase() + field.slice(1)} already exists.`;
+  }
+
+  // Mongoose validation errors (e.g. missing required field)
+  if (err.name === "ValidationError") {
+    statusCode = 400;
+    message    = Object.values(err.errors).map((e) => e.message).join(". ");
+  }
+
+  // JWT errors
+  if (err.name === "JsonWebTokenError")  { statusCode = 401; message = "Invalid token. Please log in again."; }
+  if (err.name === "TokenExpiredError")  { statusCode = 401; message = "Your session has expired. Please log in again."; }
+
+  // In production, hide internal 500 messages from the client
+  if (statusCode === 500 && process.env.NODE_ENV === "production") {
+    message = "An internal server error occurred. Please try again later.";
+  }
 
   res.status(statusCode).json({
     success: false,
-    message: err.message || "Something went wrong",
+    message,
+    ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
   });
 };
+
+
+// ===============================
+// VALIDATE REQUEST BODY FIELDS
+// Usage: validate(["field1", "field2"])
+// ===============================
+export const validate = (requiredFields) => (req, res, next) => {
+  const missing = requiredFields.filter(
+    (field) => req.body[field] === undefined || req.body[field] === null || req.body[field] === ""
+  );
+
+  if (missing.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: `Missing required fields: ${missing.join(", ")}`,
+    });
+  }
+
+  next();
+};

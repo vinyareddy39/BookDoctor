@@ -3,57 +3,30 @@ import { useAuth } from "../context/AuthContext";
 import API from "../services/api";
 import toast from "react-hot-toast";
 
-const SPECIALIZATIONS = [
-  "General Physician",
-  "Pediatrician",
-  "Dermatologist",
-  "Cardiologist",
-  "Orthopedic",
-  "Gynecologist",
-  "Neurologist",
-  "Dentist",
-  "Ophthalmologist",
-  "Psychiatrist"
-];
-
-const CITIES = ["Hyderabad", "Mumbai", "Delhi", "Bangalore", "Chennai", "Kolkata", "Pune"];
-
-const STATUS_COLORS = {
-  pending: "bg-amber-50 text-amber-700 border-amber-200",
-  confirmed: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  cancelled: "bg-rose-50 text-rose-700 border-rose-200",
-  completed: "bg-sky-50 text-sky-700 border-sky-200",
-};
-
-const TIME_OPTIONS = [
-  "08:00 AM", "08:30 AM", "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM", "11:00 AM", "11:30 AM",
-  "12:00 PM", "12:30 PM", "01:00 PM", "01:30 PM", "02:00 PM", "02:30 PM", "03:00 PM", "03:30 PM",
-  "04:00 PM", "04:30 PM", "05:00 PM", "05:30 PM", "06:00 PM", "06:30 PM", "07:00 PM", "07:30 PM",
-  "08:00 PM", "08:30 PM", "09:00 PM", "09:30 PM", "10:00 PM", "10:30 PM", "11:00 PM", "11:30 PM"
-];
+// Sub-components (split for maintainability)
+import DashboardStats     from "../components/dashboard/DashboardStats.jsx";
+import AppointmentsList   from "../components/dashboard/AppointmentsList.jsx";
+import ClinicSettingsForm from "../components/dashboard/ClinicSettingsForm.jsx";
 
 export default function DoctorDashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("appointments");
   const [profile, setProfile] = useState(null);
   const [appts, setAppts] = useState([]);
-  
-  // Profile edit forms
+
   const [form, setForm] = useState({
     name: "", phone: "", specialization: "", qualification: "",
     experience: "", consultationFee: "", bio: "", city: "",
     clinicName: "", address: "", mapUrl: "", availableDays: "",
   });
-  
-  // Available time dropdown selectors
+
   const [startTime, setStartTime] = useState("09:00 AM");
   const [endTime, setEndTime] = useState("05:00 PM");
 
-  // Loading/UI states
   const [loadingProfile, setLoadingProfile] = useState(true);
-  const [loadingAppts, setLoadingAppts] = useState(true);
+  const [loadingAppts,   setLoadingAppts]   = useState(true);
   const [toggling, setToggling] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [saving,   setSaving]   = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -65,10 +38,10 @@ export default function DoctorDashboard() {
       const res = await API.get("/doctors/profile/me");
       const doc = res.data.data;
       setProfile(doc);
-      
+
       let parsedStart = "09:00 AM";
       let parsedEnd = "05:00 PM";
-      if (doc.availableTime && doc.availableTime.includes("-")) {
+      if (doc.availableTime?.includes("-")) {
         const parts = doc.availableTime.split("-").map((s) => s.trim());
         if (parts[0]) parsedStart = parts[0];
         if (parts[1]) parsedEnd = parts[1];
@@ -115,10 +88,9 @@ export default function DoctorDashboard() {
     try {
       const res = await API.patch("/doctors/profile/me/toggle");
       setProfile((prev) => ({ ...prev, isAvailable: res.data.data.isAvailable }));
-      toast.success(res.data.data.isAvailable ? "You are now Available!" : "You are now Unavailable!");
+      toast.success(res.data.data.isAvailable ? "You are now Available! 🟢" : "You are now Unavailable!");
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to update availability status.");
+      toast.error("Failed to update availability.");
     } finally {
       setToggling(false);
     }
@@ -130,23 +102,22 @@ export default function DoctorDashboard() {
     try {
       const payload = {
         ...form,
-        availableTime: `${startTime} - ${endTime}`,
+        availableTime:   `${startTime} - ${endTime}`,
         experience:      Number(form.experience),
         consultationFee: Number(form.consultationFee),
         availableDays:   form.availableDays.split(",").map((d) => d.trim()).filter(Boolean),
       };
       const res = await API.put("/doctors/profile/me", payload);
       setProfile(res.data.data);
-      toast.success("Clinic profile settings updated successfully! 🎉");
+      toast.success("Clinic profile updated successfully! 🎉");
     } catch (err) {
-      console.error(err);
       toast.error("Failed to save clinic settings.");
     } finally {
       setSaving(false);
     }
   };
 
-  const updateStatus = async (id, status) => {
+  const handleStatusUpdate = async (id, status) => {
     try {
       await API.put(`/appointments/${id}`, { status });
       setAppts((prev) =>
@@ -156,25 +127,21 @@ export default function DoctorDashboard() {
             : a
         )
       );
-      toast.success(`Appointment status updated to ${status}.`);
+      toast.success(`Appointment ${status}.`);
     } catch (err) {
-      console.error(err);
       toast.error("Failed to update appointment status.");
     }
   };
 
-  const updatePaymentStatus = async (id, currentStatus) => {
+  const handlePaymentUpdate = async (id, currentStatus) => {
     try {
       const nextStatus = currentStatus === "paid" ? "pending" : "paid";
       await API.put(`/appointments/${id}`, { paymentStatus: nextStatus });
       setAppts((prev) =>
-        prev.map((a) =>
-          a._id === id ? { ...a, paymentStatus: nextStatus } : a
-        )
+        prev.map((a) => a._id === id ? { ...a, paymentStatus: nextStatus } : a)
       );
-      toast.success(`Payment status marked as ${nextStatus === "paid" ? "Paid" : "Unpaid"}.`);
+      toast.success(`Payment marked as ${nextStatus === "paid" ? "Paid ✓" : "Unpaid"}.`);
     } catch (err) {
-      console.error("Failed to update payment status", err);
       toast.error("Failed to update payment status.");
     }
   };
@@ -183,26 +150,20 @@ export default function DoctorDashboard() {
     return (
       <div className="min-h-[calc(100vh-140px)] flex items-center justify-center bg-surface">
         <div className="flex flex-col items-center gap-3">
-          <div className="animate-spin w-10 h-10 rounded-full border-4 border-primary-500 border-t-transparent"></div>
+          <div className="animate-spin w-10 h-10 rounded-full border-4 border-primary-500 border-t-transparent" />
           <p className="text-slate-500 font-medium text-sm">Loading your dashboard...</p>
         </div>
       </div>
     );
   }
 
-  const stats = {
-    total:     appts.length,
-    pending:   appts.filter((a) => a.status === "pending").length,
-    confirmed: appts.filter((a) => a.status === "confirmed").length,
-    completed: appts.filter((a) => a.status === "completed").length,
-  };
-
   return (
     <div className="min-h-screen bg-surface pb-16">
-      
-      {/* Header Banner */}
+
+      {/* ── Sticky Dashboard Header ── */}
       <div className="bg-white border-b border-slate-100 shadow-sm sticky top-0 z-10 backdrop-blur-md bg-white/90">
-        <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* Doctor info */}
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 bg-primary-50 border border-primary-100 rounded-2xl flex items-center justify-center text-2xl font-bold text-primary-600 shadow-sm">
               {profile?.userId?.name?.charAt(0) || "D"}
@@ -211,412 +172,76 @@ export default function DoctorDashboard() {
               <h1 className="text-2xl font-black text-slate-800 tracking-tight">
                 Dr. {profile?.userId?.name || user?.name}
               </h1>
-              <p className="text-slate-500 text-sm font-semibold mt-0.5">{profile?.specialization} · {profile?.city}</p>
+              <p className="text-slate-500 text-sm font-semibold mt-0.5">
+                {profile?.specialization} · {profile?.city}
+              </p>
             </div>
           </div>
-          
-          {/* Availability Toggle Switch */}
-          <div className="flex items-center gap-4 bg-slate-50 px-4 py-2.5 rounded-2xl border border-slate-100 shadow-inner">
+
+          {/* Availability Toggle */}
+          <div className="flex items-center gap-3 bg-slate-50 px-4 py-2.5 rounded-2xl border border-slate-100 shadow-inner">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Accepting Appointments:</span>
             <button
               onClick={handleToggle}
               disabled={toggling}
-              className={`relative inline-flex items-center transition-colors focus:outline-none w-[50px] h-[26px] rounded-[20px] ${
-                profile?.isAvailable ? "bg-[#22c55e]" : "bg-[#e5e7eb]"
-              }`}
+              className={`relative inline-flex items-center focus:outline-none w-[50px] h-[26px] rounded-full transition-colors duration-200 ${profile?.isAvailable ? "bg-green-500" : "bg-slate-300"}`}
             >
-              <span className={`inline-block bg-white rounded-[20px] shadow-sm transform transition-transform duration-200 ease-in-out w-[22px] h-[22px] ${
-                profile?.isAvailable ? "translate-x-[26px]" : "translate-x-[2px]"
-              }`}></span>
+              <span className={`inline-block bg-white rounded-full shadow-sm transform transition-transform duration-200 w-[22px] h-[22px] ${profile?.isAvailable ? "translate-x-[26px]" : "translate-x-[2px]"}`} />
             </button>
-            <span className={`text-xs font-bold ${profile?.isAvailable ? "text-emerald-600 animate-pulse" : "text-slate-400"}`}>
+            <span className={`text-xs font-bold ${profile?.isAvailable ? "text-emerald-600" : "text-slate-400"}`}>
               {toggling ? "Saving…" : profile?.isAvailable ? "Available" : "Unavailable"}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="max-w-6xl mx-auto px-6 py-8 grid grid-cols-2 sm:grid-cols-4 gap-5">
-        {[
-          { label: "Total Bookings", value: stats.total, color: "from-slate-700 to-slate-800 border-slate-200" },
-          { label: "Pending Approval", value: stats.pending, color: "from-amber-500 to-amber-600 border-amber-200" },
-          { label: "Confirmed Slots", value: stats.confirmed, color: "from-emerald-500 to-emerald-600 border-emerald-200" },
-          { label: "Completed", value: stats.completed, color: "from-primary-600 to-primary-700 border-primary-200" },
-        ].map((s) => (
-          <div key={s.label} className={`bg-gradient-to-br ${s.color} rounded-3xl p-5 text-white shadow-md hover:shadow-lg transition-shadow border`}>
-            <p className="text-3xl font-black">{s.value}</p>
-            <p className="text-xs opacity-90 font-bold tracking-wide uppercase mt-1.5">{s.label}</p>
-          </div>
-        ))}
-      </div>
+      {/* ── Main Content ── */}
+      <div className="max-w-6xl mx-auto px-6 pt-8">
 
-      {/* Tab Selectors */}
-      <div className="max-w-6xl mx-auto px-6">
+        {/* Stats cards */}
+        <DashboardStats appts={appts} />
+
+        {/* Tab Bar */}
         <div className="flex gap-2 bg-white rounded-xl p-1.5 w-fit border border-slate-200 mb-8 shadow-sm">
           {["appointments", "profile"].map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
-              className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all capitalize ${
+              className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${
                 activeTab === t
                   ? "bg-primary-600 text-white shadow-sm"
                   : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
               }`}
             >
-              {t === "appointments" ? "📋 Appointments" : "⚙️ Clinic & Schedule Settings"}
+              {t === "appointments" ? "📋 Appointments" : "⚙️ Clinic & Schedule"}
             </button>
           ))}
         </div>
 
-        {/* Appointments Tab Content */}
+        {/* Tab content */}
         {activeTab === "appointments" && (
-          <div className="space-y-5">
-            {loadingAppts ? (
-              <div className="text-center py-12 text-slate-400">Loading appointments…</div>
-            ) : appts.length === 0 ? (
-              <div className="card p-16 text-center">
-                <div className="text-7xl mb-4">📭</div>
-                <p className="text-slate-500 font-bold text-sm">No appointments scheduled yet.</p>
-              </div>
-            ) : (
-              appts.map((a) => {
-                const patient = a.patientId;
-                const date = new Date(a.appointmentDate).toLocaleDateString("en-IN", {
-                  day: "numeric", month: "short", year: "numeric",
-                });
-                return (
-                  <div key={a._id} className="card p-6 flex flex-col gap-5 hover:shadow-card-lg transition-shadow duration-300">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center text-xl font-bold border border-primary-100 flex-shrink-0">
-                          {patient?.name?.charAt(0) || "P"}
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-800 text-base">{patient?.name || "Patient"}</p>
-                          <p className="text-xs text-slate-400 mt-0.5">{patient?.email} · {patient?.phone || "No phone"}</p>
-                          
-                          {(patient?.dob || patient?.gender || patient?.bloodGroup || patient?.emergencyContact) && (
-                            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                              {patient?.dob && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-primary-50 text-primary-600 rounded">DOB: {new Date(patient.dob).toLocaleDateString()}</span>}
-                              {patient?.gender && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-pink-50 text-pink-600 rounded capitalize">{patient.gender}</span>}
-                              {patient?.bloodGroup && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-red-50 text-red-600 rounded">Blood: {patient.bloodGroup}</span>}
-                              {patient?.emergencyContact && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded">Emergency: {patient.emergencyContact}</span>}
-                            </div>
-                          )}
-
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className="badge-blue">
-                              📅 {date}
-                            </span>
-                            <span className="badge-blue">
-                              ⏰ {a.appointmentTime}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right Hand Control Badges and Actions */}
-                      <div className="flex items-center gap-4 flex-wrap md:justify-end">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-black text-slate-700">₹{a.amount}</span>
-                          <span className={`text-xs font-bold px-3 py-1 rounded-full border ${STATUS_COLORS[a.status]}`}>
-                            {a.status}
-                          </span>
-                        </div>
-
-                        {/* Interactive Payment Status Switch */}
-                        <div className="flex items-center">
-                          {a.paymentStatus === "paid" ? (
-                            <button
-                              type="button"
-                              onClick={() => updatePaymentStatus(a._id, "paid")}
-                              className="text-xs font-bold px-3 py-1.5 rounded-xl bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors flex items-center gap-1.5"
-                              title="Click to toggle payment to Unpaid"
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                              Paid ✓
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => updatePaymentStatus(a._id, "pending")}
-                              className="text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors flex items-center gap-1.5"
-                              title="Click to toggle payment to Paid"
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                              Unpaid ✗
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Booking Status Controls */}
-                        <div className="flex items-center gap-2">
-                          {a.status === "pending" && (
-                            <>
-                              <button
-                                onClick={() => updateStatus(a._id, "confirmed")}
-                                className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-bold shadow-sm hover:shadow transition-all"
-                              >
-                                Accept
-                              </button>
-                              <button
-                                onClick={() => updateStatus(a._id, "cancelled")}
-                                className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 px-3.5 py-2 rounded-xl font-bold transition-all border border-rose-200/50"
-                              >
-                                Decline
-                              </button>
-                            </>
-                          )}
-                          {a.status === "confirmed" && (
-                            <button
-                              onClick={() => updateStatus(a._id, "completed")}
-                              className="text-xs bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-xl font-bold shadow-sm hover:shadow transition-all"
-                            >
-                              Complete Appointment
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Patient Feedback Section (Display if present) */}
-                    {a.status === "completed" && a.rating && (
-                      <div className="bg-amber-50/50 border border-amber-100 rounded-2xl px-5 py-4 mt-2">
-                        <p className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-2">Patient Feedback</p>
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                          {[...Array(5)].map((_, i) => (
-                            <svg key={i} className={`w-4 h-4 ${i < a.rating ? "text-amber-400 fill-current" : "text-slate-200 stroke-current"}`} viewBox="0 0 24 24">
-                              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
-                            </svg>
-                          ))}
-                          <span className="text-xs text-amber-800 font-bold ml-1">{a.rating}/5 Stars</span>
-                        </div>
-                        {a.review && <p className="text-sm text-slate-600 italic">"{a.review}"</p>}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
+          <AppointmentsList
+            appts={appts}
+            loading={loadingAppts}
+            onStatusUpdate={handleStatusUpdate}
+            onPaymentUpdate={handlePaymentUpdate}
+          />
         )}
 
-        {/* Profile/Clinic Settings Tab */}
         {activeTab === "profile" && (
-          <form onSubmit={handleSave} className="card p-6 sm:p-8 pb-12 mb-12 space-y-8 animate-fade-in-up">
-            <div>
-              <h2 className="text-lg font-black text-slate-800 tracking-tight">Edit Profile & Clinic Info</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Manage your digital clinic settings, available hours, and medical rates.</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2">
-              
-              {/* Doctor Name */}
-              <div>
-                <label className="input-label">Doctor Full Name</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  required
-                  className="input"
-                />
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label className="input-label">Phone Number</label>
-                <input
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                  className="input"
-                />
-              </div>
-
-              {/* Qualification */}
-              <div>
-                <label className="input-label">Qualification</label>
-                <input
-                  type="text"
-                  value={form.qualification}
-                  onChange={(e) => setForm((f) => ({ ...f, qualification: e.target.value }))}
-                  placeholder="E.g. MBBS, MD, DM"
-                  className="input"
-                />
-              </div>
-
-              {/* Experience */}
-              <div>
-                <label className="input-label">Experience (Years)</label>
-                <input
-                  type="number"
-                  value={form.experience}
-                  onChange={(e) => setForm((f) => ({ ...f, experience: e.target.value }))}
-                  className="input"
-                />
-              </div>
-
-              {/* Fee */}
-              <div>
-                <label className="input-label">Consultation Fee (₹)</label>
-                <input
-                  type="number"
-                  value={form.consultationFee}
-                  onChange={(e) => setForm((f) => ({ ...f, consultationFee: e.target.value }))}
-                  className="input"
-                />
-              </div>
-
-              {/* Available Days */}
-              <div>
-                <label className="input-label">Available Days</label>
-                <input
-                  type="text"
-                  value={form.availableDays}
-                  onChange={(e) => setForm((f) => ({ ...f, availableDays: e.target.value }))}
-                  placeholder="Mon, Tue, Wed, Thu, Fri"
-                  className="input"
-                />
-              </div>
-
-              {/* Available Timing range picker dropdowns */}
-              <div className="sm:col-span-2 grid grid-cols-2 gap-4">
-                <div>
-                  <label className="input-label">Available From</label>
-                  <select
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="input cursor-pointer"
-                  >
-                    {TIME_OPTIONS.map((time) => (
-                      <option key={time} value={time}>{time}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="input-label">Available To</label>
-                  <select
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className="input cursor-pointer"
-                  >
-                    {TIME_OPTIONS.map((time) => (
-                      <option key={time} value={time}>{time}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
- 
-              {/* Availability Toggle inside Settings */}
-              <div className="sm:col-span-2 bg-slate-50 border border-slate-100 p-5 rounded-2xl flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800">Currently Accepting Appointments</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Turn this off if you are on leave or fully booked.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleToggle}
-                  disabled={toggling}
-                  className={`relative inline-flex items-center transition-colors focus:outline-none w-[50px] h-[26px] rounded-[20px] ${
-                    profile?.isAvailable ? "bg-[#22c55e]" : "bg-[#e5e7eb]"
-                  }`}
-                >
-                  <span className={`inline-block bg-white rounded-[20px] shadow-sm transform transition-transform duration-200 ease-in-out w-[22px] h-[22px] ${
-                    profile?.isAvailable ? "translate-x-[26px]" : "translate-x-[2px]"
-                  }`}></span>
-                </button>
-              </div>
-
-              {/* Clinic Name */}
-              <div>
-                <label className="input-label">Clinic Name</label>
-                <input
-                  type="text"
-                  value={form.clinicName}
-                  onChange={(e) => setForm((f) => ({ ...f, clinicName: e.target.value }))}
-                  placeholder="E.g. City Health Clinic"
-                  className="input"
-                />
-              </div>
-
-              {/* Specialization */}
-              <div>
-                <label className="input-label">Specialization</label>
-                <select
-                  value={form.specialization}
-                  onChange={(e) => setForm((f) => ({ ...f, specialization: e.target.value }))}
-                  className="input cursor-pointer"
-                >
-                  {SPECIALIZATIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-
-              {/* City */}
-              <div>
-                <label className="input-label">City</label>
-                <select
-                  value={form.city}
-                  onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-                  className="input cursor-pointer"
-                >
-                  {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-
-              {/* Clinic Address */}
-              <div className="sm:col-span-2">
-                <label className="input-label">Clinic Address</label>
-                <textarea
-                  value={form.address}
-                  onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-                  rows={2}
-                  className="input"
-                  placeholder="Full clinic street address"
-                />
-              </div>
-
-              {/* Google Maps Embed URL */}
-              <div className="sm:col-span-2">
-                <label className="input-label">Google Maps Embed URL</label>
-                <input
-                  type="url"
-                  value={form.mapUrl}
-                  onChange={(e) => setForm((f) => ({ ...f, mapUrl: e.target.value }))}
-                  className="input"
-                  placeholder="https://www.google.com/maps/embed?pb=..."
-                />
-              </div>
-
-              {/* Bio */}
-              <div className="sm:col-span-2">
-                <label className="input-label">Bio / About Me</label>
-                <textarea
-                  value={form.bio}
-                  onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
-                  rows={3}
-                  className="input"
-                  placeholder="Describe your medical practice details..."
-                />
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-slate-100 flex justify-end">
-              <button
-                type="submit"
-                disabled={saving}
-                className="btn-primary"
-              >
-                {saving ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Saving settings...
-                  </span>
-                ) : "Save Settings Profile"}
-              </button>
-            </div>
-          </form>
+          <ClinicSettingsForm
+            form={form}
+            setForm={setForm}
+            startTime={startTime}
+            setStartTime={setStartTime}
+            endTime={endTime}
+            setEndTime={setEndTime}
+            profile={profile}
+            onToggle={handleToggle}
+            toggling={toggling}
+            onSave={handleSave}
+            saving={saving}
+          />
         )}
       </div>
     </div>

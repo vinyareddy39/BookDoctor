@@ -1,17 +1,11 @@
 import { useEffect, useState } from "react";
 import API from "../services/api";
 import DoctorList from "../components/doctor/DoctorList.jsx";
+import { SPECIALIZATIONS as CONST_SPECS, CITIES as CONST_CITIES } from "../utils/constants";
 
-const SPECIALIZATIONS = [
-  "All Specialists", "General Physician", "Cardiologist", "Dermatologist",
-  "Neurologist", "Orthopedist", "Pediatrician", "Gynecologist",
-  "Ophthalmologist", "ENT Specialist", "Dentist", "Psychiatrist", "Urologist",
-];
+const SPECIALIZATIONS = ["All Specialists", ...CONST_SPECS];
+const CITIES = ["All Cities", ...CONST_CITIES];
 
-const CITIES = [
-  "All Cities", "Hyderabad", "Bangalore", "Chennai", "Mumbai",
-  "Delhi", "Pune", "Kolkata", "Ahmedabad", "Jaipur", "Lucknow",
-];
 
 function DoctorSkeleton() {
   return (

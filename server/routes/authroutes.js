@@ -4,12 +4,13 @@ import {
   login,
   getProfile,
 } from "../controllers/authController.js";
-import { auth } from "../middleware/index.js";
+import { auth, validate } from "../middleware/index.js";
 
 const router = express.Router();
 
-router.post("/register", register);
-router.post("/login", login);
-router.get("/profile", auth, getProfile);
+// validate() ensures required fields exist before the controller runs
+router.post("/register", validate(["name", "email", "password", "role"]), register);
+router.post("/login",    validate(["email", "password"]), login);
+router.get("/profile",   auth, getProfile);
 
 export default router;
