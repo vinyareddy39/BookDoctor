@@ -54,8 +54,8 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
-// Explicit OPTIONS preflight handler — ensures 204 with CORS headers on all routes
-app.options("*", cors());
+// Explicit OPTIONS preflight handler — regex wildcard required in Express 5+ / path-to-regexp v8+
+app.options(/(.*)/,  cors());
 
 // ===============================
 // SOCKET.IO INITIALIZATION
