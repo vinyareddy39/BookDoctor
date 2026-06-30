@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import API from "../services/api";
+import toast from "react-hot-toast";
 
 const SPECIALIZATIONS = [
   "General Physician",
@@ -53,7 +54,6 @@ export default function DoctorDashboard() {
   const [loadingAppts, setLoadingAppts] = useState(true);
   const [toggling, setToggling] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -66,7 +66,6 @@ export default function DoctorDashboard() {
       const doc = res.data.data;
       setProfile(doc);
       
-      // Parse availableTime e.g. "09:00 AM - 05:00 PM"
       let parsedStart = "09:00 AM";
       let parsedEnd = "05:00 PM";
       if (doc.availableTime && doc.availableTime.includes("-")) {
@@ -93,6 +92,7 @@ export default function DoctorDashboard() {
       });
     } catch (err) {
       console.error("Failed to load doctor profile", err);
+      toast.error("Failed to load doctor profile.");
     } finally {
       setLoadingProfile(false);
     }
@@ -104,6 +104,7 @@ export default function DoctorDashboard() {
       setAppts(res.data.data || []);
     } catch (err) {
       console.error("Failed to load appointments", err);
+      toast.error("Failed to fetch appointments.");
     } finally {
       setLoadingAppts(false);
     }
@@ -114,8 +115,10 @@ export default function DoctorDashboard() {
     try {
       const res = await API.patch("/doctors/profile/me/toggle");
       setProfile((prev) => ({ ...prev, isAvailable: res.data.data.isAvailable }));
+      toast.success(res.data.data.isAvailable ? "You are now Available!" : "You are now Unavailable!");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to update availability status.");
     } finally {
       setToggling(false);
     }
@@ -134,10 +137,10 @@ export default function DoctorDashboard() {
       };
       const res = await API.put("/doctors/profile/me", payload);
       setProfile(res.data.data);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      toast.success("Clinic profile settings updated successfully! 🎉");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to save clinic settings.");
     } finally {
       setSaving(false);
     }
@@ -153,8 +156,10 @@ export default function DoctorDashboard() {
             : a
         )
       );
+      toast.success(`Appointment status updated to ${status}.`);
     } catch (err) {
       console.error(err);
+      toast.error("Failed to update appointment status.");
     }
   };
 
@@ -167,14 +172,16 @@ export default function DoctorDashboard() {
           a._id === id ? { ...a, paymentStatus: nextStatus } : a
         )
       );
+      toast.success(`Payment status marked as ${nextStatus === "paid" ? "Paid" : "Unpaid"}.`);
     } catch (err) {
       console.error("Failed to update payment status", err);
+      toast.error("Failed to update payment status.");
     }
   };
 
   if (loadingProfile) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-[calc(100vh-140px)] flex items-center justify-center bg-surface">
         <div className="flex flex-col items-center gap-3">
           <div className="animate-spin w-10 h-10 rounded-full border-4 border-primary-500 border-t-transparent"></div>
           <p className="text-slate-500 font-medium text-sm">Loading your dashboard...</p>
@@ -191,20 +198,20 @@ export default function DoctorDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-16">
+    <div className="min-h-screen bg-surface pb-16">
       
       {/* Header Banner */}
       <div className="bg-white border-b border-slate-100 shadow-sm sticky top-0 z-10 backdrop-blur-md bg-white/90">
-        <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-center text-2xl font-bold text-indigo-600 shadow-sm">
+            <div className="w-14 h-14 bg-primary-50 border border-primary-100 rounded-2xl flex items-center justify-center text-2xl font-bold text-primary-600 shadow-sm">
               {profile?.userId?.name?.charAt(0) || "D"}
             </div>
             <div>
               <h1 className="text-2xl font-black text-slate-800 tracking-tight">
                 Dr. {profile?.userId?.name || user?.name}
               </h1>
-              <p className="text-slate-500 text-sm font-medium mt-0.5">{profile?.specialization} · {profile?.city}</p>
+              <p className="text-slate-500 text-sm font-semibold mt-0.5">{profile?.specialization} · {profile?.city}</p>
             </div>
           </div>
           
@@ -233,28 +240,28 @@ export default function DoctorDashboard() {
       <div className="max-w-6xl mx-auto px-6 py-8 grid grid-cols-2 sm:grid-cols-4 gap-5">
         {[
           { label: "Total Bookings", value: stats.total, color: "from-slate-700 to-slate-800 border-slate-200" },
-          { label: "Pending Approval", value: stats.pending, color: "from-amber-600 to-amber-700 border-amber-200" },
-          { label: "Confirmed Slots", value: stats.confirmed, color: "from-emerald-600 to-emerald-700 border-emerald-200" },
-          { label: "Completed", value: stats.completed, color: "from-indigo-600 to-indigo-700 border-indigo-200" },
+          { label: "Pending Approval", value: stats.pending, color: "from-amber-500 to-amber-600 border-amber-200" },
+          { label: "Confirmed Slots", value: stats.confirmed, color: "from-emerald-500 to-emerald-600 border-emerald-200" },
+          { label: "Completed", value: stats.completed, color: "from-primary-600 to-primary-700 border-primary-200" },
         ].map((s) => (
           <div key={s.label} className={`bg-gradient-to-br ${s.color} rounded-3xl p-5 text-white shadow-md hover:shadow-lg transition-shadow border`}>
             <p className="text-3xl font-black">{s.value}</p>
-            <p className="text-xs opacity-90 font-medium tracking-wide uppercase mt-1.5">{s.label}</p>
+            <p className="text-xs opacity-90 font-bold tracking-wide uppercase mt-1.5">{s.label}</p>
           </div>
         ))}
       </div>
 
       {/* Tab Selectors */}
       <div className="max-w-6xl mx-auto px-6">
-        <div className="flex gap-2 bg-slate-100/80 rounded-2xl p-1.5 w-fit border border-slate-200/50 mb-8">
+        <div className="flex gap-2 bg-white rounded-xl p-1.5 w-fit border border-slate-200 mb-8 shadow-sm">
           {["appointments", "profile"].map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
-              className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all capitalize ${
+              className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all capitalize ${
                 activeTab === t
-                  ? "bg-white text-indigo-600 shadow-sm border border-slate-200/20"
-                  : "text-slate-500 hover:text-slate-700 hover:bg-white/40"
+                  ? "bg-primary-600 text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
               }`}
             >
               {t === "appointments" ? "📋 Appointments" : "⚙️ Clinic & Schedule Settings"}
@@ -268,9 +275,9 @@ export default function DoctorDashboard() {
             {loadingAppts ? (
               <div className="text-center py-12 text-slate-400">Loading appointments…</div>
             ) : appts.length === 0 ? (
-              <div className="text-center py-16 bg-white rounded-3xl border border-slate-100 shadow-sm">
-                <div className="text-5xl mb-4">📭</div>
-                <p className="text-slate-500 font-semibold text-sm">No appointments scheduled yet.</p>
+              <div className="card p-16 text-center">
+                <div className="text-7xl mb-4">📭</div>
+                <p className="text-slate-500 font-bold text-sm">No appointments scheduled yet.</p>
               </div>
             ) : (
               appts.map((a) => {
@@ -279,10 +286,10 @@ export default function DoctorDashboard() {
                   day: "numeric", month: "short", year: "numeric",
                 });
                 return (
-                  <div key={a._id} className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 flex flex-col gap-5 hover:shadow-md transition-shadow">
+                  <div key={a._id} className="card p-6 flex flex-col gap-5 hover:shadow-card-lg transition-shadow duration-300">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl font-bold border border-indigo-100/50 flex-shrink-0">
+                        <div className="w-12 h-12 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center text-xl font-bold border border-primary-100 flex-shrink-0">
                           {patient?.name?.charAt(0) || "P"}
                         </div>
                         <div>
@@ -291,7 +298,7 @@ export default function DoctorDashboard() {
                           
                           {(patient?.dob || patient?.gender || patient?.bloodGroup || patient?.emergencyContact) && (
                             <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                              {patient?.dob && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded">DOB: {new Date(patient.dob).toLocaleDateString()}</span>}
+                              {patient?.dob && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-primary-50 text-primary-600 rounded">DOB: {new Date(patient.dob).toLocaleDateString()}</span>}
                               {patient?.gender && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-pink-50 text-pink-600 rounded capitalize">{patient.gender}</span>}
                               {patient?.bloodGroup && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-red-50 text-red-600 rounded">Blood: {patient.bloodGroup}</span>}
                               {patient?.emergencyContact && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded">Emergency: {patient.emergencyContact}</span>}
@@ -299,10 +306,10 @@ export default function DoctorDashboard() {
                           )}
 
                           <div className="flex items-center gap-2 mt-2">
-                            <span className="text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
+                            <span className="badge-blue">
                               📅 {date}
                             </span>
-                            <span className="text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
+                            <span className="badge-blue">
                               ⏰ {a.appointmentTime}
                             </span>
                           </div>
@@ -364,7 +371,7 @@ export default function DoctorDashboard() {
                           {a.status === "confirmed" && (
                             <button
                               onClick={() => updateStatus(a._id, "completed")}
-                              className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold shadow-sm hover:shadow transition-all"
+                              className="text-xs bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-xl font-bold shadow-sm hover:shadow transition-all"
                             >
                               Complete Appointment
                             </button>
@@ -397,16 +404,9 @@ export default function DoctorDashboard() {
 
         {/* Profile/Clinic Settings Tab */}
         {activeTab === "profile" && (
-          <form onSubmit={handleSave} className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 sm:p-8 pb-12 mb-12 space-y-8">
-            
-            {saved && (
-              <div className="px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-xl text-sm font-semibold">
-                ✓ Clinic profile settings updated successfully!
-              </div>
-            )}
-
+          <form onSubmit={handleSave} className="card p-6 sm:p-8 pb-12 mb-12 space-y-8 animate-fade-in-up">
             <div>
-              <h2 className="text-lg font-bold text-slate-800 tracking-tight">Edit Profile & Clinic Info</h2>
+              <h2 className="text-lg font-black text-slate-800 tracking-tight">Edit Profile & Clinic Info</h2>
               <p className="text-xs text-slate-400 mt-0.5">Manage your digital clinic settings, available hours, and medical rates.</p>
             </div>
 
@@ -414,81 +414,81 @@ export default function DoctorDashboard() {
               
               {/* Doctor Name */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Doctor Full Name</label>
+                <label className="input-label">Doctor Full Name</label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                  className="input"
                 />
               </div>
 
               {/* Phone */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Phone Number</label>
+                <label className="input-label">Phone Number</label>
                 <input
                   type="tel"
                   value={form.phone}
                   onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                  className="input"
                 />
               </div>
 
               {/* Qualification */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Qualification</label>
+                <label className="input-label">Qualification</label>
                 <input
                   type="text"
                   value={form.qualification}
                   onChange={(e) => setForm((f) => ({ ...f, qualification: e.target.value }))}
                   placeholder="E.g. MBBS, MD, DM"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                  className="input"
                 />
               </div>
 
               {/* Experience */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Experience (Years)</label>
+                <label className="input-label">Experience (Years)</label>
                 <input
                   type="number"
                   value={form.experience}
                   onChange={(e) => setForm((f) => ({ ...f, experience: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                  className="input"
                 />
               </div>
 
               {/* Fee */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Consultation Fee (₹)</label>
+                <label className="input-label">Consultation Fee (₹)</label>
                 <input
                   type="number"
                   value={form.consultationFee}
                   onChange={(e) => setForm((f) => ({ ...f, consultationFee: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                  className="input"
                 />
               </div>
 
               {/* Available Days */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Available Days</label>
+                <label className="input-label">Available Days</label>
                 <input
                   type="text"
                   value={form.availableDays}
                   onChange={(e) => setForm((f) => ({ ...f, availableDays: e.target.value }))}
                   placeholder="Mon, Tue, Wed, Thu, Fri"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                  className="input"
                 />
               </div>
 
               {/* Available Timing range picker dropdowns */}
               <div className="sm:col-span-2 grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Available From</label>
+                  <label className="input-label">Available From</label>
                   <select
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                    className="input cursor-pointer"
                   >
                     {TIME_OPTIONS.map((time) => (
                       <option key={time} value={time}>{time}</option>
@@ -496,11 +496,11 @@ export default function DoctorDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Available To</label>
+                  <label className="input-label">Available To</label>
                   <select
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                    className="input cursor-pointer"
                   >
                     {TIME_OPTIONS.map((time) => (
                       <option key={time} value={time}>{time}</option>
@@ -508,7 +508,7 @@ export default function DoctorDashboard() {
                   </select>
                 </div>
               </div>
-
+ 
               {/* Availability Toggle inside Settings */}
               <div className="sm:col-span-2 bg-slate-50 border border-slate-100 p-5 rounded-2xl flex items-center justify-between">
                 <div>
@@ -531,23 +531,23 @@ export default function DoctorDashboard() {
 
               {/* Clinic Name */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Clinic Name</label>
+                <label className="input-label">Clinic Name</label>
                 <input
                   type="text"
                   value={form.clinicName}
                   onChange={(e) => setForm((f) => ({ ...f, clinicName: e.target.value }))}
                   placeholder="E.g. City Health Clinic"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                  className="input"
                 />
               </div>
 
               {/* Specialization */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Specialization</label>
+                <label className="input-label">Specialization</label>
                 <select
                   value={form.specialization}
                   onChange={(e) => setForm((f) => ({ ...f, specialization: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                  className="input cursor-pointer"
                 >
                   {SPECIALIZATIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
@@ -555,11 +555,11 @@ export default function DoctorDashboard() {
 
               {/* City */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">City</label>
+                <label className="input-label">City</label>
                 <select
                   value={form.city}
                   onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                  className="input cursor-pointer"
                 >
                   {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -567,36 +567,36 @@ export default function DoctorDashboard() {
 
               {/* Clinic Address */}
               <div className="sm:col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Clinic Address</label>
+                <label className="input-label">Clinic Address</label>
                 <textarea
                   value={form.address}
                   onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
                   rows={2}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                  className="input"
                   placeholder="Full clinic street address"
                 />
               </div>
 
-              {/* Map Embed URL */}
+              {/* Google Maps Embed URL */}
               <div className="sm:col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Google Maps Embed URL</label>
+                <label className="input-label">Google Maps Embed URL</label>
                 <input
                   type="url"
                   value={form.mapUrl}
                   onChange={(e) => setForm((f) => ({ ...f, mapUrl: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                  className="input"
                   placeholder="https://www.google.com/maps/embed?pb=..."
                 />
               </div>
 
               {/* Bio */}
               <div className="sm:col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Bio / About Me</label>
+                <label className="input-label">Bio / About Me</label>
                 <textarea
                   value={form.bio}
                   onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
                   rows={3}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                  className="input"
                   placeholder="Describe your medical practice details..."
                 />
               </div>
@@ -606,16 +606,14 @@ export default function DoctorDashboard() {
               <button
                 type="submit"
                 disabled={saving}
-                className="px-6 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                className="btn-primary"
               >
                 {saving ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     Saving settings...
-                  </>
-                ) : (
-                  "Save Settings Profile"
-                )}
+                  </span>
+                ) : "Save Settings Profile"}
               </button>
             </div>
           </form>

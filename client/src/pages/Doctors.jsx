@@ -3,7 +3,7 @@ import API from "../services/api";
 import DoctorList from "../components/doctor/DoctorList.jsx";
 
 const SPECIALIZATIONS = [
-  "All", "General Physician", "Cardiologist", "Dermatologist",
+  "All Specialists", "General Physician", "Cardiologist", "Dermatologist",
   "Neurologist", "Orthopedist", "Pediatrician", "Gynecologist",
   "Ophthalmologist", "ENT Specialist", "Dentist", "Psychiatrist", "Urologist",
 ];
@@ -13,13 +13,33 @@ const CITIES = [
   "Delhi", "Pune", "Kolkata", "Ahmedabad", "Jaipur", "Lucknow",
 ];
 
+function DoctorSkeleton() {
+  return (
+    <div className="card p-5 animate-pulse space-y-4">
+      <div className="flex flex-col items-center">
+        <div className="skeleton w-20 h-20 rounded-2xl mb-3" />
+        <div className="skeleton h-4 w-32 rounded mb-2" />
+        <div className="skeleton h-3 w-24 rounded" />
+      </div>
+      <div className="grid grid-cols-2 divide-x divide-slate-100 border-t border-b border-slate-100 py-3">
+        <div className="skeleton h-4 w-12 mx-auto rounded" />
+        <div className="skeleton h-4 w-12 mx-auto rounded" />
+      </div>
+      <div className="skeleton h-3 w-3/4 mx-auto rounded" />
+      <div className="skeleton h-10 w-full rounded-xl mt-3" />
+    </div>
+  );
+}
+
 export default function Doctors() {
-  const [allDoctors, setAllDoctors] = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [city, setCity]             = useState("All Cities");
-  const [spec, setSpec]             = useState("All");
-  const [search, setSearch]         = useState("");
+  const [allDoctors,    setAllDoctors]    = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [city,          setCity]          = useState("All Cities");
+  const [spec,          setSpec]          = useState("All Specialists");
+  const [search,         setSearch]        = useState("");
   const [onlyAvailable, setOnlyAvailable] = useState(false);
+  const [maxFee,        setMaxFee]        = useState(2000);
+  const [minExperience, setMinExperience] = useState(0);
 
   useEffect(() => {
     const fetchDoctors = async () => {
@@ -35,131 +55,193 @@ export default function Doctors() {
     fetchDoctors();
   }, []);
 
+  const handleClearFilters = () => {
+    setCity("All Cities");
+    setSpec("All Specialists");
+    setSearch("");
+    setOnlyAvailable(false);
+    setMaxFee(2000);
+    setMinExperience(0);
+  };
+
   // Client-side filtering
   const filtered = allDoctors.filter((doc) => {
-    const docName  = doc.userId?.name || "";
-    const docCity  = doc.city || "";
-    const docSpec  = doc.specialization || "";
+    const name           = doc.userId?.name || doc.name || "";
+    const docCity        = doc.city || "";
+    const docSpec        = doc.specialization || "";
+    const fee            = doc.consultationFee || 0;
+    const exp            = doc.experience || 0;
+    const clinicName     = doc.clinicName || "";
 
-    const matchCity  = city === "All Cities" || docCity.toLowerCase().includes(city.toLowerCase());
-    const matchSpec  = spec === "All"        || docSpec.toLowerCase().includes(spec.toLowerCase());
-    const matchAvail = !onlyAvailable        || doc.isAvailable === true;
-    const matchText  = !search
-      || docName.toLowerCase().includes(search.toLowerCase())
+    const matchCity      = city === "All Cities" || docCity.toLowerCase().includes(city.toLowerCase());
+    const matchSpec      = spec === "All Specialists" || docSpec.toLowerCase().includes(spec.replace(" Specialists", "").toLowerCase());
+    const matchAvail     = !onlyAvailable || doc.isAvailable === true;
+    const matchFee       = fee <= maxFee;
+    const matchExp       = exp >= minExperience;
+    const matchText      = !search
+      || name.toLowerCase().includes(search.toLowerCase())
       || docSpec.toLowerCase().includes(search.toLowerCase())
+      || clinicName.toLowerCase().includes(search.toLowerCase())
       || docCity.toLowerCase().includes(search.toLowerCase());
 
-    return matchCity && matchSpec && matchAvail && matchText;
+    return matchCity && matchSpec && matchAvail && matchFee && matchExp && matchText;
   });
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Hero Banner */}
-      <div className="bg-gradient-to-r from-primary-600 to-secondary-600 text-white py-12 px-6">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-4xl md:text-5xl font-extrabold mb-3 tracking-tight">
+    <div className="min-h-screen bg-surface">
+      {/* ── Hero Search Banner ── */}
+      <div className="bg-gradient-to-r from-primary-600 to-secondary-600 text-white py-16 px-6 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.1),transparent_50%)]" />
+        <div className="max-w-4xl mx-auto text-center relative z-10 space-y-4 animate-fade-in-up">
+          <span className="text-xs font-extrabold uppercase tracking-widest bg-white/10 px-3.5 py-1 rounded-full border border-white/20">
+            Search Verified Specialists
+          </span>
+          <h1 className="text-4xl md:text-5xl font-black tracking-tight leading-none">
             Find Your Doctor
           </h1>
-          <p className="text-primary-100 text-lg mb-8">
-            Search by city, specialization or name across India
+          <p className="text-primary-100 text-base md:text-lg max-w-md mx-auto">
+            Book online instantly to consult with expert doctors matching your needs.
           </p>
 
-          {/* Search Bar */}
-          <div className="relative max-w-xl mx-auto">
-            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          {/* Search Input */}
+          <div className="relative max-w-xl mx-auto pt-4">
+            <svg className="absolute left-4 top-[60%] -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, specialization or city…"
-              className="w-full pl-12 pr-4 py-4 rounded-2xl text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-white/50 shadow-lg"
+              placeholder="Search by doctor name, specialty, or clinic..."
+              className="w-full pl-12 pr-4 py-4 rounded-2xl text-slate-800 font-semibold focus:outline-none focus:ring-4 focus:ring-primary-500/20 shadow-lg border border-slate-100 bg-white"
             />
           </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="sticky top-[73px] z-40 bg-white border-b border-slate-100 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-wrap gap-3 items-center">
-          {/* City Filter */}
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-            <svg className="w-4 h-4 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <select
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              className="bg-transparent text-sm font-semibold text-slate-700 focus:outline-none cursor-pointer"
-            >
-              {CITIES.map((c) => <option key={c}>{c}</option>)}
-            </select>
+      {/* ── Main Layout ── */}
+      <div className="section py-10">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+
+          {/* ── Sidebar Filters ── */}
+          <div className="lg:col-span-1 space-y-6">
+            <div className="card p-6 space-y-6 sticky top-24">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <h3 className="text-base font-black text-slate-800">Filter By</h3>
+                <button
+                  onClick={handleClearFilters}
+                  className="text-xs font-bold text-primary-600 hover:text-primary-700 transition-colors"
+                >
+                  Reset All
+                </button>
+              </div>
+
+              {/* City Selection */}
+              <div>
+                <label className="input-label">City</label>
+                <select
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  className="input cursor-pointer"
+                >
+                  {CITIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Specialty Selection */}
+              <div>
+                <label className="input-label">Specialty</label>
+                <select
+                  value={spec}
+                  onChange={(e) => setSpec(e.target.value)}
+                  className="input cursor-pointer"
+                >
+                  {SPECIALIZATIONS.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Max Consultation Fee */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Max Consultation Fee</label>
+                  <span className="text-sm font-bold text-primary-600">₹{maxFee}</span>
+                </div>
+                <input
+                  type="range"
+                  min="200"
+                  max="2000"
+                  step="100"
+                  value={maxFee}
+                  onChange={(e) => setMaxFee(Number(e.target.value))}
+                  className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-primary-600"
+                />
+                <div className="flex justify-between text-[10px] font-bold text-slate-400 mt-1">
+                  <span>₹200</span>
+                  <span>₹2000</span>
+                </div>
+              </div>
+
+              {/* Experience */}
+              <div>
+                <label className="input-label">Min Experience (Years)</label>
+                <select
+                  value={minExperience}
+                  onChange={(e) => setMinExperience(Number(e.target.value))}
+                  className="input cursor-pointer"
+                >
+                  <option value={0}>Any Experience</option>
+                  <option value={3}>3+ Years</option>
+                  <option value={5}>5+ Years</option>
+                  <option value={10}>10+ Years</option>
+                  <option value={15}>15+ Years</option>
+                </select>
+              </div>
+
+              {/* Availability Toggle */}
+              <div className="pt-2">
+                <button
+                  onClick={() => setOnlyAvailable(!onlyAvailable)}
+                  className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border text-sm font-bold transition-all duration-200 ${
+                    onlyAvailable
+                      ? "bg-green-50 text-green-700 border-green-200"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-green-300"
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${onlyAvailable ? "bg-green-500 animate-pulse" : "bg-slate-400"}`} />
+                  Available Now
+                </button>
+              </div>
+            </div>
           </div>
 
-          {/* Specialization Filter */}
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-            <svg className="w-4 h-4 text-secondary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-            <select
-              value={spec}
-              onChange={(e) => setSpec(e.target.value)}
-              className="bg-transparent text-sm font-semibold text-slate-700 focus:outline-none cursor-pointer"
-            >
-              {SPECIALIZATIONS.map((s) => <option key={s}>{s}</option>)}
-            </select>
+          {/* ── Doctor Grid Content ── */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Header info */}
+            <div className="flex items-center justify-between bg-white border border-slate-100 shadow-sm rounded-2xl px-6 py-4">
+              <span className="text-sm font-bold text-slate-500">
+                {loading ? "Finding doctors..." : `${filtered.length} specialist${filtered.length !== 1 ? "s" : ""} available`}
+              </span>
+              <span className="text-xs font-bold text-primary-600 bg-primary-50 border border-primary-100 rounded-full px-3 py-1 uppercase">
+                ⚡ Real-time updates
+              </span>
+            </div>
+
+            {loading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <DoctorSkeleton key={i} />
+                ))}
+              </div>
+            ) : (
+              <DoctorList doctors={filtered} onClearFilters={handleClearFilters} />
+            )}
           </div>
 
-          {/* Available Only Toggle */}
-          <button
-            onClick={() => setOnlyAvailable(!onlyAvailable)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
-              onlyAvailable
-                ? "bg-green-500 text-white border-green-500 shadow-sm"
-                : "bg-white text-slate-600 border-slate-200 hover:border-green-300"
-            }`}
-          >
-            <span className={`w-2 h-2 rounded-full ${onlyAvailable ? "bg-white" : "bg-green-400"}`}></span>
-            Available Now
-          </button>
-
-          {/* Result count */}
-          <span className="ml-auto text-sm text-slate-500 font-medium">
-            {loading ? "Loading…" : `${filtered.length} doctor${filtered.length !== 1 ? "s" : ""} found`}
-          </span>
         </div>
-      </div>
-
-      {/* Quick Spec Pills */}
-      <div className="max-w-7xl mx-auto px-6 py-4">
-        <div className="flex gap-2 flex-wrap">
-          {["All", "Dermatologist", "Cardiologist", "Pediatrician", "Dentist", "Neurologist", "Orthopedist"].map((s) => (
-            <button
-              key={s}
-              onClick={() => setSpec(s)}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                spec === s
-                  ? "bg-primary-600 text-white border-primary-600"
-                  : "bg-white text-slate-600 border-slate-200 hover:border-primary-300 hover:text-primary-600"
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Doctor Grid */}
-      <div className="max-w-7xl mx-auto px-6 pb-16">
-        {loading ? (
-          <div className="flex justify-center py-24">
-            <div className="animate-spin w-12 h-12 rounded-full border-4 border-primary-500 border-t-transparent"></div>
-          </div>
-        ) : (
-          <DoctorList doctors={filtered} />
-        )}
       </div>
     </div>
   );
