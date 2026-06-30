@@ -1,7 +1,7 @@
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
 
-// Generate Token
+// Generate Token — pulls secret from env ONLY
 const generateToken = (id, role) => {
   return jwt.sign(
     { id, role },
@@ -11,71 +11,63 @@ const generateToken = (id, role) => {
 };
 
 // REGISTER
-export const register = async (req, res) => {
+export const register = async (req, res, next) => {
   try {
     const { name, email, password, role } = req.body;
 
-    const existingUser = await User.findOne({ email });
-
+    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
     if (existingUser) {
-      return req.http.badRequest("User already exists");
+      return req.http.badRequest("An account with this email already exists.");
     }
 
-    const user = await User.create({
-      name,
-      email,
-      password,
-      role: role || "patient",
-    });
+    // Never accept admin role from public registration
+    const safeRole = ["patient", "doctor"].includes(role) ? role : "patient";
+
+    const user = await User.create({ name: name.trim(), email, password, role: safeRole });
 
     return req.http.created(
       {
-        _id: user._id,
-        name: user.name,
+        _id:   user._id,
+        name:  user.name,
         email: user.email,
-        role: user.role,
+        role:  user.role,
         token: generateToken(user._id, user.role),
       },
-      "User registered successfully"
+      "Account created successfully"
     );
   } catch (err) {
-    return req.http.serverError(err.message);
+    next(err);
   }
 };
 
 // LOGIN
-export const login = async (req, res) => {
+export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email });
-
-    if (!user) {
-      return req.http.unauthorized("Invalid credentials");
-    }
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) return req.http.unauthorized("Invalid email or password.");
 
     const isMatch = await user.matchPassword(password);
-
-    if (!isMatch) {
-      return req.http.unauthorized("Invalid credentials");
-    }
+    if (!isMatch) return req.http.unauthorized("Invalid email or password.");
 
     return req.http.ok(
       {
-        _id: user._id,
-        name: user.name,
+        _id:   user._id,
+        name:  user.name,
         email: user.email,
-        role: user.role,
+        role:  user.role,
         token: generateToken(user._id, user.role),
       },
       "Login successful"
     );
   } catch (err) {
-    return req.http.serverError(err.message);
+    next(err);
   }
 };
 
-// PROFILE
+// GET PROFILE (current user)
 export const getProfile = async (req, res) => {
+  // req.user is already populated by auth middleware (without password)
   return req.http.ok(req.user, "User profile fetched");
 };

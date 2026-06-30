@@ -22,6 +22,7 @@ const Profile         = lazy(() => import("./pages/Profile.jsx"));
 const NotFound        = lazy(() => import("./pages/NotFound.jsx"));
 const About           = lazy(() => import("./pages/About.jsx"));
 const Contact         = lazy(() => import("./pages/Contact.jsx"));
+const AdminDashboard  = lazy(() => import("./pages/AdminDashboard.jsx"));
 
 // Page loader fallback
 function PageLoader() {
@@ -48,6 +49,15 @@ function DoctorRoute({ children }) {
   if (loading) return <PageLoader />;
   if (!isLoggedIn) return <Navigate to="/doctor/login" replace />;
   if (!isDoctor)  return <Navigate to="/" replace />;
+  return children;
+}
+
+// Guard: admin role only
+function AdminRoute({ children }) {
+  const { isLoggedIn, isAdmin, loading } = useAuth();
+  if (loading) return <PageLoader />;
+  if (!isLoggedIn) return <Navigate to="/login" replace />;
+  if (!isAdmin) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -97,6 +107,9 @@ function App() {
 
             {/* Doctor protected */}
             <Route path="/doctor/dashboard"   element={<DoctorRoute><DoctorDashboard /></DoctorRoute>} />
+
+            {/* Admin protected */}
+            <Route path="/admin"              element={<AdminRoute><AdminDashboard /></AdminRoute>} />
 
             {/* 404 */}
             <Route path="*" element={<NotFound />} />

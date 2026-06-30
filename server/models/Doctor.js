@@ -71,4 +71,10 @@ const doctorSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// ─── Indexes for search performance ─────────────────────────────────────────
+// Powers GET /doctors?city=&specialization=&available=true
+doctorSchema.index({ city: 1, specialization: 1, isAvailable: 1 });
+// Ensures one doctor profile per user account
+doctorSchema.index({ userId: 1 }, { unique: true });
+
 export default mongoose.model("Doctor", doctorSchema);

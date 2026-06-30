@@ -29,6 +29,7 @@ function SkeletonCard() {
 export default function MyAppointments() {
   const [appointments, setAppointments] = useState([]);
   const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState(null);
   const [activeTab,    setActiveTab]    = useState("All");
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function MyAppointments() {
         setAppointments(res.data.data || []);
       } catch (err) {
         console.error(err);
+        setError("Failed to load appointments. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -118,6 +120,15 @@ export default function MyAppointments() {
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
+          </div>
+        ) : error ? (
+          <div className="card p-16 text-center border-red-200 bg-red-50">
+            <div className="text-5xl mb-4">⚠️</div>
+            <h3 className="text-xl font-black text-red-700 mb-2">Oops!</h3>
+            <p className="text-red-600 text-sm mb-6">{error}</p>
+            <button onClick={() => window.location.reload()} className="btn-primary inline-flex">
+              Retry
+            </button>
           </div>
         ) : filtered.length === 0 ? (
           <div className="card p-16 text-center">

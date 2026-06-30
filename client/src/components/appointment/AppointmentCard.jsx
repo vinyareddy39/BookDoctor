@@ -18,6 +18,13 @@ export default function AppointmentCard({ appointment }) {
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  
+  // Cancellation state
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  
+  // Local state for status updates (to avoid full refetch)
+  const [currentStatus, setCurrentStatus] = useState((appointment?.status || "pending").toLowerCase());
 
   const doc            = appointment?.doctorId;
   const doctorName     = doc?.userId?.name || doc?.name || "Doctor";
@@ -32,7 +39,7 @@ export default function AppointmentCard({ appointment }) {
     ? new Date(rawDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
     : "TBD";
   const time    = appointment?.appointmentTime || "TBD";
-  const status  = (appointment?.status || "pending").toLowerCase();
+  const status  = currentStatus;
   const payment = appointment?.paymentStatus || "pending";
 
   const sc = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
@@ -49,6 +56,20 @@ export default function AppointmentCard({ appointment }) {
       setError(err.response?.data?.message || "Failed to submit feedback.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    setCancelling(true);
+    try {
+      await API.patch(`/appointments/${appointment._id}/cancel`);
+      setCurrentStatus("cancelled");
+      setShowCancelModal(false);
+    } catch (err) {
+      console.error(err);
+      // Let it fail silently for now or add a toast later if needed, since toast isn't imported here
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -141,6 +162,16 @@ export default function AppointmentCard({ appointment }) {
                 Rate Appointment
               </button>
             )}
+
+            {/* Cancel button if pending or confirmed */}
+            {(status === "pending" || status === "confirmed") && (
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="btn-danger text-xs px-3 py-1.5 shadow-none hover:-translate-y-0"
+              >
+                Cancel
+              </button>
+            )}
           </div>
         </div>
 
@@ -201,6 +232,35 @@ export default function AppointmentCard({ appointment }) {
           </form>
         )}
       </div>
+
+      {/* Cancellation Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 animate-fade-in-up">
+            <h3 className="text-lg font-black text-slate-800 mb-2">Cancel Appointment?</h3>
+            <p className="text-slate-500 text-sm mb-6">
+              Are you sure you want to cancel your appointment with Dr. {doctorName} on {date} at {time}? This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(false)}
+                className="btn-secondary flex-1 py-2 text-sm"
+              >
+                Keep it
+              </button>
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="btn-danger flex-1 py-2 text-sm"
+              >
+                {cancelling ? "Cancelling..." : "Yes, Cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

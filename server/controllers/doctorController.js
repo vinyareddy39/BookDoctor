@@ -1,86 +1,92 @@
 import Doctor from "../models/Doctor.js";
 import User from "../models/User.js";
 
-// CREATE DOCTOR (Admin or self-register)
-export const createDoctor = async (req, res) => {
+// CREATE DOCTOR (Admin only)
+export const createDoctor = async (req, res, next) => {
   try {
     const doctor = await Doctor.create(req.body);
     return req.http.created(doctor, "Doctor created");
   } catch (err) {
-    return req.http.serverError(err.message);
+    next(err);
   }
 };
 
-// GET ALL DOCTORS (with city & specialization filter)
-export const getDoctors = async (req, res) => {
+// GET ALL DOCTORS (public — supports ?city= &specialization= &available=true)
+export const getDoctors = async (req, res, next) => {
   try {
     const { city, specialization, available } = req.query;
     const filter = {};
 
-    if (city) filter.city = { $regex: city, $options: "i" };
+    if (city)           filter.city           = { $regex: city, $options: "i" };
     if (specialization) filter.specialization = { $regex: specialization, $options: "i" };
     if (available === "true") filter.isAvailable = true;
 
-    const doctors = await Doctor.find(filter).populate("userId", "name email phone");
+    const doctors = await Doctor.find(filter)
+      .populate("userId", "name email phone")
+      .lean();
+
     return req.http.ok(doctors, "Doctors fetched");
   } catch (err) {
-    return req.http.serverError(err.message);
+    next(err);
   }
 };
 
-// GET SINGLE DOCTOR
-export const getDoctor = async (req, res) => {
+// GET SINGLE DOCTOR (public)
+export const getDoctor = async (req, res, next) => {
   try {
-    const doctor = await Doctor.findById(req.params.id).populate("userId", "name email phone");
+    const doctor = await Doctor.findById(req.params.id)
+      .populate("userId", "name email phone")
+      .lean();
     if (!doctor) return req.http.notFound("Doctor not found");
     return req.http.ok(doctor);
   } catch (err) {
-    return req.http.serverError(err.message);
+    next(err);
   }
 };
 
 // UPDATE DOCTOR (Admin)
-export const updateDoctor = async (req, res) => {
+export const updateDoctor = async (req, res, next) => {
   try {
-    const doctor = await Doctor.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const doctor = await Doctor.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    if (!doctor) return req.http.notFound("Doctor not found");
     return req.http.ok(doctor, "Doctor updated");
   } catch (err) {
-    return req.http.serverError(err.message);
+    next(err);
   }
 };
 
 // DELETE DOCTOR (Admin)
-export const deleteDoctor = async (req, res) => {
+export const deleteDoctor = async (req, res, next) => {
   try {
-    await Doctor.findByIdAndDelete(req.params.id);
+    const doctor = await Doctor.findByIdAndDelete(req.params.id);
+    if (!doctor) return req.http.notFound("Doctor not found");
     return req.http.ok(null, "Doctor deleted");
   } catch (err) {
-    return req.http.serverError(err.message);
+    next(err);
   }
 };
 
 // GET MY DOCTOR PROFILE (Doctor self)
-export const getMyDoctorProfile = async (req, res) => {
+export const getMyDoctorProfile = async (req, res, next) => {
   try {
-    const doctor = await Doctor.findOne({ userId: req.user._id }).populate("userId", "name email phone");
+    let doctor = await Doctor.findOne({ userId: req.user._id }).populate("userId", "name email phone");
     if (!doctor) {
-      // Auto-create a stub doctor profile for newly registered doctors
+      // Auto-create a stub profile for newly registered doctors
       const newDoctor = await Doctor.create({
-        userId: req.user._id,
-        specialization: "General Physician",
+        userId:          req.user._id,
+        specialization:  "General Physician",
         consultationFee: 500,
       });
-      const populated = await newDoctor.populate("userId", "name email phone");
-      return req.http.ok(populated, "Doctor profile created");
+      doctor = await newDoctor.populate("userId", "name email phone");
     }
     return req.http.ok(doctor, "Doctor profile fetched");
   } catch (err) {
-    return req.http.serverError(err.message);
+    next(err);
   }
 };
 
 // UPDATE MY DOCTOR PROFILE (Doctor self)
-export const updateMyDoctorProfile = async (req, res) => {
+export const updateMyDoctorProfile = async (req, res, next) => {
   try {
     const {
       name, phone,
@@ -89,12 +95,11 @@ export const updateMyDoctorProfile = async (req, res) => {
       isAvailable, city, clinicName, address, mapUrl,
     } = req.body;
 
-    // Update user name/phone if provided
+    // Update user name/phone in User collection if provided
     if (name || phone) {
       await User.findByIdAndUpdate(req.user._id, { name, phone });
     }
 
-    // Update doctor profile
     const doctor = await Doctor.findOneAndUpdate(
       { userId: req.user._id },
       {
@@ -108,12 +113,12 @@ export const updateMyDoctorProfile = async (req, res) => {
     if (!doctor) return req.http.notFound("Doctor profile not found");
     return req.http.ok(doctor, "Profile updated");
   } catch (err) {
-    return req.http.serverError(err.message);
+    next(err);
   }
 };
 
-// TOGGLE AVAILABILITY (Doctor self - quick toggle)
-export const toggleAvailability = async (req, res) => {
+// TOGGLE AVAILABILITY (Doctor self)
+export const toggleAvailability = async (req, res, next) => {
   try {
     const doctor = await Doctor.findOne({ userId: req.user._id });
     if (!doctor) return req.http.notFound("Doctor profile not found");
@@ -126,6 +131,6 @@ export const toggleAvailability = async (req, res) => {
       `You are now ${doctor.isAvailable ? "Available" : "Unavailable"}`
     );
   } catch (err) {
-    return req.http.serverError(err.message);
+    next(err);
   }
 };

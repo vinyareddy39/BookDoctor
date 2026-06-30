@@ -55,4 +55,10 @@ const appointmentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// ─── Indexes for query performance ──────────────────────────────────────────
+// Patient dashboard: fetch by patientId sorted by date
+appointmentSchema.index({ patientId: 1, appointmentDate: -1 });
+// Doctor dashboard: fetch by doctorId + status filter
+appointmentSchema.index({ doctorId: 1, status: 1 });
+
 export default mongoose.model("Appointment", appointmentSchema);

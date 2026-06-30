@@ -1,16 +1,15 @@
 import express from "express";
-import {
-  register,
-  login,
-  getProfile,
-} from "../controllers/authController.js";
+import { register, login, getProfile } from "../controllers/authController.js";
 import { auth, validate } from "../middleware/index.js";
+import { authLimiter } from "../server.js";
 
 const router = express.Router();
 
-// validate() ensures required fields exist before the controller runs
-router.post("/register", validate(["name", "email", "password", "role"]), register);
-router.post("/login",    validate(["email", "password"]), login);
-router.get("/profile",   auth, getProfile);
+// Rate-limited auth endpoints
+router.post("/register", authLimiter, validate(["name", "email", "password", "role"]), register);
+router.post("/login",    authLimiter, validate(["email", "password"]), login);
+
+// Protected profile
+router.get("/profile", auth, getProfile);
 
 export default router;
