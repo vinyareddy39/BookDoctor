@@ -33,19 +33,29 @@ const __dirname  = path.dirname(__filename);
 // ===============================
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-  : ["http://localhost:5173", "http://localhost:3000"];
+  : [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "https://book-doctor-six.vercel.app", // production frontend
+    ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (e.g., curl, mobile apps, Postman)
+    // Allow requests with no origin (curl, Postman, server-to-server)
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS policy: origin '${origin}' is not allowed.`));
+    // Return false — do NOT throw an Error here.
+    // Throwing causes Express to send a response with no CORS headers,
+    // making the browser show a confusing opaque CORS failure instead of a 403.
+    return callback(null, false);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
+
+// Explicit OPTIONS preflight handler — ensures 204 with CORS headers on all routes
+app.options("*", cors());
 
 // ===============================
 // SOCKET.IO INITIALIZATION
