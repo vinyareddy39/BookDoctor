@@ -13,6 +13,7 @@ import appointmentRoutes from "./routes/appointmentroutes.js";
 import userRoutes        from "./routes/userroutes.js";
 import adminRoutes       from "./routes/adminroutes.js";
 import paymentRoutes     from "./routes/paymentroutes.js";
+import googleRoutes      from "./routes/googleroutes.js";
 
 // Middleware
 import { response, errorHandler } from "./middleware/index.js";
@@ -110,6 +111,7 @@ app.use("/api/appointments", appointmentRoutes);
 app.use("/api/users",        userRoutes);
 app.use("/api/admin",        adminRoutes);
 app.use("/api/payments",     paymentRoutes);
+app.use("/api/google",       googleRoutes);
 
 // ===============================
 // HEALTH CHECK

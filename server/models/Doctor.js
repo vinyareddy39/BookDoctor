@@ -67,6 +67,20 @@ const doctorSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+
+    // ─── Google Calendar Integration ─────────────────────────────────────
+    googleAccessToken: {
+      type: String,
+      select: false, // never returned in API responses
+    },
+    googleRefreshToken: {
+      type: String,
+      select: false, // never returned in API responses
+    },
+    googleCalendarSynced: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

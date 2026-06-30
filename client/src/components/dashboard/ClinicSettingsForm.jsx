@@ -1,4 +1,5 @@
 import { SPECIALIZATIONS, CITIES } from "../../utils/constants";
+import GoogleCalendarSync from "./GoogleCalendarSync.jsx";
 
 /**
  * ClinicSettingsForm — All doctor profile & clinic settings in one focused form.
@@ -20,6 +21,17 @@ export default function ClinicSettingsForm({
   onToggle, toggling,
   onSave, saving,
 }) {
+  // When Google Calendar syncs, update the form so the user sees the new days/hours immediately
+  const handleCalendarSynced = ({ availableDays, availableTime }) => {
+    if (availableDays) {
+      setForm((f) => ({ ...f, availableDays: availableDays.join(", ") }));
+    }
+    if (availableTime && availableTime.includes("-")) {
+      const parts = availableTime.split("-").map((s) => s.trim());
+      if (parts[0]) setStartTime(parts[0]);
+      if (parts[1]) setEndTime(parts[1]);
+    }
+  };
   return (
     <form onSubmit={onSave} className="card p-6 sm:p-8 pb-12 mb-12 space-y-8 animate-fade-in-up">
       <div>
@@ -57,7 +69,11 @@ export default function ClinicSettingsForm({
         <div>
           <label className="input-label">Available Days</label>
           <input type="text" value={form.availableDays} onChange={(e) => setForm((f) => ({ ...f, availableDays: e.target.value }))} placeholder="Mon, Tue, Wed, Thu, Fri" className="input" />
+          <p className="text-[11px] text-slate-400 mt-1">Comma-separated. Or connect Google Calendar below to set this automatically.</p>
         </div>
+
+        {/* ─── Google Calendar Sync Card ─── */}
+        <GoogleCalendarSync profile={profile} onSynced={handleCalendarSynced} />
 
         {/* Time range pickers */}
         <div className="sm:col-span-2 grid grid-cols-2 gap-4">
