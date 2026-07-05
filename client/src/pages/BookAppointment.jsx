@@ -112,15 +112,22 @@ export default function BookAppointment() {
   const [booking,     setBooking]     = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [dateError,   setDateError]   = useState("");
+  
+  const [patientProfile, setPatientProfile] = useState(null);
+  const [dependentId, setDependentId] = useState("");
 
   useEffect(() => {
     const fetchDoc = async () => {
       try {
-        const res = await API.get(`/doctors/${id}`);
-        setDoctor(res.data.data);
+        const [docRes, profileRes] = await Promise.all([
+          API.get(`/doctors/${id}`),
+          API.get(`/users/profile`)
+        ]);
+        setDoctor(docRes.data.data);
+        setPatientProfile(profileRes.data.data || profileRes.data);
       } catch (err) {
         console.error(err);
-        toast.error("Failed to load doctor profile.");
+        toast.error("Failed to load doctor profile or user details.");
       } finally {
         setLoading(false);
       }
@@ -165,12 +172,15 @@ export default function BookAppointment() {
     }
     setBooking(true);
     try {
-      await API.post("/appointments", {
+      const payload = {
         doctorId:        id,
         appointmentDate: date,
         appointmentTime: time,
         amount:          doctor?.consultationFee || 500,
-      });
+      };
+      if (dependentId) payload.dependentId = dependentId;
+
+      await API.post("/appointments", payload);
       toast.success("Appointment booked successfully! 🎉");
       setShowConfirm(false);
       navigate("/appointments");
@@ -403,6 +413,21 @@ export default function BookAppointment() {
               )}
 
               <div className="space-y-4">
+                
+                {/* Dependent Selection */}
+                <div>
+                  <label className="input-label">Booking For</label>
+                  <select
+                    value={dependentId}
+                    onChange={(e) => setDependentId(e.target.value)}
+                    className="input cursor-pointer"
+                  >
+                    <option value="">Myself</option>
+                    {patientProfile?.dependents?.map(dep => (
+                      <option key={dep._id} value={dep._id}>{dep.name} ({dep.relation})</option>
+                    ))}
+                  </select>
+                </div>
 
                 {/* Date picker */}
                 <div>
@@ -500,6 +525,7 @@ export default function BookAppointment() {
 
             <div className="bg-slate-50 rounded-2xl p-4 space-y-3 mb-6">
               {[
+                { label: "Patient",    value: dependentId ? patientProfile?.dependents?.find(d => d._id === dependentId)?.name : patientProfile?.name },
                 { label: "Doctor",     value: `Dr. ${name}` },
                 { label: "Specialty",  value: specialization },
                 { label: "Date",       value: formatDateDisplay(date) },

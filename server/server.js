@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import path from "path";
 import { fileURLToPath } from "url";
+import * as Sentry from "@sentry/node";
+import { nodeProfilingIntegration } from "@sentry/profiling-node";
 
 // Routes
 import authRoutes        from "./routes/authroutes.js";
@@ -13,12 +15,19 @@ import userRoutes        from "./routes/userroutes.js";
 import adminRoutes       from "./routes/adminroutes.js";
 import paymentRoutes     from "./routes/paymentroutes.js";
 import googleRoutes      from "./routes/googleroutes.js";
+import chatRoutes        from "./routes/chatroutes.js";
+
+// Swagger
+import swaggerUi from "swagger-ui-express";
+import swaggerSpec from "./swagger.js";
 
 // Middleware
 import { response, errorHandler } from "./middleware/index.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
 import { initSocket } from "./socket.js";
 import http from "http";
+import cookieParser from "cookie-parser";
+import { startReminderCron } from "./service/cronService.js";
 
 dotenv.config();
 
@@ -27,6 +36,18 @@ const server = http.createServer(app);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
+
+// ===============================
+// SENTRY INITIALIZATION
+// ===============================
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || "",
+  integrations: [
+    nodeProfilingIntegration(),
+  ],
+  tracesSampleRate: 1.0,
+  profilesSampleRate: 1.0,
+});
 
 // ===============================
 // CORS — locked to allowed origins
@@ -68,8 +89,9 @@ initSocket(server, allowedOrigins);
 app.use("/api", apiLimiter);
 
 // ===============================
-// BODY PARSING
+// BODY PARSING & COOKIES
 // ===============================
+app.use(cookieParser());
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
@@ -92,7 +114,10 @@ const connectDB = async () => {
   }
 };
 
-connectDB();
+if (process.env.NODE_ENV !== "test") {
+  connectDB();
+  startReminderCron();
+}
 
 // ===============================
 // API ROUTES
@@ -104,6 +129,10 @@ app.use("/api/users",        userRoutes);
 app.use("/api/admin",        adminRoutes);
 app.use("/api/payments",     paymentRoutes);
 app.use("/api/google",       googleRoutes);
+app.use("/api/chat",         chatRoutes);
+
+// Swagger API Docs
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // ===============================
 // HEALTH CHECK
@@ -120,12 +149,17 @@ app.use((req, res) => {
 // ===============================
 // GLOBAL ERROR HANDLER (must be last)
 // ===============================
+Sentry.setupExpressErrorHandler(app);
 app.use(errorHandler);
 
 // ===============================
 // START SERVER
 // ===============================
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT} [${process.env.NODE_ENV || "development"}]`);
-});
+if (process.env.NODE_ENV !== "test") {
+  server.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT} [${process.env.NODE_ENV || "development"}]`);
+  });
+}
+
+export { app };

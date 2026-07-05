@@ -1,5 +1,6 @@
 import Doctor from "../models/Doctor.js";
 import User from "../models/User.js";
+import Appointment from "../models/Appointment.js";
 
 // CREATE DOCTOR (Admin only)
 export const createDoctor = async (req, res, next) => {
@@ -11,18 +12,45 @@ export const createDoctor = async (req, res, next) => {
   }
 };
 
-// GET ALL DOCTORS (public — supports ?city= &specialization= &available=true)
+// GET ALL DOCTORS (public with filtering & sorting)
 export const getDoctors = async (req, res, next) => {
   try {
-    const { city, specialization, available } = req.query;
-    const filter = {};
+    const { city, specialization, available, minFee, maxFee, gender, sortBy } = req.query;
+    const filter = { isVerified: true }; // default to verified only
 
     if (city)           filter.city           = { $regex: city, $options: "i" };
     if (specialization) filter.specialization = { $regex: specialization, $options: "i" };
     if (available === "true") filter.isAvailable = true;
 
+    // Consultation Fee Filters
+    if (minFee || maxFee) {
+      filter.consultationFee = {};
+      if (minFee) filter.consultationFee.$gte = Number(minFee);
+      if (maxFee) filter.consultationFee.$lte = Number(maxFee);
+    }
+
+    // Gender Filter (Lookup corresponding User accounts)
+    if (gender) {
+      const usersOfGender = await User.find({ gender, role: "doctor" }).select("_id");
+      const userIds = usersOfGender.map(u => u._id);
+      filter.userId = { $in: userIds };
+    }
+
+    // Sorting Logic
+    let sortOptions = {};
+    if (sortBy === "rating") {
+      sortOptions.averageRating = -1;
+    } else if (sortBy === "fee-asc") {
+      sortOptions.consultationFee = 1;
+    } else if (sortBy === "fee-desc") {
+      sortOptions.consultationFee = -1;
+    } else {
+      sortOptions.createdAt = -1;
+    }
+
     const doctors = await Doctor.find(filter)
-      .populate("userId", "name email phone")
+      .populate("userId", "name email phone gender")
+      .sort(sortOptions)
       .lean();
 
     return req.http.ok(doctors, "Doctors fetched");
@@ -35,7 +63,7 @@ export const getDoctors = async (req, res, next) => {
 export const getDoctor = async (req, res, next) => {
   try {
     const doctor = await Doctor.findById(req.params.id)
-      .populate("userId", "name email phone")
+      .populate("userId", "name email phone gender")
       .lean();
     if (!doctor) return req.http.notFound("Doctor not found");
     return req.http.ok(doctor);
@@ -69,7 +97,7 @@ export const deleteDoctor = async (req, res, next) => {
 // GET MY DOCTOR PROFILE (Doctor self)
 export const getMyDoctorProfile = async (req, res, next) => {
   try {
-    let doctor = await Doctor.findOne({ userId: req.user._id }).populate("userId", "name email phone");
+    let doctor = await Doctor.findOne({ userId: req.user._id }).populate("userId", "name email phone gender");
     if (!doctor) {
       // Auto-create a stub profile for newly registered doctors
       const newDoctor = await Doctor.create({
@@ -77,7 +105,7 @@ export const getMyDoctorProfile = async (req, res, next) => {
         specialization:  "General Physician",
         consultationFee: 500,
       });
-      doctor = await newDoctor.populate("userId", "name email phone");
+      doctor = await newDoctor.populate("userId", "name email phone gender");
     }
     return req.http.ok(doctor, "Doctor profile fetched");
   } catch (err) {
@@ -89,15 +117,20 @@ export const getMyDoctorProfile = async (req, res, next) => {
 export const updateMyDoctorProfile = async (req, res, next) => {
   try {
     const {
-      name, phone,
+      name, phone, gender,
       specialization, qualification, experience,
       consultationFee, bio, availableDays, availableTime,
       isAvailable, city, clinicName, address, mapUrl,
     } = req.body;
 
-    // Update user name/phone in User collection if provided
-    if (name || phone) {
-      await User.findByIdAndUpdate(req.user._id, { name, phone });
+    // Update user name/phone/gender in User collection if provided
+    const userUpdates = {};
+    if (name) userUpdates.name = name;
+    if (phone) userUpdates.phone = phone;
+    if (gender) userUpdates.gender = gender;
+
+    if (Object.keys(userUpdates).length > 0) {
+      await User.findByIdAndUpdate(req.user._id, userUpdates);
     }
 
     const doctor = await Doctor.findOneAndUpdate(
@@ -108,7 +141,7 @@ export const updateMyDoctorProfile = async (req, res, next) => {
         isAvailable, city, clinicName, address, mapUrl,
       },
       { new: true, runValidators: true }
-    ).populate("userId", "name email phone");
+    ).populate("userId", "name email phone gender");
 
     if (!doctor) return req.http.notFound("Doctor profile not found");
     return req.http.ok(doctor, "Profile updated");
@@ -130,6 +163,49 @@ export const toggleAvailability = async (req, res, next) => {
       { isAvailable: doctor.isAvailable },
       `You are now ${doctor.isAvailable ? "Available" : "Unavailable"}`
     );
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET DOCTOR ANALYTICS (Charts)
+export const getDoctorAnalytics = async (req, res, next) => {
+  try {
+    const doctor = await Doctor.findOne({ userId: req.user._id });
+    if (!doctor) return req.http.notFound("Doctor profile not found");
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const dailyStats = await Appointment.aggregate([
+      {
+        $match: {
+          doctorId: doctor._id,
+          createdAt: { $gte: thirtyDaysAgo }
+        }
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          appointments: { $sum: 1 },
+          revenue: {
+            $sum: {
+              $cond: [{ $eq: ["$paymentStatus", "paid"] }, "$amount", 0]
+            }
+          }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    // Format for Recharts
+    const chartData = dailyStats.map(stat => ({
+      date: stat._id,
+      appointments: stat.appointments,
+      revenue: stat.revenue
+    }));
+
+    return req.http.ok(chartData);
   } catch (err) {
     next(err);
   }

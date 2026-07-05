@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import API from "../services/api";
 import toast from "react-hot-toast";
+import FamilyProfiles from "../components/profile/FamilyProfiles";
+import HealthVault from "../components/profile/HealthVault";
 
 const PRESET_AVATARS = [
   "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix",
@@ -19,6 +21,8 @@ const GENDERS = ["male", "female", "other"];
 
 export default function Profile() {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState("personal");
+  const [fullProfile, setFullProfile] = useState(null);
   
   // Form states
   const [name, setName] = useState("");
@@ -42,6 +46,7 @@ export default function Profile() {
         const res = await API.get("/users/profile");
         const profileData = res.data?.data || res.data;
         if (profileData) {
+          setFullProfile(profileData);
           setName(profileData.name || "");
           setEmail(profileData.email || "");
           setPhone(profileData.phone || "");
@@ -150,10 +155,29 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Form Content */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* Left: Avatar Picker */}
+          {/* Tab Navigation */}
+          <div className="flex gap-2 bg-white rounded-xl p-1.5 w-fit border border-slate-200 shadow-sm mx-auto sm:mx-0">
+            {["personal", "family", "vault"].map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setActiveTab(t)}
+                className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === t
+                    ? "bg-primary-600 text-white shadow-sm"
+                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {t === "personal" ? "👤 Personal Info" : t === "family" ? "👨‍👩‍👧‍👦 Family Profiles" : "📁 Health Vault"}
+              </button>
+            ))}
+          </div>
+
+          {/* Form Content - Personal Info */}
+          {activeTab === "personal" && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              
+              {/* Left: Avatar Picker */}
             <div className="lg:col-span-1 card p-6 space-y-6">
               <div>
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Choose Avatar</h3>
@@ -312,8 +336,22 @@ export default function Profile() {
               </div>
 
             </div>
+          )}
 
-          </div>
+          {/* Family Profiles Content */}
+          {activeTab === "family" && (
+            <div className="card p-6 sm:p-8">
+              <FamilyProfiles profile={fullProfile} setProfile={setFullProfile} />
+            </div>
+          )}
+
+          {/* Health Vault Content */}
+          {activeTab === "vault" && (
+            <div className="card p-6 sm:p-8 bg-slate-50/50">
+              <HealthVault profile={fullProfile} />
+            </div>
+          )}
+
         </form>
       </div>
     </div>

@@ -34,6 +34,20 @@ export default function Doctors() {
   const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [maxFee,        setMaxFee]        = useState(2000);
   const [minExperience, setMinExperience] = useState(0);
+  const [gender,        setGender]        = useState("All");
+  const [sortBy,        setSortBy]        = useState("default");
+
+  const SYMPTOMS_MAP = {
+    "Fever / Cough": "General Physician",
+    "Chest Pain": "Cardiologist",
+    "Skin Rash": "Dermatologist",
+    "Toothache": "Dentist",
+    "Joint Pain": "Orthopedist",
+    "Pregnancy": "Gynecologist",
+    "Anxiety": "Psychiatrist",
+    "Blurry Vision": "Ophthalmologist",
+    "Child Health": "Pediatrician",
+  };
 
   useEffect(() => {
     const fetchDoctors = async () => {
@@ -56,6 +70,8 @@ export default function Doctors() {
     setOnlyAvailable(false);
     setMaxFee(2000);
     setMinExperience(0);
+    setGender("All");
+    setSortBy("default");
   };
 
   // Client-side filtering
@@ -68,17 +84,25 @@ export default function Doctors() {
     const clinicName     = doc.clinicName || "";
 
     const matchCity      = city === "All Cities" || docCity.toLowerCase().includes(city.toLowerCase());
-    const matchSpec      = spec === "All Specialists" || docSpec.toLowerCase().includes(spec.replace(" Specialists", "").toLowerCase());
+    const matchSpec      = spec === "All Specialists" || docSpec.toLowerCase().includes(spec.replace(" Specialists", "").replace(" Specialists", "").replace(" Specialist", "").toLowerCase());
     const matchAvail     = !onlyAvailable || doc.isAvailable === true;
     const matchFee       = fee <= maxFee;
     const matchExp       = exp >= minExperience;
+    const matchGender    = gender === "All" || (doc.userId?.gender || "").toLowerCase() === gender.toLowerCase();
     const matchText      = !search
       || name.toLowerCase().includes(search.toLowerCase())
       || docSpec.toLowerCase().includes(search.toLowerCase())
       || clinicName.toLowerCase().includes(search.toLowerCase())
       || docCity.toLowerCase().includes(search.toLowerCase());
 
-    return matchCity && matchSpec && matchAvail && matchFee && matchExp && matchText;
+    return matchCity && matchSpec && matchAvail && matchFee && matchExp && matchGender && matchText;
+  });
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortBy === "rating") return (b.averageRating || 0) - (a.averageRating || 0);
+    if (sortBy === "fee-asc") return (a.consultationFee || 0) - (b.consultationFee || 0);
+    if (sortBy === "fee-desc") return (b.consultationFee || 0) - (a.consultationFee || 0);
+    return 0;
   });
 
   return (
@@ -109,6 +133,23 @@ export default function Doctors() {
               placeholder="Search by doctor name, specialty, or clinic..."
               className="w-full pl-12 pr-4 py-4 rounded-2xl text-slate-800 font-semibold focus:outline-none focus:ring-4 focus:ring-primary-500/20 shadow-lg border border-slate-100 bg-white"
             />
+          </div>
+
+          {/* Symptom Helper */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-4 text-xs font-bold">
+            <span className="text-primary-100 opacity-80 uppercase tracking-wider">Common Symptoms:</span>
+            {Object.keys(SYMPTOMS_MAP).map((symptom) => (
+              <button
+                key={symptom}
+                onClick={() => {
+                  setSpec(SYMPTOMS_MAP[symptom]);
+                  toast.success(`Filtering by ${SYMPTOMS_MAP[symptom]}!`);
+                }}
+                className="bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-full px-3 py-1 transition-all"
+              >
+                {symptom}
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -179,6 +220,20 @@ export default function Doctors() {
                 </div>
               </div>
 
+              {/* Doctor Gender */}
+              <div>
+                <label className="input-label">Doctor Gender</label>
+                <select
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value)}
+                  className="input cursor-pointer"
+                >
+                  <option value="All">All Genders</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </div>
+
               {/* Experience */}
               <div>
                 <label className="input-label">Min Experience (Years)</label>
@@ -215,13 +270,25 @@ export default function Doctors() {
           {/* ── Doctor Grid Content ── */}
           <div className="lg:col-span-3 space-y-6">
             {/* Header info */}
-            <div className="flex items-center justify-between bg-white border border-slate-100 shadow-sm rounded-2xl px-6 py-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-slate-100 shadow-sm rounded-2xl px-6 py-4">
               <span className="text-sm font-bold text-slate-500">
-                {loading ? "Finding doctors..." : `${filtered.length} specialist${filtered.length !== 1 ? "s" : ""} available`}
+                {loading ? "Finding doctors..." : `${sorted.length} specialist${sorted.length !== 1 ? "s" : ""} available`}
               </span>
-              <span className="text-xs font-bold text-primary-600 bg-primary-50 border border-primary-100 rounded-full px-3 py-1 uppercase">
-                ⚡ Real-time updates
-              </span>
+              <div className="flex items-center gap-3">
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="input py-1.5 px-3 text-xs w-auto cursor-pointer border-slate-200"
+                >
+                  <option value="default">Sort by: Default</option>
+                  <option value="rating">Sort by: Top Rated</option>
+                  <option value="fee-asc">Fee: Low to High</option>
+                  <option value="fee-desc">Fee: High to Low</option>
+                </select>
+                <span className="text-xs font-bold text-primary-600 bg-primary-50 border border-primary-100 rounded-full px-3 py-1 uppercase whitespace-nowrap">
+                  ⚡ Real-time updates
+                </span>
+              </div>
             </div>
 
             {loading ? (
@@ -231,7 +298,7 @@ export default function Doctors() {
                 ))}
               </div>
             ) : (
-              <DoctorList doctors={filtered} onClearFilters={handleClearFilters} />
+              <DoctorList doctors={sorted} onClearFilters={handleClearFilters} />
             )}
           </div>
 

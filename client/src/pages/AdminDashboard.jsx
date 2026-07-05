@@ -1,25 +1,62 @@
 import { useState, useEffect } from "react";
 import API from "../services/api";
+import { RevenueChart, AppointmentVolumeChart } from "../components/common/Charts";
+import { exportToCSV, exportToPDF } from "../utils/export";
 
 export default function AdminDashboard() {
   const [data, setData] = useState(null);
+  const [analytics, setAnalytics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const fetchDashboard = async () => {
+    try {
+      const [resDash, resAnalytics] = await Promise.all([
+        API.get("/admin/dashboard"),
+        API.get("/admin/analytics")
+      ]);
+      setData(resDash.data.data || resDash.data);
+      setAnalytics(resAnalytics.data.data || resAnalytics.data);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load admin dashboard.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchDashboard = async () => {
-      try {
-        const res = await API.get("/admin/dashboard");
-        setData(res.data.data || res.data);
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load admin dashboard.");
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchDashboard();
   }, []);
+
+  const handleVerify = async (id, isVerified) => {
+    try {
+      await API.put(`/admin/doctors/${id}/verify`, { isVerified });
+      fetchDashboard();
+    } catch (err) {
+      console.error("Verification failed:", err);
+    }
+  };
+
+  const handleClearReview = async (id) => {
+    if (!window.confirm("Clear this review?")) return;
+    try {
+      await API.delete(`/admin/appointments/${id}/review`);
+      fetchDashboard();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleForceRefund = async (id) => {
+    if (!window.confirm("Force refund for this appointment?")) return;
+    try {
+      await API.put(`/admin/appointments/${id}/refund`);
+      fetchDashboard();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   if (loading) {
     return (
@@ -44,9 +81,25 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-surface py-10 px-4">
       <div className="max-w-6xl mx-auto space-y-8">
         
-        <div>
-          <h1 className="text-3xl font-black text-slate-900">Admin Dashboard</h1>
-          <p className="text-slate-500 mt-1">Platform overview and statistics</p>
+        <div className="flex justify-between items-end">
+          <div>
+            <h1 className="text-3xl font-black text-slate-900">Admin Dashboard</h1>
+            <p className="text-slate-500 mt-1">Platform overview and statistics</p>
+          </div>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => exportToCSV(analytics, "admin-analytics.csv")}
+              className="btn-primary py-2 text-sm bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
+            >
+              Export CSV
+            </button>
+            <button 
+              onClick={() => exportToPDF(analytics, "Admin Analytics (Last 30 Days)", "admin-analytics.pdf")}
+              className="btn-primary py-2 text-sm"
+            >
+              Export PDF
+            </button>
+          </div>
         </div>
 
         {/* Stats Grid */}
@@ -62,6 +115,18 @@ export default function AdminDashboard() {
               <p className="text-3xl font-black mt-2">{s.val}</p>
             </div>
           ))}
+        </div>
+
+        {/* Charts Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="card p-5">
+            <h3 className="font-black text-slate-800 mb-4">Revenue Trends (Last 30 Days)</h3>
+            <RevenueChart data={analytics} />
+          </div>
+          <div className="card p-5">
+            <h3 className="font-black text-slate-800 mb-4">Appointment Volume (Last 30 Days)</h3>
+            <AppointmentVolumeChart data={analytics} />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -88,6 +153,19 @@ export default function AdminDashboard() {
                         {a.status}
                       </span>
                       <p className="text-xs text-slate-400 mt-1">{new Date(a.appointmentDate).toLocaleDateString()}</p>
+                      
+                      <div className="flex gap-2 justify-end mt-2">
+                        {a.review && !a.review.includes("[Review removed by Admin]") && (
+                          <button onClick={() => handleClearReview(a._id)} className="text-[10px] font-bold text-red-600 bg-red-50 hover:bg-red-100 px-2 py-1 rounded">
+                            Clear Review
+                          </button>
+                        )}
+                        {a.paymentStatus === "paid" && (
+                          <button onClick={() => handleForceRefund(a._id)} className="text-[10px] font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded">
+                            Force Refund
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))
@@ -115,7 +193,19 @@ export default function AdminDashboard() {
                         <p className="text-xs text-slate-500">{d.specialization}</p>
                       </div>
                     </div>
-                    <span className={`w-2.5 h-2.5 rounded-full ${d.isAvailable ? "bg-green-500" : "bg-slate-300"}`} title={d.isAvailable ? "Available" : "Unavailable"} />
+                    <div className="flex items-center gap-4">
+                      {d.isVerified ? (
+                        <span className="text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-full">Verified</span>
+                      ) : (
+                        <button
+                          onClick={() => handleVerify(d._id, true)}
+                          className="btn-primary py-1 px-3 text-xs bg-amber-500 hover:bg-amber-600 border-none"
+                        >
+                          Approve
+                        </button>
+                      )}
+                      <span className={`w-2.5 h-2.5 rounded-full ${d.isAvailable ? "bg-green-500" : "bg-slate-300"}`} title={d.isAvailable ? "Available" : "Unavailable"} />
+                    </div>
                   </div>
                 ))
               ) : (

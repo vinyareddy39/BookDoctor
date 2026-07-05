@@ -3,15 +3,6 @@ import API from "../services/api";
 
 const AuthContext = createContext();
 
-// Helper: decode JWT payload without a library
-const parseJwt = (token) => {
-  try {
-    return JSON.parse(atob(token.split(".")[1]));
-  } catch {
-    return null;
-  }
-};
-
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);   // { token, role, name, email, _id }
   const [loading, setLoading] = useState(true);
@@ -52,21 +43,16 @@ export const AuthProvider = ({ children }) => {
   // REGISTER
   const register = async (data) => {
     const res = await API.post("/auth/register", data);
-    const payload = res.data?.data;
-    const token = payload?.token;
-    if (token) {
-      persist(token, {
-        _id: payload._id,
-        name: payload.name,
-        email: payload.email,
-        role: payload.role,
-      });
-    }
-    return res.data;
+    return res.data; // Don't persist yet since email verification is pending
   };
 
   // LOGOUT
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await API.post("/auth/logout");
+    } catch (err) {
+      console.warn("Logout request failed:", err.message);
+    }
     localStorage.removeItem("token");
     localStorage.removeItem("userData");
     setUser(null);

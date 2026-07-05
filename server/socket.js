@@ -1,4 +1,5 @@
 import { Server } from "socket.io";
+import Message from "./models/Message.js";
 
 let io;
 // Map to keep track of connected users: { userId: socketId }
@@ -20,16 +21,52 @@ export const initSocket = (server, allowedOrigins) => {
     socket.on("register", (userId) => {
       if (userId) {
         userSockets.set(userId, socket.id);
-        // console.log(`User ${userId} registered with socket ${socket.id}`);
       }
     });
 
+    // ── In-App Chat Rooms ───────────────────────────────────────────────────
+    // Join a shared chat room scoped to an appointment
+    socket.on("join-chat", (appointmentId) => {
+      socket.join(`chat-${appointmentId}`);
+    });
+
+    socket.on("leave-chat", (appointmentId) => {
+      socket.leave(`chat-${appointmentId}`);
+    });
+
+    // When user sends a message, persist it then broadcast to room
+    socket.on("send-message", async (payload) => {
+      // payload: { appointmentId, senderId, senderName, receiverId, text }
+      try {
+        const msg = await Message.create({
+          appointmentId: payload.appointmentId,
+          senderId:      payload.senderId,
+          receiverId:    payload.receiverId,
+          text:          payload.text,
+        });
+
+        const response = {
+          _id:           msg._id,
+          appointmentId: payload.appointmentId,
+          senderId:      { _id: payload.senderId, name: payload.senderName },
+          text:          payload.text,
+          createdAt:     msg.createdAt,
+        };
+
+        // Broadcast to all sockets in the appointment chat room
+        io.to(`chat-${payload.appointmentId}`).emit("receive-message", response);
+
+      } catch (err) {
+        console.error("Socket send-message error:", err.message);
+        socket.emit("chat-error", { message: "Failed to send message." });
+      }
+    });
+
+    // ── Disconnect ────────────────────────────────────────────────────────
     socket.on("disconnect", () => {
-      // Remove socket from the map on disconnect
       for (const [userId, socketId] of userSockets.entries()) {
         if (socketId === socket.id) {
           userSockets.delete(userId);
-          // console.log(`User ${userId} disconnected`);
           break;
         }
       }

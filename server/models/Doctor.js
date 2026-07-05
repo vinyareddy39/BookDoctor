@@ -68,6 +68,25 @@ const doctorSchema = new mongoose.Schema(
       default: "",
     },
 
+    // ─── Admin Verification ───────────────────────────────────────────────────
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+
+    // Average rating (denormalized for fast sorting)
+    averageRating: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+    },
+
+    totalReviews: {
+      type: Number,
+      default: 0,
+    },
+
     // ─── Google Calendar Integration ─────────────────────────────────────
     googleAccessToken: {
       type: String,
@@ -86,9 +105,9 @@ const doctorSchema = new mongoose.Schema(
 );
 
 // ─── Indexes for search performance ─────────────────────────────────────────
-// Powers GET /doctors?city=&specialization=&available=true
 doctorSchema.index({ city: 1, specialization: 1, isAvailable: 1 });
-// Ensures one doctor profile per user account
 doctorSchema.index({ userId: 1 }, { unique: true });
+doctorSchema.index({ averageRating: -1 });
+doctorSchema.index({ consultationFee: 1 });
 
 export default mongoose.model("Doctor", doctorSchema);

@@ -49,3 +49,90 @@ export const getDashboard = async (req, res, next) => {
     next(err);
   }
 };
+
+// VERIFY / APPROVE DOCTOR (Admin only)
+export const verifyDoctor = async (req, res, next) => {
+  try {
+    const { isVerified } = req.body;
+    const doctor = await Doctor.findByIdAndUpdate(
+      req.params.id,
+      { isVerified },
+      { new: true }
+    ).populate("userId", "name email");
+
+    if (!doctor) return req.http.notFound("Doctor profile not found.");
+
+    return req.http.ok(doctor, `Doctor verified status updated to ${isVerified}`);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET ADMIN ANALYTICS (Charts)
+export const getAnalytics = async (req, res, next) => {
+  try {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const dailyStats = await Appointment.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: thirtyDaysAgo }
+        }
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          appointments: { $sum: 1 },
+          revenue: {
+            $sum: {
+              $cond: [{ $eq: ["$paymentStatus", "paid"] }, "$amount", 0]
+            }
+          }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    // Format for Recharts
+    const chartData = dailyStats.map(stat => ({
+      date: stat._id,
+      appointments: stat.appointments,
+      revenue: stat.revenue
+    }));
+
+    return req.http.ok(chartData);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// CLEAR REVIEW (Admin Moderation)
+export const clearReview = async (req, res, next) => {
+  try {
+    const appointment = await Appointment.findByIdAndUpdate(
+      req.params.id,
+      { $set: { review: "[Review removed by Admin]", rating: null } },
+      { new: true }
+    );
+    if (!appointment) return req.http.notFound("Appointment not found");
+    return req.http.ok(appointment, "Review cleared");
+  } catch (err) {
+    next(err);
+  }
+};
+
+// FORCE REFUND (Admin Dispute Resolution)
+export const forceRefund = async (req, res, next) => {
+  try {
+    const appointment = await Appointment.findByIdAndUpdate(
+      req.params.id,
+      { $set: { paymentStatus: "refunded", status: "cancelled" } },
+      { new: true }
+    );
+    if (!appointment) return req.http.notFound("Appointment not found");
+    return req.http.ok(appointment, "Appointment cancelled and payment marked as refunded");
+  } catch (err) {
+    next(err);
+  }
+};

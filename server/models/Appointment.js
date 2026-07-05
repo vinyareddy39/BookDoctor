@@ -8,6 +8,11 @@ const appointmentSchema = new mongoose.Schema(
       required: true,
     },
 
+    dependentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null, // Null means booked for the patient themselves
+    },
+
     doctorId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Doctor",
@@ -32,7 +37,7 @@ const appointmentSchema = new mongoose.Schema(
 
     paymentStatus: {
       type: String,
-      enum: ["pending", "paid", "failed"],
+      enum: ["pending", "paid", "failed", "refunded"],
       default: "pending",
     },
 
@@ -51,14 +56,22 @@ const appointmentSchema = new mongoose.Schema(
       min: 1,
       max: 5,
     },
+
+    prescription: {
+      type: String,
+      default: "",
+    },
+    
+    rescheduleCount: {
+      type: Number,
+      default: 0,
+    }
   },
   { timestamps: true }
 );
 
 // ─── Indexes for query performance ──────────────────────────────────────────
-// Patient dashboard: fetch by patientId sorted by date
 appointmentSchema.index({ patientId: 1, appointmentDate: -1 });
-// Doctor dashboard: fetch by doctorId + status filter
 appointmentSchema.index({ doctorId: 1, status: 1 });
 
 export default mongoose.model("Appointment", appointmentSchema);

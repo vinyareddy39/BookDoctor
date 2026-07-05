@@ -3,14 +3,18 @@ import {
   bookAppointment,
   getAppointments,
   updateAppointment,
+  rescheduleAppointment,
+  addPrescription,
   cancelAppointment,
   deleteAppointment,
+  getAppointmentRoom,
+  submitFeedback,
 } from "../controllers/appointmentController.js";
 import { auth, role, validate } from "../middleware/index.js";
 
 const router = express.Router();
 
-// Book — patient only (validate required fields first)
+// Book — patient only
 router.post(
   "/",
   auth,
@@ -19,16 +23,26 @@ router.post(
   bookAppointment
 );
 
-// Get all (role-scoped: patient sees own, doctor sees their clinic's, admin sees all)
+// Get all
 router.get("/", auth, getAppointments);
 
-// Update status (doctor or admin — ownership enforced in controller)
+// Update status (doctor or admin)
 router.put("/:id", auth, role("doctor", "admin"), updateAppointment);
 
-// Soft-cancel (patient, doctor, or admin — ownership enforced in controller)
+// Cancel / Reschedule
 router.patch("/:id/cancel", auth, cancelAppointment);
+router.patch("/:id/reschedule", auth, validate(["appointmentDate", "appointmentTime"]), rescheduleAppointment);
 
-// Hard delete (admin only — for data cleanup)
+// Video Consultation Room
+router.get("/:id/room", auth, getAppointmentRoom);
+
+// Feedback
+router.patch("/:id/feedback", auth, role("patient"), validate(["rating"]), submitFeedback);
+
+// Doctor specific
+router.patch("/:id/prescription", auth, role("doctor"), validate(["prescription"]), addPrescription);
+
+// Hard delete (admin only)
 router.delete("/:id", auth, role("admin"), deleteAppointment);
 
 export default router;

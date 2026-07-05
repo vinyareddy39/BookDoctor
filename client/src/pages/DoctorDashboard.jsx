@@ -3,16 +3,18 @@ import { useAuth } from "../context/AuthContext";
 import API from "../services/api";
 import toast from "react-hot-toast";
 
-// Sub-components (split for maintainability)
 import DashboardStats     from "../components/dashboard/DashboardStats.jsx";
 import AppointmentsList   from "../components/dashboard/AppointmentsList.jsx";
 import ClinicSettingsForm from "../components/dashboard/ClinicSettingsForm.jsx";
+import { RevenueChart, AppointmentVolumeChart } from "../components/common/Charts.jsx";
+import { exportToCSV, exportToPDF } from "../utils/export.js";
 
 export default function DoctorDashboard() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState("appointments");
+  const [activeTab, setActiveTab] = useState("analytics");
   const [profile, setProfile] = useState(null);
   const [appts, setAppts] = useState([]);
+  const [analytics, setAnalytics] = useState([]);
 
   const [form, setForm] = useState({
     name: "", phone: "", specialization: "", qualification: "",
@@ -31,7 +33,17 @@ export default function DoctorDashboard() {
   useEffect(() => {
     fetchProfile();
     fetchAppointments();
+    fetchAnalytics();
   }, []);
+
+  const fetchAnalytics = async () => {
+    try {
+      const res = await API.get("/doctors/analytics");
+      setAnalytics(res.data.data || res.data);
+    } catch (err) {
+      console.error("Failed to load doctor analytics", err);
+    }
+  };
 
   const fetchProfile = async () => {
     try {
@@ -203,7 +215,7 @@ export default function DoctorDashboard() {
 
         {/* Tab Bar */}
         <div className="flex gap-2 bg-white rounded-xl p-1.5 w-fit border border-slate-200 mb-8 shadow-sm">
-          {["appointments", "profile"].map((t) => (
+          {["analytics", "appointments", "profile"].map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
@@ -213,12 +225,41 @@ export default function DoctorDashboard() {
                   : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
               }`}
             >
-              {t === "appointments" ? "📋 Appointments" : "⚙️ Clinic & Schedule"}
+              {t === "analytics" ? "📈 Analytics" : t === "appointments" ? "📋 Appointments" : "⚙️ Clinic & Schedule"}
             </button>
           ))}
         </div>
 
         {/* Tab content */}
+        {activeTab === "analytics" && (
+          <div className="space-y-6">
+            <div className="flex justify-end gap-2">
+              <button 
+                onClick={() => exportToCSV(analytics, "doctor-analytics.csv")}
+                className="btn-primary py-1.5 px-4 text-xs bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
+              >
+                Export CSV
+              </button>
+              <button 
+                onClick={() => exportToPDF(analytics, `Analytics - Dr. ${profile?.userId?.name || user?.name}`, "doctor-analytics.pdf")}
+                className="btn-primary py-1.5 px-4 text-xs"
+              >
+                Export PDF
+              </button>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="card p-5">
+                <h3 className="font-black text-slate-800 mb-4">Revenue Trends (Last 30 Days)</h3>
+                <RevenueChart data={analytics} />
+              </div>
+              <div className="card p-5">
+                <h3 className="font-black text-slate-800 mb-4">Appointment Volume (Last 30 Days)</h3>
+                <AppointmentVolumeChart data={analytics} />
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === "appointments" && (
           <AppointmentsList
             appts={appts}

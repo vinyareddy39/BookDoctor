@@ -167,6 +167,27 @@ export default function AppointmentsList({ appts, loading, onStatusUpdate, onPay
                 {a.review && <p className="text-sm text-slate-600 italic">"{a.review}"</p>}
               </div>
             )}
+
+            {/* Prescription Form for Doctors */}
+            {a.status === "completed" && (
+              <div className="mt-3 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <label className="text-xs font-bold text-slate-700 block">📝 Prescription / Clinical Notes</label>
+                <textarea
+                  placeholder="Enter medical prescription, dosage, guidelines..."
+                  defaultValue={a.prescription || ""}
+                  onBlur={async (e) => {
+                    try {
+                      await API.patch(`/appointments/${a._id}/prescription`, { prescription: e.target.value });
+                      toast.success("Prescription saved successfully!");
+                    } catch (err) {
+                      toast.error("Failed to save prescription.");
+                    }
+                  }}
+                  className="w-full text-sm input p-3 border-slate-200 rounded-lg min-h-[80px]"
+                />
+                <p className="text-[10px] text-slate-400">Prescription auto-saves when you click outside the text area.</p>
+              </div>
+            )}
           </div>
         );
       })}

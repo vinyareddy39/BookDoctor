@@ -23,8 +23,22 @@ export default function AppointmentCard({ appointment }) {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   
+  // Reschedule state
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [newDate, setNewDate] = useState("");
+  const [newTime, setNewTime] = useState("");
+  const [rescheduling, setRescheduling] = useState(false);
+  
   // Local state for status updates (to avoid full refetch)
   const [currentStatus, setCurrentStatus] = useState((appointment?.status || "pending").toLowerCase());
+  const [currentDate, setCurrentDate] = useState(appointment?.appointmentDate);
+  const [currentTime, setCurrentTime] = useState(appointment?.appointmentTime);
+
+  const isDoctorView = window.location.pathname.includes("/dashboard");
+  const dependent = appointment.dependentId
+    ? appointment.patientId?.dependents?.find(d => d._id === appointment.dependentId)
+    : null;
+  const forName = dependent ? dependent.name : appointment.patientId?.name;
 
   const doc            = appointment?.doctorId;
   const doctorName     = doc?.userId?.name || doc?.name || "Doctor";
@@ -34,11 +48,11 @@ export default function AppointmentCard({ appointment }) {
   const clinicName     = doc?.clinicName || "";
   const initials       = doctorName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 
-  const rawDate = appointment?.appointmentDate;
+  const rawDate = currentDate;
   const date    = rawDate
     ? new Date(rawDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
     : "TBD";
-  const time    = appointment?.appointmentTime || "TBD";
+  const time    = currentTime || "TBD";
   const status  = currentStatus;
   const payment = appointment?.paymentStatus || "pending";
 
@@ -49,7 +63,7 @@ export default function AppointmentCard({ appointment }) {
     setError("");
     setSubmitting(true);
     try {
-      await API.put(`/appointments/${appointment._id}`, { rating, review });
+      await API.patch(`/appointments/${appointment._id}/feedback`, { rating, review });
       setSubmittedFeedback({ rating, review });
       setShowFeedbackForm(false);
     } catch (err) {
@@ -67,9 +81,27 @@ export default function AppointmentCard({ appointment }) {
       setShowCancelModal(false);
     } catch (err) {
       console.error(err);
-      // Let it fail silently for now or add a toast later if needed, since toast isn't imported here
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const handleReschedule = async (e) => {
+    e.preventDefault();
+    if (!newDate || !newTime) return;
+    setRescheduling(true);
+    try {
+      await API.patch(`/appointments/${appointment._id}/reschedule`, {
+        appointmentDate: newDate,
+        appointmentTime: newTime,
+      });
+      setCurrentDate(newDate);
+      setCurrentTime(newTime);
+      setShowRescheduleModal(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRescheduling(false);
     }
   };
 
@@ -79,12 +111,19 @@ export default function AppointmentCard({ appointment }) {
         {/* Header */}
         <div className="bg-gradient-to-r from-primary-50 to-secondary-50 px-5 py-4 flex items-center gap-4">
           <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-lg font-extrabold text-primary-600 shadow-sm flex-shrink-0">
-            {initials}
+            {isDoctorView ? (appointment.patientId?.name?.charAt(0) || "P") : initials}
           </div>
-          <Link to={`/book-appointment/${doc._id}`} className="flex-1 min-w-0 hover:opacity-80 transition-opacity">
-            <h4 className="font-extrabold text-slate-800 truncate hover:text-primary-600 transition-colors">Dr. {doctorName}</h4>
-            <p className="text-sm text-secondary-600 font-medium">{specialization}</p>
-          </Link>
+          {isDoctorView ? (
+            <div className="flex-1 min-w-0">
+              <h4 className="font-extrabold text-slate-800 truncate">{appointment.patientId?.name || "Unknown Patient"}</h4>
+              <p className="text-sm text-secondary-600 font-medium">Booking for: {forName}</p>
+            </div>
+          ) : (
+            <Link to={`/book-appointment/${doc._id}`} className="flex-1 min-w-0 hover:opacity-80 transition-opacity">
+              <h4 className="font-extrabold text-slate-800 truncate hover:text-primary-600 transition-colors">Dr. {doctorName}</h4>
+              <p className="text-sm text-secondary-600 font-medium">{specialization}</p>
+            </Link>
+          )}
           {/* Status Badge */}
           <span className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border ${sc.bg} ${sc.text} ${sc.border} flex-shrink-0`}>
             <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`}></span>
@@ -136,6 +175,36 @@ export default function AppointmentCard({ appointment }) {
               )}
             </div>
           )}
+
+          {/* Prescription Display */}
+          {appointment?.prescription && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl space-y-2">
+              <div className="flex items-center gap-1.5 text-blue-800 font-bold text-xs">
+                <span>📝 Prescription / Medical Notes:</span>
+              </div>
+              <p className="text-xs text-blue-700 whitespace-pre-wrap leading-relaxed">{appointment.prescription}</p>
+            </div>
+          )}
+
+          {/* Patient View Info (Booking For) */}
+          {!isDoctorView && (
+            <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Booking For:</span>
+              <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-md">{forName}</span>
+            </div>
+          )}
+
+          {/* Join Call Button */}
+          {status === "confirmed" && (
+            <div className="mt-4 pt-3 border-t border-slate-100">
+              <Link 
+                to={`/room/${appointment._id}`}
+                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-bold shadow-md shadow-emerald-500/30 transition-all"
+              >
+                <span>🎥</span> Join Video Consultation
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 
@@ -163,14 +232,22 @@ export default function AppointmentCard({ appointment }) {
               </button>
             )}
 
-            {/* Cancel button if pending or confirmed */}
+            {/* Cancel & Reschedule buttons if pending or confirmed */}
             {(status === "pending" || status === "confirmed") && (
-              <button
-                onClick={() => setShowCancelModal(true)}
-                className="btn-danger text-xs px-3 py-1.5 shadow-none hover:-translate-y-0"
-              >
-                Cancel
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowRescheduleModal(true)}
+                  className="bg-primary-100 hover:bg-primary-200 text-primary-700 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Reschedule
+                </button>
+                <button
+                  onClick={() => setShowCancelModal(true)}
+                  className="btn-danger text-xs px-3 py-1.5 shadow-none hover:-translate-y-0"
+                >
+                  Cancel
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -259,6 +336,57 @@ export default function AppointmentCard({ appointment }) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {/* Reschedule Modal */}
+      {showRescheduleModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <form onSubmit={handleReschedule} className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 animate-fade-in-up space-y-4">
+            <h3 className="text-lg font-black text-slate-800">Reschedule Appointment</h3>
+            <p className="text-slate-500 text-sm">
+              Select a new date and time slot for your appointment with Dr. {doctorName}.
+            </p>
+            <div>
+              <label className="input-label">Select Date</label>
+              <input
+                type="date"
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
+                required
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="input-label">Select Time Slot</label>
+              <select
+                value={newTime}
+                onChange={(e) => setNewTime(e.target.value)}
+                required
+                className="input"
+              >
+                <option value="">Choose a slot...</option>
+                {["09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "02:00 PM", "03:00 PM", "04:00 PM"].map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowRescheduleModal(false)}
+                className="btn-secondary flex-1 py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={rescheduling}
+                className="btn-primary flex-1 py-2 text-sm"
+              >
+                {rescheduling ? "Saving..." : "Confirm"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

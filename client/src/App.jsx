@@ -23,6 +23,10 @@ const NotFound        = lazy(() => import("./pages/NotFound.jsx"));
 const About           = lazy(() => import("./pages/About.jsx"));
 const Contact         = lazy(() => import("./pages/Contact.jsx"));
 const AdminDashboard  = lazy(() => import("./pages/AdminDashboard.jsx"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword.jsx"));
+const ResetPassword   = lazy(() => import("./pages/ResetPassword.jsx"));
+const VerifyEmail     = lazy(() => import("./pages/VerifyEmail.jsx"));
+const VideoConsultation = lazy(() => import("./components/appointment/VideoConsultation.jsx"));
 
 // Page loader fallback
 function PageLoader() {
@@ -98,6 +102,9 @@ function App() {
             <Route path="/doctors"            element={<Doctors />} />
             <Route path="/about"             element={<About />} />
             <Route path="/contact"           element={<Contact />} />
+            <Route path="/forgot-password"   element={<ForgotPassword />} />
+            <Route path="/reset-password"     element={<ResetPassword />} />
+            <Route path="/verify-email"       element={<VerifyEmail />} />
 
             {/* Patient protected */}
             <Route path="/book/:id"             element={<AuthRoute><BookAppointment /></AuthRoute>} />
@@ -107,6 +114,9 @@ function App() {
 
             {/* Doctor protected */}
             <Route path="/doctor/dashboard"   element={<DoctorRoute><DoctorDashboard /></DoctorRoute>} />
+            
+            {/* Real-time Video Consultation Room */}
+            <Route path="/room/:id"           element={<AuthRoute><VideoConsultation /></AuthRoute>} />
 
             {/* Admin protected */}
             <Route path="/admin"              element={<AdminRoute><AdminDashboard /></AdminRoute>} />
