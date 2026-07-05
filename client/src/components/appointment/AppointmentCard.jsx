@@ -88,7 +88,13 @@ export default function AppointmentCard({ appointment }) {
         appointmentId: appointment._id,
       });
 
-      const { order_id, amount, currency, key_id } = res.data.data;
+      const { order_id, amount, currency, key_id, demoMode } = res.data.data || res.data;
+
+      if (demoMode) {
+        toast.success("Demo Mode: Payment successful!");
+        setLocalPaymentStatus("paid");
+        return;
+      }
 
       // 2. Open Razorpay Checkout
       const options = {

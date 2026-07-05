@@ -33,6 +33,19 @@ export const createOrder = async (req, res, next) => {
       return req.http.notFound("Appointment not found");
     }
 
+    // Demo Mode bypass
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+      // Simulate successful payment instantly for demo purposes
+      await Appointment.findByIdAndUpdate(appointmentId, { paymentStatus: "paid" });
+      if (appointment.doctorId) {
+        const doctor = await mongoose.model("Doctor").findById(appointment.doctorId);
+        if (doctor) {
+          triggerDashboardUpdate(doctor.userId, "A payment was captured (Demo Mode)");
+        }
+      }
+      return req.http.ok({ demoMode: true }, "Demo Mode: Payment marked as successful");
+    }
+
     const rzp = getRazorpayInstance();
 
     // Create Razorpay order (amount is in paise)
