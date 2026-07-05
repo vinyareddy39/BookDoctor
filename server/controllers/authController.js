@@ -73,13 +73,7 @@ export const login = async (req, res, next) => {
     if (!isMatch) return req.http.unauthorized("Invalid email or password.");
 
     // Enforce email verification (optional block — but highly recommended)
-    if (!user.isEmailVerified) {
-      return res.status(403).json({
-        success: false,
-        message: "Please verify your email address before logging in.",
-        unverified: true
-      });
-    }
+    // Removed to allow users to login since email sending is not configured
 
     // Generate tokens
     const accessToken = generateAccessToken(user._id, user.role);
