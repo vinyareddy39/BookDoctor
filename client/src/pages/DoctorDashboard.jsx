@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import API from "../services/api";
 import toast from "react-hot-toast";
-import { socket } from "../services/socket";
+import { useSocket } from "../context/SocketContext";
 
 import DashboardStats     from "../components/dashboard/DashboardStats.jsx";
 import AppointmentsList   from "../components/dashboard/AppointmentsList.jsx";
@@ -12,6 +12,7 @@ import { exportToCSV, exportToPDF } from "../utils/export.js";
 
 export default function DoctorDashboard() {
   const { user } = useAuth();
+  const { socket } = useSocket();
   const [activeTab, setActiveTab] = useState("analytics");
   const [profile, setProfile] = useState(null);
   const [appts, setAppts] = useState([]);
@@ -35,7 +36,9 @@ export default function DoctorDashboard() {
     fetchProfile();
     fetchAppointments();
     fetchAnalytics();
+  }, []);
 
+  useEffect(() => {
     if (socket) {
       const handleDashboardUpdate = (data) => {
         // Refetch appointments and analytics when backend says there is an update
@@ -48,7 +51,7 @@ export default function DoctorDashboard() {
         socket.off("DASHBOARD_UPDATE", handleDashboardUpdate);
       };
     }
-  }, []);
+  }, [socket]);
 
   const fetchAnalytics = async () => {
     try {
