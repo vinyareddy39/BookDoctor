@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useSocket } from "../context/SocketContext";
 import API from "../services/api";
-import socket from "../services/socket";
 import toast from "react-hot-toast";
 
 function formatTime(dateStr) {
@@ -23,6 +23,7 @@ function formatDate(dateStr) {
 export default function Chat() {
   const { id: appointmentId } = useParams();
   const { user } = useAuth();
+  const { socket } = useSocket();
   const [appointment, setAppointment] = useState(null);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
@@ -68,7 +69,7 @@ export default function Chat() {
 
   // Join socket room and listen for messages
   useEffect(() => {
-    if (!user) return;
+    if (!user || !socket) return;
 
     socket.emit("register", user._id);
     socket.emit("join-chat", appointmentId);
@@ -89,7 +90,7 @@ export default function Chat() {
       socket.off("receive-message", handleReceive);
       socket.off("chat-error");
     };
-  }, [appointmentId, user]);
+  }, [appointmentId, user, socket]);
 
   // Auto-scroll to latest message
   useEffect(() => {
@@ -100,7 +101,7 @@ export default function Chat() {
     (e) => {
       e.preventDefault();
       const trimmed = text.trim();
-      if (!trimmed || !receiverId) return;
+      if (!trimmed || !receiverId || !socket) return;
 
       socket.emit("send-message", {
         appointmentId,
@@ -112,7 +113,7 @@ export default function Chat() {
 
       setText("");
     },
-    [text, appointmentId, user, receiverId]
+    [text, appointmentId, user, receiverId, socket]
   );
 
   // Group messages by date
