@@ -95,3 +95,11 @@ export const sendNotificationToUser = (userId, messagePayload) => {
     io.to(socketId).emit("notification", messagePayload);
   }
 };
+
+export const triggerDashboardUpdate = (userId, message) => {
+  if (!io) return;
+  const socketId = userSockets.get(String(userId));
+  if (socketId) {
+    io.to(socketId).emit("DASHBOARD_UPDATE", { message });
+  }
+};

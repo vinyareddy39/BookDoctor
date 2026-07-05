@@ -1,12 +1,14 @@
 import Razorpay from "razorpay";
+import mongoose from "mongoose";
 import crypto from "crypto";
-import Payment from "../models/Payment.js";
+import Transaction from "../models/Transaction.js";
 import Appointment from "../models/Appointment.js";
+import { getIO, triggerDashboardUpdate } from "../socket.js";
 
-// Initialize Razorpay
+// Initialize Razorpay instance lazily to avoid crash if keys are missing initially
 const getRazorpayInstance = () => {
   if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-    throw new Error("Razorpay API keys are missing in the environment config.");
+    throw new Error("Razorpay API keys are not configured.");
   }
   return new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
@@ -14,98 +16,180 @@ const getRazorpayInstance = () => {
   });
 };
 
-// CREATE ORDER
+// ==========================================
+// 1. CREATE ORDER
+// ==========================================
 export const createOrder = async (req, res, next) => {
   try {
-    const { amount, appointmentId } = req.body;
+    const { amount, currency = "INR", appointmentId } = req.body;
+
     if (!amount || !appointmentId) {
-      return req.http.badRequest("Amount and appointmentId are required.");
+      return req.http.badRequest("Amount and Appointment ID are required");
     }
 
-    const instance = getRazorpayInstance();
+    // Verify appointment exists
+    const appointment = await Appointment.findById(appointmentId).populate("patientId", "name email phone");
+    if (!appointment) {
+      return req.http.notFound("Appointment not found");
+    }
+
+    const rzp = getRazorpayInstance();
+
+    // Create Razorpay order (amount is in paise)
     const options = {
-      amount: Math.round(amount * 100), // in paisa
-      currency: "INR",
+      amount: amount * 100, 
+      currency,
       receipt: `receipt_${appointmentId}`,
     };
 
-    const order = await instance.orders.create(options);
+    const order = await rzp.orders.create(options);
 
-    // Save initial payment record
-    await Payment.create({
-      appointmentId,
+    // Create pending transaction in DB
+    await Transaction.create({
       userId: req.user._id,
-      razorpayOrderId: order.id,
+      appointmentId,
+      orderId: order.id,
       amount,
+      currency,
       status: "created",
+      customerDetails: {
+        name: appointment.patientId?.name,
+        email: appointment.patientId?.email,
+        contact: appointment.patientId?.phone,
+      }
     });
 
-    return req.http.ok(order, "Razorpay order created successfully");
+    return req.http.ok(
+      {
+        order_id: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        key_id: process.env.RAZORPAY_KEY_ID,
+      },
+      "Order created successfully"
+    );
   } catch (err) {
+    console.error("[Razorpay Create Order Error]", err);
     next(err);
   }
 };
 
-// VERIFY PAYMENT
+// ==========================================
+// 2. VERIFY PAYMENT (Called by Frontend after success)
+// ==========================================
 export const verifyPayment = async (req, res, next) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return req.http.badRequest("Missing required Razorpay parameters.");
+      return req.http.badRequest("Missing payment verification details");
     }
 
+    // Verify signature
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(body.toString())
       .digest("hex");
 
-    if (expectedSignature !== razorpay_signature) {
-      return req.http.badRequest("Payment signature verification failed.");
+    const isAuthentic = expectedSignature === razorpay_signature;
+
+    if (!isAuthentic) {
+      // Mark transaction as failed
+      await Transaction.findOneAndUpdate(
+        { orderId: razorpay_order_id },
+        { status: "failed", paymentId: razorpay_payment_id }
+      );
+      return req.http.badRequest("Payment signature verification failed");
     }
 
-    // Update payment record
-    const payment = await Payment.findOneAndUpdate(
-      { razorpayOrderId: razorpay_order_id },
-      { razorpayPaymentId: razorpay_payment_id, status: "paid" },
+    // Mark transaction as captured
+    const transaction = await Transaction.findOneAndUpdate(
+      { orderId: razorpay_order_id },
+      {
+        status: "captured",
+        paymentId: razorpay_payment_id,
+        signature: razorpay_signature,
+      },
       { new: true }
     );
 
-    if (!payment) return req.http.notFound("Payment order matching ID not found.");
+    if (transaction) {
+      // Mark appointment as paid
+      const appointment = await Appointment.findByIdAndUpdate(
+        transaction.appointmentId,
+        { paymentStatus: "paid" },
+        { new: true }
+      );
 
-    // Update appointment payment status
-    await Appointment.findByIdAndUpdate(payment.appointmentId, {
-      paymentStatus: "paid",
-    });
+      // Notify doctor
+      if (appointment?.doctorId) {
+        // Need to get the actual userId of the doctor
+        const doctor = await mongoose.model("Doctor").findById(appointment.doctorId);
+        if (doctor) {
+          triggerDashboardUpdate(doctor.userId, "A payment was captured");
+        }
+      }
+    }
 
-    return req.http.ok(payment, "Payment verified and recorded successfully.");
+    return req.http.ok(null, "Payment verified successfully");
   } catch (err) {
+    console.error("[Razorpay Verify Error]", err);
     next(err);
   }
 };
 
-// REFUND PAYMENT (Helper function called during cancellation)
-export const refundPayment = async (appointmentId) => {
+// ==========================================
+// 3. WEBHOOK (Called by Razorpay asynchronously)
+// ==========================================
+export const razorpayWebhook = async (req, res, next) => {
   try {
-    const payment = await Payment.findOne({ appointmentId, status: "paid" });
-    if (!payment || !payment.razorpayPaymentId) {
-      console.log(`[Refund] No paid Razorpay transaction found for appointment ${appointmentId}`);
-      return false;
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!secret) return res.status(500).send("Webhook secret not configured");
+
+    const signature = req.headers["x-razorpay-signature"];
+
+    // Validate signature
+    const expectedSignature = crypto
+      .createHmac("sha256", secret)
+      .update(JSON.stringify(req.body))
+      .digest("hex");
+
+    if (signature !== expectedSignature) {
+      return res.status(400).send("Invalid signature");
     }
 
-    const instance = getRazorpayInstance();
-    const refund = await instance.payments.refund(payment.razorpayPaymentId, {
-      amount: Math.round(payment.amount * 100),
-      notes: { reason: "Appointment cancelled by patient/doctor" },
-    });
+    const event = req.body.event;
+    const payload = req.body.payload;
 
-    payment.status = "failed"; // mark transaction status or create a refund doc
-    await payment.save();
+    if (event === "payment.captured" || event === "payment.authorized") {
+      const paymentEntity = payload.payment.entity;
+      const orderId = paymentEntity.order_id;
 
-    console.log(`[Refund] Refund processed for payment ID: ${payment.razorpayPaymentId}`);
-    return true;
+      // Ensure transaction is updated
+      const transaction = await Transaction.findOneAndUpdate(
+        { orderId },
+        { status: "captured", paymentId: paymentEntity.id },
+        { new: true }
+      );
+
+      if (transaction) {
+        await Appointment.findByIdAndUpdate(
+          transaction.appointmentId,
+          { paymentStatus: "paid" }
+        );
+      }
+    } else if (event === "payment.failed") {
+      const paymentEntity = payload.payment.entity;
+      await Transaction.findOneAndUpdate(
+        { orderId: paymentEntity.order_id },
+        { status: "failed" }
+      );
+    }
+
+    res.status(200).send("OK");
   } catch (err) {
-    console.error("Razorpay refund error:", err.message);
-    return false;
+    console.error("[Razorpay Webhook Error]", err);
+    res.status(500).send("Webhook processing error");
   }
 };

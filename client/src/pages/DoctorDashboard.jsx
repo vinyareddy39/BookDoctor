@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import API from "../services/api";
 import toast from "react-hot-toast";
+import { socket } from "../services/socket";
 
 import DashboardStats     from "../components/dashboard/DashboardStats.jsx";
 import AppointmentsList   from "../components/dashboard/AppointmentsList.jsx";
@@ -34,6 +35,19 @@ export default function DoctorDashboard() {
     fetchProfile();
     fetchAppointments();
     fetchAnalytics();
+
+    if (socket) {
+      const handleDashboardUpdate = (data) => {
+        // Refetch appointments and analytics when backend says there is an update
+        fetchAppointments();
+        fetchAnalytics();
+      };
+      
+      socket.on("DASHBOARD_UPDATE", handleDashboardUpdate);
+      return () => {
+        socket.off("DASHBOARD_UPDATE", handleDashboardUpdate);
+      };
+    }
   }, []);
 
   const fetchAnalytics = async () => {

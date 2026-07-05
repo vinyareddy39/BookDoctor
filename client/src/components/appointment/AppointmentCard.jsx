@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
 import API from "../../services/api";
+import { exportPrescriptionToPDF } from "../../utils/export";
 
 const STATUS_CONFIG = {
   pending:   { bg: "bg-amber-50",  text: "text-amber-700",  border: "border-amber-200",  dot: "bg-amber-400",  label: "Pending" },
@@ -55,8 +57,80 @@ export default function AppointmentCard({ appointment }) {
   const time    = currentTime || "TBD";
   const status  = currentStatus;
   const payment = appointment?.paymentStatus || "pending";
+  const [localPaymentStatus, setLocalPaymentStatus] = useState(payment);
 
   const sc = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+
+  // Load Razorpay Script
+  useEffect(() => {
+    if (localPaymentStatus !== "paid" && !isDoctorView) {
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      document.body.appendChild(script);
+      return () => {
+        document.body.removeChild(script);
+      };
+    }
+  }, [localPaymentStatus, isDoctorView]);
+
+  const handlePayment = async () => {
+    try {
+      if (!window.Razorpay) {
+        toast.error("Razorpay SDK failed to load. Are you online?");
+        return;
+      }
+
+      // 1. Create order on backend
+      const res = await API.post("/payments/create-order", {
+        amount: fee,
+        currency: "INR",
+        appointmentId: appointment._id,
+      });
+
+      const { order_id, amount, currency, key_id } = res.data.data;
+
+      // 2. Open Razorpay Checkout
+      const options = {
+        key: key_id,
+        amount: amount,
+        currency: currency,
+        name: "BookDoctor",
+        description: `Payment for appointment with Dr. ${doctorName}`,
+        order_id: order_id,
+        handler: async function (response) {
+          // 3. Verify payment on backend
+          try {
+            await API.post("/payments/verify", {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+            toast.success("Payment successful!");
+            setLocalPaymentStatus("paid");
+          } catch (err) {
+            toast.error("Payment verification failed.");
+          }
+        },
+        prefill: {
+          name: forName,
+          email: appointment.patientId?.email || "",
+          contact: appointment.patientId?.phone || "",
+        },
+        theme: {
+          color: "#3b82f6",
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on("payment.failed", function (response) {
+        toast.error(response.error.description || "Payment failed");
+      });
+      rzp.open();
+    } catch (error) {
+      toast.error("Could not initiate payment. Please try again.");
+    }
+  };
 
   const handleSubmitFeedback = async (e) => {
     e.preventDefault();
@@ -178,9 +252,15 @@ export default function AppointmentCard({ appointment }) {
 
           {/* Prescription Display */}
           {appointment?.prescription && (
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl space-y-2">
-              <div className="flex items-center gap-1.5 text-blue-800 font-bold text-xs">
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl space-y-2 relative group">
+              <div className="flex items-center justify-between gap-1.5 text-blue-800 font-bold text-xs">
                 <span>📝 Prescription / Medical Notes:</span>
+                <button 
+                  onClick={() => exportPrescriptionToPDF(appointment, doctorName)}
+                  className="bg-white hover:bg-blue-100 text-blue-600 px-2 py-1 rounded shadow-sm text-[10px] transition-colors"
+                >
+                  Download PDF
+                </button>
               </div>
               <p className="text-xs text-blue-700 whitespace-pre-wrap leading-relaxed">{appointment.prescription}</p>
             </div>
@@ -217,10 +297,20 @@ export default function AppointmentCard({ appointment }) {
           </div>
           <div className="flex items-center gap-3">
             <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-              payment === "paid" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"
+              localPaymentStatus === "paid" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"
             }`}>
-              {payment === "paid" ? "✓ Paid" : "Unpaid"}
+              {localPaymentStatus === "paid" ? "✓ Paid" : "Unpaid"}
             </span>
+
+            {/* Pay Now Button (Patient Only) */}
+            {localPaymentStatus !== "paid" && !isDoctorView && (
+              <button
+                onClick={handlePayment}
+                className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow transition-colors"
+              >
+                Pay Now
+              </button>
+            )}
 
             {/* Give feedback button if completed and no feedback yet */}
             {status === "completed" && !submittedFeedback && !showFeedbackForm && (

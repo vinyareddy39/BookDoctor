@@ -96,10 +96,10 @@ const doctorSchema = new mongoose.Schema(
       type: String,
       select: false, // never returned in API responses
     },
-    googleCalendarSynced: {
-      type: Boolean,
-      default: false,
-    },
+    // ─── Google Calendar Sync ────────────────────────────────────────────────
+    googleAccessToken: String,
+    googleRefreshToken: String,
+    googleCalendarSynced: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

@@ -1,7 +1,7 @@
 import Appointment from "../models/Appointment.js";
 import Doctor from "../models/Doctor.js";
 import { sendBookingConfirmation, sendCancellationEmail, sendRescheduledEmail } from "../service/emailService.js";
-import { sendNotificationToUser } from "../socket.js";
+import { sendNotificationToUser, triggerDashboardUpdate } from "../socket.js";
 import { refundPayment } from "./paymentController.js";
 
 // BOOK APPOINTMENT (patient only)
@@ -34,6 +34,7 @@ export const bookAppointment = async (req, res, next) => {
           title: "New Appointment Booked",
           message: `${populated.patientId?.name || "A patient"} booked a slot on ${new Date(populated.appointmentDate).toLocaleDateString()} at ${populated.appointmentTime}.`
         });
+        triggerDashboardUpdate(populated.doctorId.userId._id, "A new appointment was booked");
       }
     } catch (emailErr) {
       console.warn("[Email/Socket] Notification failed:", emailErr.message);
@@ -98,6 +99,10 @@ export const updateAppointment = async (req, res, next) => {
         title: `Appointment ${updated.status}`,
         message: `Your appointment with Dr. ${updated.doctorId?.userId?.name || "your doctor"} has been ${updated.status}.`
       });
+    }
+
+    if (updated.doctorId?.userId) {
+      triggerDashboardUpdate(updated.doctorId.userId, `Appointment status changed to ${updated.status}`);
     }
 
     return req.http.ok(updated, "Appointment updated");

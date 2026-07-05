@@ -1,4 +1,6 @@
 import toast from "react-hot-toast";
+import API from "../../services/api";
+import { exportPrescriptionToPDF } from "../../utils/export";
 
 /**
  * AppointmentsList — Renders the list of doctor appointments with action buttons
@@ -171,7 +173,15 @@ export default function AppointmentsList({ appts, loading, onStatusUpdate, onPay
             {/* Prescription Form for Doctors */}
             {a.status === "completed" && (
               <div className="mt-3 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                <label className="text-xs font-bold text-slate-700 block">📝 Prescription / Clinical Notes</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 block">📝 Prescription / Clinical Notes</label>
+                  <button 
+                    onClick={() => exportPrescriptionToPDF(a, a.doctorId?.userId?.name || "Doctor")}
+                    className="bg-white hover:bg-slate-200 text-slate-600 border border-slate-200 px-2 py-1 rounded shadow-sm text-[10px] transition-colors"
+                  >
+                    Export PDF
+                  </button>
+                </div>
                 <textarea
                   placeholder="Enter medical prescription, dosage, guidelines..."
                   defaultValue={a.prescription || ""}
