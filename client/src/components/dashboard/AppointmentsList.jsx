@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import { exportPrescriptionToPDF } from "../../utils/export";
@@ -13,6 +14,57 @@ const STATUS_COLORS = {
   cancelled: "bg-rose-50 text-rose-700 border-rose-200",
   completed: "bg-sky-50 text-sky-700 border-sky-200",
 };
+
+function PrescriptionEditor({ appointment, doctorName }) {
+  const [text, setText] = useState(appointment.prescription || "");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await API.patch(`/appointments/${appointment._id}/prescription`, { prescription: text });
+      toast.success("Prescription saved successfully!");
+    } catch (err) {
+      toast.error("Failed to save prescription.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleExport = () => {
+    // Export with the CURRENT text in state
+    exportPrescriptionToPDF({ ...appointment, prescription: text }, doctorName);
+  };
+
+  return (
+    <div className="mt-3 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-bold text-slate-700 block">📝 Prescription / Clinical Notes</label>
+        <div className="flex gap-2">
+          <button 
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-primary-600 hover:bg-primary-700 text-white px-3 py-1 rounded shadow-sm text-[10px] font-bold transition-colors disabled:opacity-50"
+          >
+            {saving ? "Saving..." : "Save Notes"}
+          </button>
+          <button 
+            onClick={handleExport}
+            className="bg-white hover:bg-slate-200 text-slate-600 border border-slate-200 px-3 py-1 rounded shadow-sm text-[10px] font-bold transition-colors"
+          >
+            Export PDF
+          </button>
+        </div>
+      </div>
+      <textarea
+        placeholder="Enter medical prescription, dosage, guidelines..."
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        className="w-full text-sm input p-3 border-slate-200 rounded-lg min-h-[80px]"
+      />
+    </div>
+  );
+}
 
 function SkeletonCard() {
   return (
@@ -172,31 +224,7 @@ export default function AppointmentsList({ appts, loading, onStatusUpdate, onPay
 
             {/* Prescription Form for Doctors */}
             {a.status === "completed" && (
-              <div className="mt-3 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700 block">📝 Prescription / Clinical Notes</label>
-                  <button 
-                    onClick={() => exportPrescriptionToPDF(a, a.doctorId?.userId?.name || "Doctor")}
-                    className="bg-white hover:bg-slate-200 text-slate-600 border border-slate-200 px-2 py-1 rounded shadow-sm text-[10px] transition-colors"
-                  >
-                    Export PDF
-                  </button>
-                </div>
-                <textarea
-                  placeholder="Enter medical prescription, dosage, guidelines..."
-                  defaultValue={a.prescription || ""}
-                  onBlur={async (e) => {
-                    try {
-                      await API.patch(`/appointments/${a._id}/prescription`, { prescription: e.target.value });
-                      toast.success("Prescription saved successfully!");
-                    } catch (err) {
-                      toast.error("Failed to save prescription.");
-                    }
-                  }}
-                  className="w-full text-sm input p-3 border-slate-200 rounded-lg min-h-[80px]"
-                />
-                <p className="text-[10px] text-slate-400">Prescription auto-saves when you click outside the text area.</p>
-              </div>
+              <PrescriptionEditor appointment={a} doctorName={a.doctorId?.userId?.name || "Doctor"} />
             )}
           </div>
         );
