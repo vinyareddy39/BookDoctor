@@ -193,3 +193,32 @@ export const razorpayWebhook = async (req, res, next) => {
     res.status(500).send("Webhook processing error");
   }
 };
+
+// ==========================================
+// 4. REFUND PAYMENT
+// ==========================================
+export const refundPayment = async (appointmentId) => {
+  try {
+    const transaction = await Transaction.findOne({ appointmentId, status: "captured" });
+    if (!transaction || !transaction.paymentId) {
+      console.warn(`No captured payment found for appointment ${appointmentId}`);
+      return false;
+    }
+
+    const rzp = getRazorpayInstance();
+    const refund = await rzp.payments.refund(transaction.paymentId, {
+      amount: transaction.amount * 100,
+    });
+
+    if (refund.status === "processed") {
+      transaction.status = "refunded";
+      await transaction.save();
+      return true;
+    }
+    
+    return false;
+  } catch (err) {
+    console.error("[Razorpay Refund Error]", err);
+    return false; // Safely return false if refund fails (e.g. invalid payment state)
+  }
+};
