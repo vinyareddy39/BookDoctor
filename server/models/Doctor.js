@@ -97,8 +97,6 @@ const doctorSchema = new mongoose.Schema(
       select: false, // never returned in API responses
     },
     // ─── Google Calendar Sync ────────────────────────────────────────────────
-    googleAccessToken: String,
-    googleRefreshToken: String,
     googleCalendarSynced: { type: Boolean, default: false },
   },
   { timestamps: true }

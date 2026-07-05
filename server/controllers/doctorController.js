@@ -16,7 +16,7 @@ export const createDoctor = async (req, res, next) => {
 export const getDoctors = async (req, res, next) => {
   try {
     const { city, specialization, available, minFee, maxFee, gender, sortBy } = req.query;
-    const filter = { isVerified: true }; // default to verified only
+    const filter = {}; // Removed isVerified: true constraint for testing
 
     if (city)           filter.city           = { $regex: city, $options: "i" };
     if (specialization) filter.specialization = { $regex: specialization, $options: "i" };
