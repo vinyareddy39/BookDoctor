@@ -48,9 +48,12 @@ export const getDoctors = async (req, res, next) => {
       sortOptions.createdAt = -1;
     }
 
+    const limit = parseInt(req.query.limit) || 50;
+
     const doctors = await Doctor.find(filter)
       .populate("userId", "name email phone gender")
       .sort(sortOptions)
+      .limit(limit)
       .lean();
 
     return req.http.ok(doctors, "Doctors fetched");

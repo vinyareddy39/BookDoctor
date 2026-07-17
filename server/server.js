@@ -120,6 +120,13 @@ if (process.env.NODE_ENV !== "test") {
 }
 
 // ===============================
+// HEALTH CHECK (For UptimeRobot to prevent Render sleep)
+// ===============================
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
+
+// ===============================
 // API ROUTES
 // ===============================
 app.use("/api/auth",         authRoutes);

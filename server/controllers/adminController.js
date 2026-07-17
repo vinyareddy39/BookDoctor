@@ -19,10 +19,12 @@ export const getDashboard = async (req, res, next) => {
       Doctor.find()
         .populate("userId", "name email phone")
         .sort({ createdAt: -1 })
+        .limit(100)
         .lean(),
       User.find({ role: "patient" })
         .select("-password")
         .sort({ createdAt: -1 })
+        .limit(100)
         .lean(),
     ]);
 

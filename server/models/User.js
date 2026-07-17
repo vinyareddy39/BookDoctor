@@ -129,4 +129,8 @@ userSchema.methods.getEmailVerificationToken = function () {
   return token;
 };
 
+// ─── Indexes for query performance ──────────────────────────────────────────
+userSchema.index({ email: 1, role: 1 });
+userSchema.index({ role: 1 });
+
 export default mongoose.model("User", userSchema);
