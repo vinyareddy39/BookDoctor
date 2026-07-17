@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import API from "../../services/api";
 import { exportPrescriptionToPDF } from "../../utils/export";
 import ChatWindow from "../chat/ChatWindow.jsx";
+import RescheduleModal from "./RescheduleModal.jsx";
 
 const STATUS_CONFIG = {
   pending:   { bg: "bg-amber-50",  text: "text-amber-700",  border: "border-amber-200",  dot: "bg-amber-400",  label: "Pending" },
@@ -29,9 +30,6 @@ export default function AppointmentCard({ appointment }) {
   // Reschedule state
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
-  const [newDate, setNewDate] = useState("");
-  const [newTime, setNewTime] = useState("");
-  const [rescheduling, setRescheduling] = useState(false);
   
   // Local state for status updates (to avoid full refetch)
   const [currentStatus, setCurrentStatus] = useState((appointment?.status || "pending").toLowerCase());
@@ -165,25 +163,6 @@ export default function AppointmentCard({ appointment }) {
       console.error(err);
     } finally {
       setCancelling(false);
-    }
-  };
-
-  const handleReschedule = async (e) => {
-    e.preventDefault();
-    if (!newDate || !newTime) return;
-    setRescheduling(true);
-    try {
-      await API.patch(`/appointments/${appointment._id}/reschedule`, {
-        appointmentDate: newDate,
-        appointmentTime: newTime,
-      });
-      setCurrentDate(newDate);
-      setCurrentTime(newTime);
-      setShowRescheduleModal(false);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setRescheduling(false);
     }
   };
 
@@ -456,57 +435,18 @@ export default function AppointmentCard({ appointment }) {
           </div>
         </div>
       )}
+
       {/* Reschedule Modal */}
-      {showRescheduleModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <form onSubmit={handleReschedule} className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 animate-fade-in-up space-y-4">
-            <h3 className="text-lg font-black text-slate-800">Reschedule Appointment</h3>
-            <p className="text-slate-500 text-sm">
-              Select a new date and time slot for your appointment with Dr. {doctorName}.
-            </p>
-            <div>
-              <label className="input-label">Select Date</label>
-              <input
-                type="date"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-                required
-                className="input"
-              />
-            </div>
-            <div>
-              <label className="input-label">Select Time Slot</label>
-              <select
-                value={newTime}
-                onChange={(e) => setNewTime(e.target.value)}
-                required
-                className="input"
-              >
-                <option value="">Choose a slot...</option>
-                {["09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "02:00 PM", "03:00 PM", "04:00 PM"].map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowRescheduleModal(false)}
-                className="btn-secondary flex-1 py-2 text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={rescheduling}
-                className="btn-primary flex-1 py-2 text-sm"
-              >
-                {rescheduling ? "Saving..." : "Confirm"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      <RescheduleModal
+        isOpen={showRescheduleModal}
+        onClose={() => setShowRescheduleModal(false)}
+        appointment={appointment}
+        onSuccess={(updatedAppt) => {
+          setCurrentDate(updatedAppt.appointmentDate);
+          setCurrentTime(updatedAppt.appointmentTime);
+          toast.success("Date and time updated successfully!");
+        }}
+      />
 
       {/* Chat Window */}
       {showChatModal && (

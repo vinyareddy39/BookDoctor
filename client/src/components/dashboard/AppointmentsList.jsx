@@ -4,6 +4,7 @@ import API from "../../services/api";
 import { exportPrescriptionToPDF } from "../../utils/export";
 import MedicalTimeline from "../appointment/MedicalTimeline.jsx";
 import ChatWindow from "../chat/ChatWindow.jsx";
+import RescheduleModal from "../appointment/RescheduleModal.jsx";
 
 /**
  * AppointmentsList — Renders the list of doctor appointments with action buttons
@@ -87,6 +88,7 @@ function SkeletonCard() {
 export default function AppointmentsList({ appts, loading, onStatusUpdate, onPaymentUpdate }) {
   const [selectedPatientHistory, setSelectedPatientHistory] = useState(null);
   const [selectedChatAppt, setSelectedChatAppt] = useState(null);
+  const [selectedRescheduleAppt, setSelectedRescheduleAppt] = useState(null);
 
   if (loading) {
     return (
@@ -215,12 +217,20 @@ export default function AppointmentsList({ appts, loading, onStatusUpdate, onPay
                     </button>
                   )}
                   {(a.status === "pending" || a.status === "confirmed") && (
-                    <button
-                      onClick={() => setSelectedChatAppt(a)}
-                      className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-3.5 py-2 rounded-xl font-bold transition-all border border-blue-200 flex items-center gap-1.5"
-                    >
-                      💬 Chat
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setSelectedRescheduleAppt(a)}
+                        className="text-xs bg-slate-50 hover:bg-slate-100 text-slate-700 px-3.5 py-2 rounded-xl font-bold transition-all border border-slate-200"
+                      >
+                        Reschedule
+                      </button>
+                      <button
+                        onClick={() => setSelectedChatAppt(a)}
+                        className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-3.5 py-2 rounded-xl font-bold transition-all border border-blue-200 flex items-center gap-1.5"
+                      >
+                        💬 Chat
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -272,8 +282,22 @@ export default function AppointmentsList({ appts, loading, onStatusUpdate, onPay
 
       {/* Chat Modal */}
       {selectedChatAppt && (
-        <ChatWindow appointment={selectedChatAppt} onClose={() => setSelectedChatAppt(null)} />
+        <ChatWindow 
+          appointment={selectedChatAppt} 
+          onClose={() => setSelectedChatAppt(null)} 
+        />
       )}
+
+      {/* Reschedule Modal */}
+      <RescheduleModal
+        isOpen={!!selectedRescheduleAppt}
+        onClose={() => setSelectedRescheduleAppt(null)}
+        appointment={selectedRescheduleAppt}
+        onSuccess={() => {
+          setSelectedRescheduleAppt(null);
+          // Usually we let the socket trigger a dashboard refresh, or we can force it here
+        }}
+      />
     </div>
   );
 }
