@@ -44,5 +44,6 @@ const healthRecordSchema = new mongoose.Schema(
 );
 
 healthRecordSchema.index({ patientId: 1, date: -1 });
+healthRecordSchema.index({ dependentId: 1 });
 
 export default mongoose.model("HealthRecord", healthRecordSchema);

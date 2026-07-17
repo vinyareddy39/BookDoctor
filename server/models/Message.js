@@ -29,4 +29,7 @@ const messageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// ─── Indexes for query performance ──────────────────────────────────────────
+messageSchema.index({ appointmentId: 1, createdAt: 1 });
+
 export default mongoose.model("Message", messageSchema);

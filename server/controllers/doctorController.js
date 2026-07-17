@@ -1,6 +1,9 @@
 import Doctor from "../models/Doctor.js";
 import User from "../models/User.js";
 import Appointment from "../models/Appointment.js";
+import NodeCache from "node-cache";
+
+const doctorCache = new NodeCache({ stdTTL: 60, checkperiod: 120 });
 
 // CREATE DOCTOR (Admin only)
 export const createDoctor = async (req, res, next) => {
@@ -15,6 +18,12 @@ export const createDoctor = async (req, res, next) => {
 // GET ALL DOCTORS (public with filtering & sorting)
 export const getDoctors = async (req, res, next) => {
   try {
+    const cacheKey = `doctors_${JSON.stringify(req.query)}`;
+    const cachedData = doctorCache.get(cacheKey);
+    if (cachedData) {
+      return req.http.ok(cachedData, "Doctors fetched from cache");
+    }
+
     const { city, specialization, available, minFee, maxFee, gender, sortBy } = req.query;
     const filter = {}; // Removed isVerified: true constraint for testing
 
@@ -52,9 +61,12 @@ export const getDoctors = async (req, res, next) => {
 
     const doctors = await Doctor.find(filter)
       .populate("userId", "name email phone gender")
+      .select("userId specialization consultationFee experience city clinicName isAvailable averageRating image")
       .sort(sortOptions)
       .limit(limit)
       .lean();
+
+    doctorCache.set(cacheKey, doctors);
 
     return req.http.ok(doctors, "Doctors fetched");
   } catch (err) {

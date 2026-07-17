@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
+import compression from "compression";
 import path from "path";
 import { fileURLToPath } from "url";
 import * as Sentry from "@sentry/node";
@@ -87,6 +88,11 @@ initSocket(server, allowedOrigins);
 // RATE LIMITING — General API
 // ===============================
 app.use("/api", apiLimiter);
+
+// ===============================
+// COMPRESSION
+// ===============================
+app.use(compression());
 
 // ===============================
 // BODY PARSING & COOKIES
