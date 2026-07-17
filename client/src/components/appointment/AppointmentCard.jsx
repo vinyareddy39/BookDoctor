@@ -233,6 +233,14 @@ export default function AppointmentCard({ appointment }) {
             </div>
           )}
 
+          {/* Privacy Notice for Patient */}
+          {!isDoctorView && status !== "completed" && (
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded w-fit border border-slate-100">
+              <span>🔒</span>
+              <span>Your phone number is hidden from the doctor until the appointment is completed.</span>
+            </div>
+          )}
+
           {/* Feedback Display */}
           {submittedFeedback && (
             <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100">

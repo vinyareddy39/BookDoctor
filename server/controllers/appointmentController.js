@@ -65,6 +65,15 @@ export const getAppointments = async (req, res, next) => {
       .sort({ appointmentDate: -1, createdAt: -1 })
       .lean();
 
+    // Privacy Mask: Hide patient phone from doctors until appointment is completed
+    if (req.user.role === "doctor") {
+      appointments.forEach((appt) => {
+        if (appt.patientId && appt.status !== "completed") {
+          appt.patientId.phone = "🔒 Hidden for privacy";
+        }
+      });
+    }
+
     return req.http.ok(appointments);
   } catch (err) {
     next(err);

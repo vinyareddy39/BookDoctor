@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import { exportPrescriptionToPDF } from "../../utils/export";
+import MedicalTimeline from "../appointment/MedicalTimeline.jsx";
 
 /**
  * AppointmentsList — Renders the list of doctor appointments with action buttons
@@ -83,6 +84,7 @@ function SkeletonCard() {
 }
 
 export default function AppointmentsList({ appts, loading, onStatusUpdate, onPaymentUpdate }) {
+  const [selectedPatientHistory, setSelectedPatientHistory] = useState(null);
 
   if (loading) {
     return (
@@ -119,7 +121,15 @@ export default function AppointmentsList({ appts, loading, onStatusUpdate, onPay
                   {patient?.name?.charAt(0) || "P"}
                 </div>
                 <div>
-                  <p className="font-bold text-slate-800 text-base">{patient?.name || "Patient"}</p>
+                  <div className="flex items-center gap-3">
+                    <p className="font-bold text-slate-800 text-base">{patient?.name || "Patient"}</p>
+                    <button 
+                      onClick={() => setSelectedPatientHistory(patient?._id)}
+                      className="text-[10px] font-bold text-primary-600 bg-primary-50 px-2 py-1 rounded hover:bg-primary-100 transition-colors"
+                    >
+                      View History
+                    </button>
+                  </div>
                   <p className="text-xs text-slate-400 mt-0.5">{patient?.email} · {patient?.phone || "No phone"}</p>
 
                   {/* Patient health tags */}
@@ -229,6 +239,26 @@ export default function AppointmentsList({ appts, loading, onStatusUpdate, onPay
           </div>
         );
       })}
+
+      {/* Patient History Modal */}
+      {selectedPatientHistory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden animate-fade-in-up">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="font-black text-slate-800">Patient Medical History</h3>
+              <button 
+                onClick={() => setSelectedPatientHistory(null)}
+                className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-50/30">
+              <MedicalTimeline appointments={appts.filter(a => a.patientId?._id === selectedPatientHistory)} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

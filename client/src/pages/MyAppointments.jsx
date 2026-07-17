@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import API from "../services/api";
 import AppointmentCard from "../components/appointment/AppointmentCard.jsx";
+import MedicalTimeline from "../components/appointment/MedicalTimeline.jsx";
 
-const TABS = ["All", "Upcoming", "Completed", "Cancelled"];
+const TABS = ["All", "Upcoming", "Completed", "Cancelled", "Medical Timeline"];
 
 function SkeletonCard() {
   return (
@@ -100,7 +101,7 @@ export default function MyAppointments() {
               }`}
             >
               {tab}
-              {tab !== "All" && !loading && (
+              {tab !== "All" && tab !== "Medical Timeline" && !loading && (
                 <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
                   activeTab === tab ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
                 }`}>
@@ -130,6 +131,8 @@ export default function MyAppointments() {
               Retry
             </button>
           </div>
+        ) : activeTab === "Medical Timeline" ? (
+          <MedicalTimeline appointments={appointments} />
         ) : filtered.length === 0 ? (
           <div className="card p-16 text-center">
             <div className="text-7xl mb-4">📭</div>
