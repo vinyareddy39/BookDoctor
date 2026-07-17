@@ -1,6 +1,7 @@
 import Message from "../models/Message.js";
 import Appointment from "../models/Appointment.js";
 import Doctor from "../models/Doctor.js";
+import { getIO } from "../socket.js";
 
 // GET messages for an appointment
 export const getMessages = async (req, res, next) => {
@@ -20,8 +21,8 @@ export const getMessages = async (req, res, next) => {
       isDoctor = doc && String(appointment.doctorId) === String(doc._id);
     }
 
-    if (!isPatient && !isDoctor && req.user.role !== "admin") {
-      return req.http.forbidden("Not authorized to view these messages.");
+    if (!isPatient && !isDoctor) {
+      return req.http.forbidden("Privacy Lock: Only the Doctor and Patient can view this chat.");
     }
 
     const messages = await Message.find({ appointmentId })
@@ -43,6 +44,20 @@ export const sendMessage = async (req, res, next) => {
     const appointment = await Appointment.findById(appointmentId);
     if (!appointment) return req.http.notFound("Appointment not found.");
 
+    // Authorization check
+    const userId = String(req.user._id);
+    const isPatient = String(appointment.patientId) === userId;
+    
+    let isDoctor = false;
+    if (req.user.role === "doctor") {
+      const doc = await Doctor.findOne({ userId: req.user._id });
+      isDoctor = doc && String(appointment.doctorId) === String(doc._id);
+    }
+
+    if (!isPatient && !isDoctor) {
+      return req.http.forbidden("Privacy Lock: Only the Doctor and Patient can send messages in this chat.");
+    }
+
     const message = await Message.create({
       appointmentId,
       senderId: req.user._id,
@@ -51,6 +66,14 @@ export const sendMessage = async (req, res, next) => {
     });
 
     const populated = await message.populate("senderId", "name role profilePicture");
+
+    // Emit to socket room for real-time update (Privacy: only sent to users in the room)
+    try {
+      const io = getIO();
+      io.to(`chat-${appointmentId}`).emit("receive-message", populated);
+    } catch (socketErr) {
+      console.warn("Socket emission failed:", socketErr.message);
+    }
 
     return req.http.created(populated, "Message sent.");
   } catch (err) {

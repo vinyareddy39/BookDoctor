@@ -21,19 +21,23 @@ export default function ChatWindow({ appointment, onClose }) {
     fetchMessages();
     
     if (socket) {
-      socket.emit("JOIN_CHAT", appointment._id);
+      socket.emit("join-chat", appointment._id);
       
       const handleNewMessage = (msg) => {
         if (msg.appointmentId === appointment._id) {
-          setMessages(prev => [...prev, msg]);
+          // If we receive our own optimistic message, skip it, or let it replace
+          setMessages(prev => {
+            if (prev.find(m => m._id === msg._id)) return prev;
+            return [...prev, msg];
+          });
         }
       };
       
-      socket.on("RECEIVE_MESSAGE", handleNewMessage);
+      socket.on("receive-message", handleNewMessage);
       
       return () => {
-        socket.emit("LEAVE_CHAT", appointment._id);
-        socket.off("RECEIVE_MESSAGE", handleNewMessage);
+        socket.emit("leave-chat", appointment._id);
+        socket.off("receive-message", handleNewMessage);
       };
     }
   }, [socket, appointment._id]);
