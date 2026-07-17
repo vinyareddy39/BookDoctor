@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import { exportPrescriptionToPDF } from "../../utils/export";
+import ChatWindow from "../chat/ChatWindow.jsx";
 
 const STATUS_CONFIG = {
   pending:   { bg: "bg-amber-50",  text: "text-amber-700",  border: "border-amber-200",  dot: "bg-amber-400",  label: "Pending" },
@@ -27,6 +28,7 @@ export default function AppointmentCard({ appointment }) {
   
   // Reschedule state
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
   const [newDate, setNewDate] = useState("");
   const [newTime, setNewTime] = useState("");
   const [rescheduling, setRescheduling] = useState(false);
@@ -340,8 +342,9 @@ export default function AppointmentCard({ appointment }) {
             {(status === "pending" || status === "confirmed") && (
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={() => setShowRescheduleModal(true)}
-                  className="bg-primary-100 hover:bg-primary-200 text-primary-700 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                  className="btn-secondary text-xs px-3 py-1.5 shadow-none hover:-translate-y-0 text-slate-600 bg-slate-50 border-slate-200"
                 >
                   Reschedule
                 </button>
@@ -352,6 +355,17 @@ export default function AppointmentCard({ appointment }) {
                   Cancel
                 </button>
               </div>
+            )}
+
+            {/* Chat Button (Available if pending or confirmed) */}
+            {(!isDoctorView && (status === "pending" || status === "confirmed")) && (
+              <button
+                type="button"
+                onClick={() => setShowChatModal(true)}
+                className="text-xs px-3 py-1.5 bg-primary-50 text-primary-600 font-bold rounded-lg border border-primary-100 hover:bg-primary-100 transition-colors flex items-center gap-1.5"
+              >
+                💬 Chat
+              </button>
             )}
           </div>
         </div>
@@ -492,6 +506,11 @@ export default function AppointmentCard({ appointment }) {
             </div>
           </form>
         </div>
+      )}
+
+      {/* Chat Window */}
+      {showChatModal && (
+        <ChatWindow appointment={appointment} onClose={() => setShowChatModal(false)} />
       )}
     </div>
   );

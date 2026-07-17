@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import API from "../../services/api";
 import { exportPrescriptionToPDF } from "../../utils/export";
 import MedicalTimeline from "../appointment/MedicalTimeline.jsx";
+import ChatWindow from "../chat/ChatWindow.jsx";
 
 /**
  * AppointmentsList — Renders the list of doctor appointments with action buttons
@@ -85,6 +86,7 @@ function SkeletonCard() {
 
 export default function AppointmentsList({ appts, loading, onStatusUpdate, onPaymentUpdate }) {
   const [selectedPatientHistory, setSelectedPatientHistory] = useState(null);
+  const [selectedChatAppt, setSelectedChatAppt] = useState(null);
 
   if (loading) {
     return (
@@ -212,6 +214,14 @@ export default function AppointmentsList({ appts, loading, onStatusUpdate, onPay
                       Complete Appointment
                     </button>
                   )}
+                  {(a.status === "pending" || a.status === "confirmed") && (
+                    <button
+                      onClick={() => setSelectedChatAppt(a)}
+                      className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-3.5 py-2 rounded-xl font-bold transition-all border border-blue-200 flex items-center gap-1.5"
+                    >
+                      💬 Chat
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -258,6 +268,11 @@ export default function AppointmentsList({ appts, loading, onStatusUpdate, onPay
             </div>
           </div>
         </div>
+      )}
+
+      {/* Chat Modal */}
+      {selectedChatAppt && (
+        <ChatWindow appointment={selectedChatAppt} onClose={() => setSelectedChatAppt(null)} />
       )}
     </div>
   );
