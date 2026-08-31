@@ -26,7 +26,7 @@ function PrescriptionEditor({ appointment, doctorName }) {
     setSaving(true);
     try {
       await API.patch(`/appointments/${appointment._id}/prescription`, { prescription: text });
-      toast.success("Prescription saved successfully!");
+      toast.success("Prescription shared with patient! They can now download the PDF.");
     } catch (err) {
       toast.error("Failed to save prescription.");
     } finally {
@@ -47,15 +47,15 @@ function PrescriptionEditor({ appointment, doctorName }) {
           <button 
             onClick={handleSave}
             disabled={saving}
-            className="bg-primary-600 hover:bg-primary-700 text-white px-3 py-1 rounded shadow-sm text-[10px] font-bold transition-colors disabled:opacity-50"
+            className="bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded shadow-sm text-xs font-bold transition-colors disabled:opacity-50"
           >
-            {saving ? "Saving..." : "Save Notes"}
+            {saving ? "Sharing..." : "Save & Share with Patient"}
           </button>
           <button 
             onClick={handleExport}
-            className="bg-white hover:bg-slate-200 text-slate-600 border border-slate-200 px-3 py-1 rounded shadow-sm text-[10px] font-bold transition-colors"
+            className="bg-white hover:bg-slate-200 text-slate-600 border border-slate-200 px-3 py-1.5 rounded shadow-sm text-xs font-bold transition-colors"
           >
-            Export PDF
+            Download PDF
           </button>
         </div>
       </div>
