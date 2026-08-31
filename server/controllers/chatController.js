@@ -3,6 +3,23 @@ import Appointment from "../models/Appointment.js";
 import Doctor from "../models/Doctor.js";
 import { getIO } from "../socket.js";
 
+// GET unread counts for all chats
+export const getUnreadCounts = async (req, res, next) => {
+  try {
+    const unreadMsgs = await Message.aggregate([
+      { $match: { receiverId: req.user._id, read: false } },
+      { $group: { _id: "$appointmentId", count: { $sum: 1 } } }
+    ]);
+    const counts = {};
+    unreadMsgs.forEach(item => {
+      counts[item._id] = item.count;
+    });
+    return req.http.ok(counts);
+  } catch (err) {
+    next(err);
+  }
+};
+
 // GET messages for an appointment
 export const getMessages = async (req, res, next) => {
   try {
@@ -87,6 +104,31 @@ export const sendMessage = async (req, res, next) => {
     }
 
     return req.http.created(populated, "Message sent.");
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PATCH mark messages as read
+export const markAsRead = async (req, res, next) => {
+  try {
+    const { appointmentId } = req.params;
+
+    // Update all messages in this appointment where the receiver is the current user and read is false
+    await Message.updateMany(
+      { appointmentId, receiverId: req.user._id, read: false },
+      { $set: { read: true } }
+    );
+
+    // Notify the other user via socket that messages were read
+    try {
+      const io = getIO();
+      io.to(`chat-${appointmentId}`).emit("messages-read", { appointmentId, readerId: req.user._id });
+    } catch (socketErr) {
+      console.warn("Socket emission failed:", socketErr.message);
+    }
+
+    return req.http.ok(null, "Messages marked as read.");
   } catch (err) {
     next(err);
   }

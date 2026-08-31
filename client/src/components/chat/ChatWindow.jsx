@@ -33,14 +33,32 @@ export default function ChatWindow({ appointment, onClose }) {
             messageCache[appointment._id] = updated; // Update cache
             return updated;
           });
+          // Mark as read immediately if we are the receiver
+          if (msg.receiverId === user._id) {
+            API.patch(`/chat/${appointment._id}/read`).catch(() => {});
+          }
+        }
+      };
+
+      const handleMessagesRead = ({ appointmentId: aId, readerId }) => {
+        if (aId === appointment._id) {
+          setMessages(prev => {
+            const updated = prev.map(m => 
+              m.receiverId === readerId ? { ...m, read: true } : m
+            );
+            messageCache[appointment._id] = updated;
+            return updated;
+          });
         }
       };
       
       socket.on("receive-message", handleNewMessage);
+      socket.on("messages-read", handleMessagesRead);
       
       return () => {
         socket.emit("leave-chat", appointment._id);
         socket.off("receive-message", handleNewMessage);
+        socket.off("messages-read", handleMessagesRead);
       };
     }
   }, [socket, appointment._id]);
@@ -51,7 +69,11 @@ export default function ChatWindow({ appointment, onClose }) {
 
   const fetchMessages = async () => {
     try {
-      const res = await API.get(`/chat/${appointment._id}`);
+      // Fetch messages and mark them as read simultaneously
+      const [res] = await Promise.all([
+        API.get(`/chat/${appointment._id}`),
+        API.patch(`/chat/${appointment._id}/read`).catch(() => {})
+      ]);
       const fetched = res.data.data || [];
       setMessages(fetched);
       messageCache[appointment._id] = fetched; // Update cache
@@ -147,9 +169,16 @@ export default function ChatWindow({ appointment, onClose }) {
                     {msg.text}
                   </div>
                   {showTime && (
-                    <span className="text-[10px] text-slate-400 mt-1 font-medium mx-1">
-                      {msgDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    </span>
+                    <div className="flex items-center gap-1 mt-1 mx-1">
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        {msgDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      </span>
+                      {isMine && (
+                        <span className={`text-[10px] font-bold ${msg.read ? "text-blue-500" : "text-slate-300"}`}>
+                          {msg.read ? "✓✓" : "✓"}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               );

@@ -4,11 +4,12 @@ import API from "../services/api";
 import ChatWindow from "../components/chat/ChatWindow";
 import toast from "react-hot-toast";
 
-const convCache = { data: null }; // Instant loading cache
+const convCache = { data: null, unread: {} }; // Instant loading cache
 
 export default function Messages() {
   const { isDoctor } = useAuth();
   const [appointments, setAppointments] = useState(convCache.data || []);
+  const [unreadCounts, setUnreadCounts] = useState(convCache.unread || {});
   const [loading, setLoading] = useState(!convCache.data);
   const [activeChat, setActiveChat] = useState(null);
 
@@ -18,10 +19,16 @@ export default function Messages() {
 
   const fetchConversations = async () => {
     try {
-      const res = await API.get("/appointments");
-      const fetched = res.data.data || [];
+      const [apptRes, unreadRes] = await Promise.all([
+        API.get("/appointments"),
+        API.get("/chat/unread")
+      ]);
+      const fetched = apptRes.data.data || [];
+      const unreads = unreadRes.data.data || {};
       setAppointments(fetched);
-      convCache.data = fetched; // Save to cache
+      setUnreadCounts(unreads);
+      convCache.data = fetched;
+      convCache.unread = unreads;
     } catch {
       toast.error("Failed to load conversations");
     } finally {
@@ -80,7 +87,14 @@ export default function Messages() {
             return (
               <button
                 key={appt._id}
-                onClick={() => setActiveChat(appt)}
+                onClick={() => {
+                  setActiveChat(appt);
+                  // Optimistically clear unread badge
+                  if (unreadCounts[appt._id]) {
+                    setUnreadCounts(prev => ({ ...prev, [appt._id]: 0 }));
+                    convCache.unread[appt._id] = 0;
+                  }
+                }}
                 className="flex items-center gap-4 p-5 bg-white rounded-2xl shadow-sm hover:shadow-md transition-all border border-slate-100 w-full text-left group hover:border-primary-200"
               >
                 <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary-50 to-primary-100 border border-primary-200 flex items-center justify-center font-bold text-primary-700 text-xl flex-shrink-0 group-hover:scale-105 transition-transform">
@@ -88,18 +102,23 @@ export default function Messages() {
                 </div>
                 
                 <div className="flex-1">
-                  <h3 className="text-lg font-bold text-slate-800 group-hover:text-primary-700 transition-colors">
+                  <h3 className="text-lg font-bold text-slate-800 group-hover:text-primary-700 transition-colors flex items-center gap-2">
                     {otherName}
+                    {unreadCounts[appt._id] > 0 && (
+                      <span className="bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm animate-fade-in-up">
+                        {unreadCounts[appt._id]}
+                      </span>
+                    )}
                   </h3>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="inline-block w-2 h-2 rounded-full bg-green-500"></span>
-                    <p className="text-sm text-slate-500 font-medium">
+                    <span className={`inline-block w-2 h-2 rounded-full ${unreadCounts[appt._id] > 0 ? "bg-green-500 animate-pulse" : "bg-slate-300"}`}></span>
+                    <p className={`text-sm font-medium ${unreadCounts[appt._id] > 0 ? "text-slate-800" : "text-slate-500"}`}>
                       Consultation: {dateStr} at {appt.appointmentTime}
                     </p>
                   </div>
                 </div>
 
-                <div className="text-primary-500 bg-primary-50 p-3 rounded-xl group-hover:bg-primary-500 group-hover:text-white transition-colors">
+                <div className={`p-3 rounded-xl transition-colors ${unreadCounts[appt._id] > 0 ? "bg-green-500 text-white shadow-md shadow-green-500/20" : "text-primary-500 bg-primary-50 group-hover:bg-primary-500 group-hover:text-white"}`}>
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                   </svg>
