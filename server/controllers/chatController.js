@@ -58,10 +58,21 @@ export const sendMessage = async (req, res, next) => {
       return req.http.forbidden("Privacy Lock: Only the Doctor and Patient can send messages in this chat.");
     }
 
+    // Determine receiverId automatically based on role
+    let resolvedReceiverId = receiverId;
+    if (!resolvedReceiverId) {
+      if (isPatient) {
+        const doc = await Doctor.findById(appointment.doctorId);
+        resolvedReceiverId = doc.userId;
+      } else {
+        resolvedReceiverId = appointment.patientId;
+      }
+    }
+
     const message = await Message.create({
       appointmentId,
       senderId: req.user._id,
-      receiverId,
+      receiverId: resolvedReceiverId,
       text,
     });
 

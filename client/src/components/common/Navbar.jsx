@@ -90,17 +90,35 @@ export default function Navbar() {
                 >
                   Profile
                 </Link>
+                <Link
+                  to="/messages"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/messages") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Messages
+                </Link>
               </>
             )}
             {isDoctor && (
-              <Link
-                to="/doctor/dashboard"
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
-                  isActive("/doctor/dashboard") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-                }`}
-              >
-                Dashboard
-              </Link>
+              <>
+                <Link
+                  to="/doctor/dashboard"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/doctor/dashboard") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Dashboard
+                </Link>
+                <Link
+                  to="/messages"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/messages") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Messages
+                </Link>
+              </>
             )}
           </div>
 
@@ -184,10 +202,14 @@ export default function Navbar() {
             <>
               <Link to="/appointments" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">My Appointments</Link>
               <Link to="/profile"      className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Profile</Link>
+              <Link to="/messages"     className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Messages</Link>
             </>
           )}
           {isDoctor && (
-            <Link to="/doctor/dashboard" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Dashboard</Link>
+            <>
+              <Link to="/doctor/dashboard" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Dashboard</Link>
+              <Link to="/messages" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Messages</Link>
+            </>
           )}
           <div className="pt-3 border-t border-slate-100 space-y-2">
             {isLoggedIn ? (

@@ -21,6 +21,7 @@ const DoctorDashboard = lazy(() => import("./pages/DoctorDashboard.jsx"));
 const Profile         = lazy(() => import("./pages/Profile.jsx"));
 const NotFound        = lazy(() => import("./pages/NotFound.jsx"));
 const About           = lazy(() => import("./pages/About.jsx"));
+const MessagesPage    = lazy(() => import("./pages/Messages.jsx"));
 const Contact         = lazy(() => import("./pages/Contact.jsx"));
 const AdminDashboard  = lazy(() => import("./pages/AdminDashboard.jsx"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword.jsx"));
@@ -111,6 +112,7 @@ function App() {
             <Route path="/book-appointment/:id" element={<AuthRoute><BookAppointment /></AuthRoute>} />
             <Route path="/appointments"         element={<AuthRoute><MyAppointments /></AuthRoute>} />
             <Route path="/profile"              element={<AuthRoute><Profile /></AuthRoute>} />
+            <Route path="/messages"             element={<AuthRoute><MessagesPage /></AuthRoute>} />
 
             {/* Doctor protected */}
             <Route path="/doctor/dashboard"   element={<DoctorRoute><DoctorDashboard /></DoctorRoute>} />
