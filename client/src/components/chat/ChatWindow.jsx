@@ -4,12 +4,14 @@ import { useSocket } from "../../context/SocketContext";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 
+const messageCache = {}; // Module-level cache for instant WhatsApp-like loading
+
 export default function ChatWindow({ appointment, onClose }) {
   const { user } = useAuth();
   const { socket } = useSocket();
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(messageCache[appointment._id] || []);
   const [newMessage, setNewMessage] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!messageCache[appointment._id]);
   const messagesEndRef = useRef(null);
 
   const isDoctor = user?.role === "doctor";
@@ -25,10 +27,11 @@ export default function ChatWindow({ appointment, onClose }) {
       
       const handleNewMessage = (msg) => {
         if (msg.appointmentId === appointment._id) {
-          // If we receive our own optimistic message, skip it, or let it replace
           setMessages(prev => {
             if (prev.find(m => m._id === msg._id)) return prev;
-            return [...prev, msg];
+            const updated = [...prev, msg];
+            messageCache[appointment._id] = updated; // Update cache
+            return updated;
           });
         }
       };
@@ -49,7 +52,9 @@ export default function ChatWindow({ appointment, onClose }) {
   const fetchMessages = async () => {
     try {
       const res = await API.get(`/chat/${appointment._id}`);
-      setMessages(res.data.data || []);
+      const fetched = res.data.data || [];
+      setMessages(fetched);
+      messageCache[appointment._id] = fetched; // Update cache
     } catch (err) {
       console.error(err);
       toast.error("Failed to load chat history");
@@ -73,20 +78,29 @@ export default function ChatWindow({ appointment, onClose }) {
       text: msgData.text,
       createdAt: new Date().toISOString()
     };
-    setMessages(prev => [...prev, tempMsg]);
+    
+    setMessages(prev => {
+      const updated = [...prev, tempMsg];
+      messageCache[appointment._id] = updated;
+      return updated;
+    });
 
     try {
       await API.post(`/chat/${appointment._id}`, msgData);
     } catch (err) {
       toast.error("Failed to send message");
       // Remove optimistic message if failed
-      setMessages(prev => prev.filter(m => m._id !== tempMsg._id));
+      setMessages(prev => {
+        const reverted = prev.filter(m => m._id !== tempMsg._id);
+        messageCache[appointment._id] = reverted;
+        return reverted;
+      });
     }
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md h-[80vh] max-h-[700px] flex flex-col overflow-hidden animate-fade-in-up">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md h-[80vh] max-h-[700px] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-primary-600 text-white shadow-sm z-10">
           <div className="flex items-center gap-3">

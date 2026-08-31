@@ -4,10 +4,12 @@ import API from "../services/api";
 import ChatWindow from "../components/chat/ChatWindow";
 import toast from "react-hot-toast";
 
+const convCache = { data: null }; // Instant loading cache
+
 export default function Messages() {
   const { isDoctor } = useAuth();
-  const [appointments, setAppointments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [appointments, setAppointments] = useState(convCache.data || []);
+  const [loading, setLoading] = useState(!convCache.data);
   const [activeChat, setActiveChat] = useState(null);
 
   useEffect(() => {
@@ -17,7 +19,9 @@ export default function Messages() {
   const fetchConversations = async () => {
     try {
       const res = await API.get("/appointments");
-      setAppointments(res.data.data || []);
+      const fetched = res.data.data || [];
+      setAppointments(fetched);
+      convCache.data = fetched; // Save to cache
     } catch {
       toast.error("Failed to load conversations");
     } finally {

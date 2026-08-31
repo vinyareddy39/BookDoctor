@@ -47,9 +47,9 @@ export default {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       animation: {
-        'fade-in-up':    'fadeInUp 0.6s ease-out both',
-        'fade-in':       'fadeIn 0.4s ease-out both',
-        'slide-in-left': 'slideInLeft 0.5s ease-out both',
+        'fade-in-up':    'fadeInUp 0.2s ease-out both',
+        'fade-in':       'fadeIn 0.15s ease-out both',
+        'slide-in-left': 'slideInLeft 0.2s ease-out both',
         'pulse-slow':    'pulse 3s cubic-bezier(0.4,0,0.6,1) infinite',
         'bounce-slow':   'bounce 2s infinite',
         'float':         'float 3s ease-in-out infinite',
