@@ -43,7 +43,7 @@ export default function Messages() {
           <span className="text-2xl">💬</span>
         </div>
         <div>
-          <h1 className="text-3xl font-black text-slate-800">Messages</h1>
+          <h1 className="text-3xl font-black text-slate-800">Chats</h1>
           <p className="text-slate-500 font-medium mt-1">
             {isDoctor ? "Chat with your patients" : "Chat with your doctors"}
           </p>

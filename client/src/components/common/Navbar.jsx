@@ -96,7 +96,7 @@ export default function Navbar() {
                     isActive("/messages") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
-                  Messages
+                  Chats
                 </Link>
               </>
             )}
@@ -116,7 +116,7 @@ export default function Navbar() {
                     isActive("/messages") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
-                  Messages
+                  Chats
                 </Link>
               </>
             )}
@@ -202,13 +202,13 @@ export default function Navbar() {
             <>
               <Link to="/appointments" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">My Appointments</Link>
               <Link to="/profile"      className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Profile</Link>
-              <Link to="/messages"     className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Messages</Link>
+              <Link to="/messages"     className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Chats</Link>
             </>
           )}
           {isDoctor && (
             <>
               <Link to="/doctor/dashboard" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Dashboard</Link>
-              <Link to="/messages" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Messages</Link>
+              <Link to="/messages" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Chats</Link>
             </>
           )}
           <div className="pt-3 border-t border-slate-100 space-y-2">
