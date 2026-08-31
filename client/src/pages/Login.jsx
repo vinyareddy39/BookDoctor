@@ -15,13 +15,11 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      const data = await login(email, password);
-      const role = data?.data?.role || data?.role;
+      const data = await login(email, password, "patient");
       toast.success("Welcome back! 👋");
-      if (role === "doctor") navigate("/doctor/dashboard");
-      else navigate("/");
+      navigate("/");
     } catch (err) {
-      toast.error(err.response?.data?.message || "Invalid email or password.");
+      toast.error(err.message || err.response?.data?.message || "Invalid email or password.");
     } finally {
       setLoading(false);
     }

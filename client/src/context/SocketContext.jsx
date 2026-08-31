@@ -31,7 +31,7 @@ export const SocketProvider = ({ children }) => {
       newSocket.on("notification", (payload) => {
         // Display a toast using react-hot-toast
         toast(
-          (t) => (
+          () => (
             <div className="flex flex-col gap-1">
               <span className="font-bold text-slate-800">{payload.title}</span>
               <span className="text-sm text-slate-500">{payload.message}</span>

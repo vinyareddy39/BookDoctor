@@ -58,7 +58,7 @@ export default function Chat() {
         const appt = allAppts.find((a) => a._id === appointmentId);
         setAppointment(appt || null);
         setMessages(msgRes.data.data || []);
-      } catch (err) {
+      } catch {
         toast.error("Could not load chat.");
       } finally {
         setLoading(false);

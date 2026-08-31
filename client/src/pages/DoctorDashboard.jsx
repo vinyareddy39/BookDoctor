@@ -32,15 +32,10 @@ export default function DoctorDashboard() {
   const [toggling, setToggling] = useState(false);
   const [saving,   setSaving]   = useState(false);
 
-  useEffect(() => {
-    fetchProfile();
-    fetchAppointments();
-    fetchAnalytics();
-  }, []);
 
   useEffect(() => {
     if (socket) {
-      const handleDashboardUpdate = (data) => {
+      const handleDashboardUpdate = () => {
         // Refetch appointments and analytics when backend says there is an update
         fetchAppointments();
         fetchAnalytics();
@@ -53,16 +48,16 @@ export default function DoctorDashboard() {
     }
   }, [socket]);
 
-  const fetchAnalytics = async () => {
+  async function fetchAnalytics() {
     try {
       const res = await API.get("/doctors/analytics");
       setAnalytics(res.data.data || res.data);
     } catch (err) {
       console.error("Failed to load doctor analytics", err);
     }
-  };
+  }
 
-  const fetchProfile = async () => {
+  async function fetchProfile() {
     try {
       const res = await API.get("/doctors/profile/me");
       const doc = res.data.data;
@@ -98,9 +93,9 @@ export default function DoctorDashboard() {
     } finally {
       setLoadingProfile(false);
     }
-  };
+  }
 
-  const fetchAppointments = async () => {
+  async function fetchAppointments() {
     try {
       const res = await API.get("/appointments");
       setAppts(res.data.data || []);
@@ -110,7 +105,13 @@ export default function DoctorDashboard() {
     } finally {
       setLoadingAppts(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    fetchProfile();
+    fetchAppointments();
+    fetchAnalytics();
+  }, []);
 
   const handleToggle = async () => {
     setToggling(true);
@@ -118,7 +119,7 @@ export default function DoctorDashboard() {
       const res = await API.patch("/doctors/profile/me/toggle");
       setProfile((prev) => ({ ...prev, isAvailable: res.data.data.isAvailable }));
       toast.success(res.data.data.isAvailable ? "You are now Available! 🟢" : "You are now Unavailable!");
-    } catch (err) {
+    } catch {
       toast.error("Failed to update availability.");
     } finally {
       setToggling(false);
@@ -139,7 +140,7 @@ export default function DoctorDashboard() {
       const res = await API.put("/doctors/profile/me", payload);
       setProfile(res.data.data);
       toast.success("Clinic profile updated successfully! 🎉");
-    } catch (err) {
+    } catch {
       toast.error("Failed to save clinic settings.");
     } finally {
       setSaving(false);
@@ -157,7 +158,7 @@ export default function DoctorDashboard() {
         )
       );
       toast.success(`Appointment ${status}.`);
-    } catch (err) {
+    } catch {
       toast.error("Failed to update appointment status.");
     }
   };
@@ -170,7 +171,7 @@ export default function DoctorDashboard() {
         prev.map((a) => a._id === id ? { ...a, paymentStatus: nextStatus } : a)
       );
       toast.success(`Payment marked as ${nextStatus === "paid" ? "Paid ✓" : "Unpaid"}.`);
-    } catch (err) {
+    } catch {
       toast.error("Failed to update payment status.");
     }
   };

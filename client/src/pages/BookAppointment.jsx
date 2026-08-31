@@ -146,7 +146,7 @@ export default function BookAppointment() {
       )
     : [];
 
-  const canBook = date && time && !dateError && isAvailable;
+
 
   return (
     <div className="min-h-screen bg-surface py-10 px-4">

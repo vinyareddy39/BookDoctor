@@ -25,10 +25,16 @@ export const AuthProvider = ({ children }) => {
   };
 
   // LOGIN
-  const login = async (email, password) => {
+  const login = async (email, password, expectedRole) => {
     const res = await API.post("/auth/login", { email, password });
     const payload = res.data?.data;
     const token = payload?.token;
+    
+    // Check role before persisting the token
+    if (expectedRole && payload?.role !== expectedRole) {
+      throw new Error(`Access denied. Please use the ${payload?.role === 'doctor' ? 'Doctor' : 'Patient'} portal.`);
+    }
+
     if (token) {
       persist(token, {
         _id: payload._id,

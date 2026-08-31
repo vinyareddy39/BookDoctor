@@ -15,16 +15,11 @@ export default function DoctorLogin() {
     e.preventDefault();
     setLoading(true);
     try {
-      const data = await login(email, password);
-      const role = data?.data?.role || data?.role;
-      if (role === "doctor") {
-        toast.success("Welcome, Doctor! 🩺");
-        navigate("/doctor/dashboard");
-      } else {
-        toast.error("Access denied. This portal is for doctors only.");
-      }
+      const data = await login(email, password, "doctor");
+      toast.success("Welcome, Doctor! 🩺");
+      navigate("/doctor/dashboard");
     } catch (err) {
-      toast.error(err.response?.data?.message || "Invalid credentials.");
+      toast.error(err.message || err.response?.data?.message || "Invalid credentials.");
     } finally {
       setLoading(false);
     }

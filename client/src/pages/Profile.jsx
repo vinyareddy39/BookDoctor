@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "../context/AuthContext";
+
 import API from "../services/api";
 import toast from "react-hot-toast";
 import FamilyProfiles from "../components/profile/FamilyProfiles";
@@ -20,7 +20,7 @@ const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
 const GENDERS = ["male", "female", "other"];
 
 export default function Profile() {
-  const { user } = useAuth();
+
   const [activeTab, setActiveTab] = useState("personal");
   const [fullProfile, setFullProfile] = useState(null);
   

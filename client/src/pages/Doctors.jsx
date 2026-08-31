@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import API from "../services/api";
+import toast from "react-hot-toast";
 import DoctorList from "../components/doctor/DoctorList.jsx";
 import { SPECIALIZATIONS as CONST_SPECS, CITIES as CONST_CITIES } from "../utils/constants";
 

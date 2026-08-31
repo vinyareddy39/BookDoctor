@@ -1,10 +1,5 @@
 import { Link } from "react-router-dom";
 
-const TEAM = [
-  { name: "Sri Vinya Reddy", role: "Full Stack Developer", emoji: "👩‍💻", color: "from-primary-500 to-primary-700" },
-  { name: "Dr. Advisor",     role: "Healthcare Consultant", emoji: "👨‍⚕️", color: "from-accent-500 to-accent-700" },
-  { name: "UI/UX Designer",  role: "Product Designer",      emoji: "🎨", color: "from-secondary-500 to-secondary-700" },
-];
 
 const VALUES = [
   { icon: "🔒", title: "Security First",    desc: "All patient data is encrypted and stored securely. Privacy is our top priority." },
