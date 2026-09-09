@@ -133,11 +133,23 @@ export default function BookAppointment() {
   const timeSlots     = generateTimeSlots(availableTime);
   const todayStr      = new Date().toISOString().split("T")[0];
 
-  const mapEmbedUrl = doctor?.mapUrl
-    ? doctor.mapUrl
-    : doctor?.address
-    ? `https://maps.google.com/maps?q=${encodeURIComponent(doctor.address)}&output=embed`
-    : null;
+  let mapEmbedUrl = null;
+  if (doctor?.mapUrl) {
+    if (doctor.mapUrl.includes("<iframe") && doctor.mapUrl.includes("src=")) {
+      // If they accidentally pasted the whole embed code, extract the src
+      const match = doctor.mapUrl.match(/src="([^"]+)"/);
+      mapEmbedUrl = match ? match[1] : null;
+    } else if (doctor.mapUrl.includes("google.com/maps/embed")) {
+      // It's a valid embed URL
+      mapEmbedUrl = doctor.mapUrl;
+    } else if (doctor.address) {
+      // Invalid URL pasted (like a regular maps link), fallback to dynamic address search
+      mapEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(doctor.address)}&output=embed`;
+    }
+  } else if (doctor?.address) {
+    // No map URL provided, fallback to dynamic address search
+    mapEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(doctor.address)}&output=embed`;
+  }
 
   // Day names for display
   const dayLabels = allowedDaySet.size > 0

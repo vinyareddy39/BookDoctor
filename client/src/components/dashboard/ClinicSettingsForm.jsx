@@ -134,6 +134,9 @@ export default function ClinicSettingsForm({
         <div className="sm:col-span-2">
           <label className="input-label">Google Maps Embed URL</label>
           <input type="url" value={form.mapUrl} onChange={(e) => setForm((f) => ({ ...f, mapUrl: e.target.value }))} className="input" placeholder="https://www.google.com/maps/embed?pb=..." />
+          <p className="text-[10px] text-slate-400 mt-1">
+            <strong>Note:</strong> Go to Google Maps {'>'} Share {'>'} Embed a map {'>'} Copy the link inside the src="..." attribute. Regular map links will not work.
+          </p>
         </div>
 
         <div className="sm:col-span-2">
