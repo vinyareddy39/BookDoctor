@@ -18,6 +18,7 @@ import paymentRoutes     from "./routes/paymentroutes.js";
 import googleRoutes      from "./routes/googleroutes.js";
 import chatRoutes        from "./routes/chatroutes.js";
 import emergencyRoutes   from "./routes/emergencyRoutes.js";
+import ambulanceRoutes   from "./routes/ambulanceRoutes.js";
 
 // Swagger
 import swaggerUi from "swagger-ui-express";

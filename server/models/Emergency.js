@@ -24,6 +24,28 @@ const emergencySchema = new mongoose.Schema(
       enum: ["active", "resolved"],
       default: "active",
     },
+    // New fields for fallback flow
+    responseMode: {
+      type: String,
+      enum: ["doctor", "ambulance"],
+      default: "doctor",
+    },
+    assignedAmbulanceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Ambulance",
+      default: null,
+    },
+    assignedHospitalId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Hospital",
+      default: null,
+    },
+    ambulanceEtaMinutes: {
+      type: Number,
+    },
+    hospitalEtaMinutes: {
+      type: Number,
+    },
     locationHistory: [
       {
         lat: { type: Number },

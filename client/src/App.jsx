@@ -30,6 +30,7 @@ const ResetPassword   = lazy(() => import("./pages/ResetPassword.jsx"));
 const VerifyEmail     = lazy(() => import("./pages/VerifyEmail.jsx"));
 const VideoConsultation = lazy(() => import("./components/appointment/VideoConsultation.jsx"));
 const EmergencyTracking = lazy(() => import("./pages/EmergencyTracking.jsx"));
+const AmbulanceDashboard = lazy(() => import("./pages/AmbulanceDashboard.jsx"));
 
 // Page loader fallback
 function PageLoader() {
@@ -123,6 +124,9 @@ function App() {
             
             {/* Real-time Video Consultation Room */}
             <Route path="/room/:id"           element={<AuthRoute><VideoConsultation /></AuthRoute>} />
+
+            {/* Ambulance Driver (Demo) */}
+            <Route path="/ambulance/dashboard" element={<AmbulanceDashboard />} />
 
             {/* Admin protected */}
             <Route path="/admin"              element={<AdminRoute><AdminDashboard /></AdminRoute>} />
