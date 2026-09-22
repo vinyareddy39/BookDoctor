@@ -87,7 +87,12 @@ export default function EmergencyTracking() {
           if (data && data.address) {
             const sub = data.address.suburb || data.address.neighbourhood || data.address.residential || data.address.road || "";
             const city = data.address.city || data.address.town || data.address.state_district || "Hyderabad";
-            const formatted = sub ? `${sub}, ${city}` : (data.display_name?.split(",").slice(0, 2).join(",") || "Your Current Location");
+            let formatted = "Live GPS Location";
+            if (sub) {
+              formatted = `${sub}, ${city}`;
+            } else if (data.display_name && typeof data.display_name === "string") {
+              formatted = data.display_name.split(",").slice(0, 2).join(",");
+            }
             setUserAddress(formatted);
           }
         })

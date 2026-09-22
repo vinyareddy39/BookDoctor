@@ -133,7 +133,7 @@ export default function Navbar() {
                   }`}>
                     {user?.name?.charAt(0)?.toUpperCase() || "U"}
                   </div>
-                  <span className="text-sm font-semibold text-slate-700">{user?.name?.split(" ")[0]}</span>
+                  <span className="text-sm font-semibold text-slate-700">{user?.name ? user.name.split(" ")[0] : "User"}</span>
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide ${
                     isDoctor ? "bg-accent-100 text-accent-700" : "bg-primary-100 text-primary-700"
                   }`}>

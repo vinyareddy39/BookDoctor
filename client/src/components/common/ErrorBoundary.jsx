@@ -40,16 +40,19 @@ export default class ErrorBoundary extends Component {
               Your data is safe. Please try refreshing or go back to the homepage.
             </p>
 
-            {/* Error detail for development */}
-            {import.meta.env.DEV && this.state.error && (
-              <pre className="text-left text-xs bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-6 overflow-auto max-h-40">
-                {this.state.error.toString()}
-              </pre>
+            {this.state.error && (
+              <div className="text-left text-xs bg-red-50 border border-red-200 text-red-700 rounded-xl p-3.5 mb-6 overflow-auto max-h-32">
+                <p className="font-bold mb-0.5">Error:</p>
+                <p className="font-mono">{this.state.error.message || this.state.error.toString()}</p>
+              </div>
             )}
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center mt-6">
               <button
-                onClick={this.handleReset}
+                onClick={() => {
+                  this.handleReset();
+                  window.location.reload();
+                }}
                 className="btn-secondary"
               >
                 Try Again
