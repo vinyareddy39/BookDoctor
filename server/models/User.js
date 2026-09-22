@@ -59,6 +59,13 @@ const userSchema = new mongoose.Schema(
       conditions: { type: String, default: "" },
       medications: { type: String, default: "" },
     },
+    
+    // Uber Emergency Auto-Dispatch Linking
+    uberAccount: {
+      isConnected: { type: Boolean, default: false },
+      uberEmail: { type: String, default: "" },
+      connectedAt: { type: Date }
+    },
     emergencyContacts: [
       {
         name: { type: String },

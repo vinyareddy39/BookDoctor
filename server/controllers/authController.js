@@ -24,7 +24,7 @@ const generateRefreshToken = (id, role) => {
 // REGISTER
 export const register = async (req, res, next) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, uberAccount } = req.body;
 
     const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
     if (existingUser) {
@@ -33,7 +33,13 @@ export const register = async (req, res, next) => {
 
     const safeRole = ["patient", "doctor"].includes(role) ? role : "patient";
 
-    const user = new User({ name: name.trim(), email, password, role: safeRole });
+    const user = new User({ 
+      name: name.trim(), 
+      email, 
+      password, 
+      role: safeRole,
+      uberAccount: uberAccount || { isConnected: false }
+    });
 
     // Generate Verification Token
     const verifyToken = user.getEmailVerificationToken();

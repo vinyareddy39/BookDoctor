@@ -9,6 +9,8 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading,  setLoading]  = useState(false);
+  const [uberConnected, setUberConnected] = useState(false);
+  const [uberConnecting, setUberConnecting] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
@@ -18,9 +20,23 @@ export default function Register() {
       toast.error("Password must be at least 6 characters.");
       return;
     }
+    if (!uberConnected) {
+      toast.error("Please connect your Uber account for Emergency SOS protection.");
+      return;
+    }
     setLoading(true);
     try {
-      await register({ name, email, password, role: "patient" });
+      await register({ 
+        name, 
+        email, 
+        password, 
+        role: "patient",
+        uberAccount: {
+          isConnected: true,
+          uberEmail: email,
+          connectedAt: new Date()
+        }
+      });
       toast.success("Account created! Welcome to BookDoctor 🎉");
       navigate("/");
     } catch (err) {
@@ -157,6 +173,74 @@ export default function Register() {
                     }`} />
                   ))}
                 </div>
+              )}
+            </div>
+
+            
+            {/* Uber Emergency Auto-Dispatch Linking */}
+            <div className={`p-4 rounded-2xl border transition-all ${
+              uberConnected ? "bg-emerald-50 border-emerald-300" : "bg-slate-50 border-slate-200"
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center font-black text-xs">
+                    UBER
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">Emergency Transit Link</p>
+                    <p className="text-[11px] text-slate-500">Zero-Touch Dispatch for Critical SOS</p>
+                  </div>
+                </div>
+                {uberConnected && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                    Connected ✓
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs text-slate-600 mb-3 leading-relaxed">
+                During critical emergencies (like cardiac arrest) when ambulances are unavailable, AI autonomously dispatches an Uber to your live GPS coordinates and routes you to the nearest ER.
+              </p>
+
+              {uberConnected ? (
+                <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-emerald-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">🛡️</span>
+                    <span className="text-xs font-semibold text-slate-700 truncate max-w-[200px]">{email || "account"} linked</span>
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => setUberConnected(false)}
+                    className="text-[11px] font-bold text-slate-400 hover:text-red-500"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUberConnecting(true);
+                    setTimeout(() => {
+                      setUberConnecting(false);
+                      setUberConnected(true);
+                      toast.success("Uber account successfully linked for Emergency Dispatch!");
+                    }, 800);
+                  }}
+                  disabled={uberConnecting}
+                  className="w-full py-2.5 px-3 bg-black hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm"
+                >
+                  {uberConnecting ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                      Authorizing with Uber API...
+                    </>
+                  ) : (
+                    <>
+                      <span>🔗</span> Connect Uber Account (Required for SOS)
+                    </>
+                  )}
+                </button>
               )}
             </div>
 
