@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import API from "../services/api";
 import { useAuth } from "../context/AuthContext";
@@ -10,16 +10,17 @@ import "leaflet/dist/leaflet.css";
 export default function EmergencyTracking() {
   const { emergencyId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   
-  const [emergency, setEmergency] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [emergency, setEmergency] = useState(location.state?.emergency || null);
+  const [loading, setLoading] = useState(!location.state?.emergency);
   const [error, setError] = useState(null);
   const [uberVehicles, setUberVehicles] = useState([]);
   const [loadingUber, setLoadingUber] = useState(false);
   const [userAddress, setUserAddress] = useState("");
   const [showQR, setShowQR] = useState(false);
-  const [redirectCountdown, setRedirectCountdown] = useState(4);
+  const [redirectCountdown, setRedirectCountdown] = useState(5);
   const [autoRedirectCancelled, setAutoRedirectCancelled] = useState(false);
 
   // Auto-redirect to pre-filled Uber URL after showing 2nd pic
@@ -92,7 +93,9 @@ export default function EmergencyTracking() {
         }
       } catch (err) {
         console.error(err);
-        setError("Failed to load emergency details.");
+        if (!emergency && !location.state?.emergency) {
+          setError("Failed to load emergency details.");
+        }
         clearInterval(statusInterval);
       } finally {
         setLoading(false);

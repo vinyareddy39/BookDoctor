@@ -68,8 +68,10 @@ export default function SOSButton() {
           toast.dismiss(loadingToast);
           toast.success("Fastest ER hospital found! Loading emergency route...");
           
-          // Navigate to live Emergency Tracking page (2nd pic!)
-          navigate(`/emergency/${res.data.data.emergency._id}`);
+          // Navigate to live Emergency Tracking page with pre-loaded state for instant popup (2nd pic!)
+          navigate(`/emergency/${res.data.data.emergency._id}`, {
+            state: { emergency: res.data.data.emergency }
+          });
         } catch (err) {
           toast.dismiss(loadingToast);
           toast.error(err.response?.data?.message || "Failed to trigger SOS. Redirecting to nearest fallback hospital...");
