@@ -80,9 +80,9 @@ export default function Messages() {
               ? patName.charAt(0).toUpperCase() 
               : docName.charAt(0).toUpperCase();
             
-            const dateStr = new Date(appt.appointmentDate).toLocaleDateString("en-US", {
+            const dateStr = appt.appointmentDate && !isNaN(new Date(appt.appointmentDate)) ? new Date(appt.appointmentDate).toLocaleDateString("en-US", {
               month: "short", day: "numeric", year: "numeric"
-            });
+            }) : "TBD";
 
             return (
               <button
