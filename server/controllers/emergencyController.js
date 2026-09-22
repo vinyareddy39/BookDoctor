@@ -38,6 +38,37 @@ export const triggerEmergency = async (req, res, next) => {
       }
     }
 
+    // Hyper-local Live Emergency Fallback:
+    // If the closest database hospital is more than 8km away, dynamically query OpenStreetMap for a hospital right next to the user
+    const closestDist = nearestHospital ? calculateDistance(lat, lng, nearestHospital.lat, nearestHospital.lng) : 999;
+    if (closestDist > 8) {
+      try {
+        const osmRes = await axios.get(
+          `https://nominatim.openstreetmap.org/search?format=json&q=hospital&limit=3&bounded=1&viewbox=${lng - 0.06},${lat + 0.06},${lng + 0.06},${lat - 0.06}`,
+          { headers: { "User-Agent": "BookDoctor-Emergency/1.0" }, timeout: 3500 }
+        );
+        if (osmRes.data && osmRes.data.length > 0) {
+          const topResult = osmRes.data[0];
+          const rawName = topResult.display_name.split(",")[0] || "Emergency Hospital";
+          const rawAddr = topResult.display_name.split(",").slice(1, 3).join(",") || "Nearby Emergency Ward";
+          const cleanName = rawName.length > 3 && rawName.toLowerCase() !== "hospital" ? rawName : `${rawName} Care Center`;
+
+          const localHosp = await Hospital.create({
+            name: cleanName,
+            address: rawAddr,
+            lat: parseFloat(topResult.lat),
+            lng: parseFloat(topResult.lon),
+            erBedsAvailable: 5,
+            phone: "+91 40 108108"
+          });
+          nearestHospital = localHosp;
+          minHospDuration = 5;
+        }
+      } catch (e) {
+        // Fall back gracefully to closest catalog hospital
+      }
+    }
+
     if (!nearestHospital && hospitals.length > 0) {
       nearestHospital = hospitals[0];
     }
@@ -217,6 +248,15 @@ export const seedGhatkesarData = async (req, res, next) => {
     // Seed Mock Hospitals
     await Hospital.deleteMany({});
     await Hospital.insertMany([
+                // ==========================================
+        // KUKATPALLY / KPHB / HITEC CITY / MADHAPUR
+        // ==========================================
+        { name: "Prathima Hospitals", address: "Phase 6, KPHB Colony, Kukatpally, Hyderabad", lat: 17.4980, lng: 78.3920, specialties: ["Emergency", "Trauma", "Cardiac"], erBedsAvailable: 9, icuBedsAvailable: 4, phone: "+91 40 43454345" },
+        { name: "Remedy Hospitals", address: "Road No 1, KPHB Colony, Kukatpally, Hyderabad", lat: 17.4935, lng: 78.3990, specialties: ["Emergency", "Critical Care", "Cardiac"], erBedsAvailable: 7, icuBedsAvailable: 3, phone: "+91 40 40227777" },
+        { name: "Anupama Hospital", address: "Road No 2, KPHB Colony, Kukatpally, Hyderabad", lat: 17.4910, lng: 78.4010, specialties: ["Emergency", "Trauma"], erBedsAvailable: 6, icuBedsAvailable: 2, phone: "+91 40 23154567" },
+        { name: "Medicover Hospitals", address: "HUDA Techno Enclave, HITEC City, Madhapur, Hyderabad", lat: 17.4475, lng: 78.3780, specialties: ["Trauma", "Cardiac", "Critical Care"], erBedsAvailable: 10, icuBedsAvailable: 5, phone: "+91 40 68334455" },
+        { name: "Apollo Cradle & Children's Hospital", address: "Kothaguda Junction, Kondapur, Hyderabad", lat: 17.4640, lng: 78.3650, specialties: ["Emergency", "Pediatric", "General"], erBedsAvailable: 8, icuBedsAvailable: 3, phone: "+91 40 44242424" },
+
         // ==========================================
         // HYDERABAD & TELANGANA
         // ==========================================
