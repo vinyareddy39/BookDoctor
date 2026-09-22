@@ -312,9 +312,14 @@ export default function EmergencyTracking() {
                 href={`https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc.lat}&pickup[longitude]=${latestLoc.lng}&pickup[nickname]=My%20Location&dropoff[latitude]=${hospital.lat}&dropoff[longitude]=${hospital.lng}&dropoff[nickname]=${encodeURIComponent(hospital.name)}&dropoff[formatted_address]=${encodeURIComponent(hospital.address || hospital.name)}`}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => {
+                  const target = hospital?.address ? `${hospital.name}, ${hospital.address}` : (hospital?.name || "Emergency Hospital");
+                  navigator.clipboard.writeText(target);
+                  toast.success(`Destination ER copied: ${hospital?.name || "Hospital"}`);
+                }}
                 className="block text-center w-full bg-black hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-md mt-2 text-sm"
               >
-                Open in Uber App
+                Open in Uber App (Auto-Copies ER Address)
               </a>
             )}
 
