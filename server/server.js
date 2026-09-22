@@ -17,6 +17,7 @@ import adminRoutes       from "./routes/adminroutes.js";
 import paymentRoutes     from "./routes/paymentroutes.js";
 import googleRoutes      from "./routes/googleroutes.js";
 import chatRoutes        from "./routes/chatroutes.js";
+import emergencyRoutes   from "./routes/emergencyRoutes.js";
 
 // Swagger
 import swaggerUi from "swagger-ui-express";
@@ -143,6 +144,7 @@ app.use("/api/admin",        adminRoutes);
 app.use("/api/payments",     paymentRoutes);
 app.use("/api/google",       googleRoutes);
 app.use("/api/chat",         chatRoutes);
+app.use("/api/emergency",    emergencyRoutes);
 
 // Swagger API Docs
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));

@@ -8,6 +8,7 @@ import {
   uploadHealthRecord,
   getHealthRecords,
   deleteHealthRecord,
+  updateMedicalId
 } from "../controllers/userController.js";
 import multer from "multer";
 import path from "path";
@@ -31,6 +32,7 @@ router.get("/", auth, role("admin"), getUsers);
 // User profile
 router.get("/profile", auth, getMyProfile);
 router.put("/profile", auth, updateProfile);
+router.put("/medical-id", auth, updateMedicalId);
 
 // Dependents
 router.post("/dependents", auth, addDependent);

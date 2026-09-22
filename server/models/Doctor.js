@@ -68,6 +68,22 @@ const doctorSchema = new mongoose.Schema(
       default: "",
     },
 
+    // ─── SOS Emergency Features ───────────────────────────────────────────────
+    acceptingEmergencies: { 
+      type: Boolean, 
+      default: false 
+    },
+    erCapacity: { 
+      type: Number, 
+      default: 0 
+    },
+    lat: { 
+      type: Number 
+    },
+    lng: { 
+      type: Number 
+    },
+
     // ─── Admin Verification ───────────────────────────────────────────────────
     isVerified: {
       type: Boolean,

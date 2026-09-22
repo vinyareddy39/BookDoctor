@@ -4,6 +4,7 @@ import API from "../services/api";
 import toast from "react-hot-toast";
 import FamilyProfiles from "../components/profile/FamilyProfiles";
 import HealthVault from "../components/profile/HealthVault";
+import MedicalIdTab from "../components/profile/MedicalIdTab";
 
 const PRESET_AVATARS = [
   "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix",
@@ -155,20 +156,20 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Tab Navigation */}
-          <div className="flex gap-2 bg-white rounded-xl p-1.5 w-fit border border-slate-200 shadow-sm mx-auto sm:mx-0">
-            {["personal", "family", "vault"].map((t) => (
+          {/* Tabs */}
+          <div className="flex overflow-x-auto gap-2 border-b border-slate-200 pb-2 hide-scrollbar">
+            {["personal", "medicalId", "family", "vault"].map((t) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => setActiveTab(t)}
-                className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
                   activeTab === t
                     ? "bg-primary-600 text-white shadow-sm"
                     : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
                 }`}
               >
-                {t === "personal" ? "👤 Personal Info" : t === "family" ? "👨‍👩‍👧‍👦 Family Profiles" : "📁 Health Vault"}
+                {t === "personal" ? "👤 Personal Info" : t === "medicalId" ? "🚨 Medical ID (SOS)" : t === "family" ? "👨‍👩‍👧‍👦 Family Profiles" : "📁 Health Vault"}
               </button>
             ))}
           </div>
@@ -336,6 +337,13 @@ export default function Profile() {
               </div>
 
               </div>
+            </div>
+          )}
+
+          {/* Medical ID (SOS) Content */}
+          {activeTab === "medicalId" && (
+            <div className="card p-6 sm:p-8 border-t-4 border-t-red-500">
+              <MedicalIdTab profile={fullProfile} setProfile={setFullProfile} />
             </div>
           )}
 

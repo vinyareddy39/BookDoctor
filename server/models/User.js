@@ -52,6 +52,20 @@ const userSchema = new mongoose.Schema(
       default: "",
     },
 
+    // ─── SOS Emergency & Medical ID ───────────────────────────────────────────
+    medicalId: {
+      bloodGroup: { type: String, default: "" },
+      allergies: { type: String, default: "" },
+      conditions: { type: String, default: "" },
+      medications: { type: String, default: "" },
+    },
+    emergencyContacts: [
+      {
+        name: { type: String },
+        phone: { type: String },
+      }
+    ],
+
     role: {
       type: String,
       enum: ["patient", "doctor", "admin"],

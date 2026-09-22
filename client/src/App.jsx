@@ -7,6 +7,7 @@ import { useAuth } from "./context/AuthContext";
 // Eagerly loaded (always needed)
 import Navbar  from "./components/common/Navbar.jsx";
 import Footer  from "./components/common/Footer.jsx";
+import SOSButton from "./components/common/SOSButton.jsx";
 
 // Lazy-loaded pages (split into separate chunks — faster initial load)
 const Home            = lazy(() => import("./pages/Home.jsx"));
@@ -28,6 +29,7 @@ const ForgotPassword = lazy(() => import("./pages/ForgotPassword.jsx"));
 const ResetPassword   = lazy(() => import("./pages/ResetPassword.jsx"));
 const VerifyEmail     = lazy(() => import("./pages/VerifyEmail.jsx"));
 const VideoConsultation = lazy(() => import("./components/appointment/VideoConsultation.jsx"));
+const EmergencyTracking = lazy(() => import("./pages/EmergencyTracking.jsx"));
 
 // Page loader fallback
 function PageLoader() {
@@ -91,6 +93,7 @@ function App() {
         }}
       />
       <Navbar />
+      <SOSButton />
       <main className="flex-1">
         <Suspense fallback={<PageLoader />}>
           <Routes>
@@ -113,6 +116,7 @@ function App() {
             <Route path="/appointments"         element={<AuthRoute><MyAppointments /></AuthRoute>} />
             <Route path="/profile"              element={<AuthRoute><Profile /></AuthRoute>} />
             <Route path="/messages"             element={<AuthRoute><MessagesPage /></AuthRoute>} />
+            <Route path="/emergency/:emergencyId" element={<AuthRoute><EmergencyTracking /></AuthRoute>} />
 
             {/* Doctor protected */}
             <Route path="/doctor/dashboard"   element={<DoctorRoute><DoctorDashboard /></DoctorRoute>} />

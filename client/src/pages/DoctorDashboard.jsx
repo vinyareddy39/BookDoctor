@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { useSocket } from "../context/SocketContext";
 
 import DashboardStats     from "../components/dashboard/DashboardStats.jsx";
+import IncomingEmergencies from "../components/dashboard/IncomingEmergencies.jsx";
 import AppointmentsList   from "../components/dashboard/AppointmentsList.jsx";
 import ClinicSettingsForm from "../components/dashboard/ClinicSettingsForm.jsx";
 import { RevenueChart, AppointmentVolumeChart } from "../components/common/Charts.jsx";
@@ -232,21 +233,21 @@ export default function DoctorDashboard() {
         <DashboardStats appts={appts} />
 
         {/* Tab Bar */}
-        <div className="flex gap-2 bg-white rounded-xl p-1.5 w-fit border border-slate-200 mb-8 shadow-sm">
-          {["analytics", "appointments", "profile"].map((t) => (
-            <button
-              key={t}
-              onClick={() => setActiveTab(t)}
-              className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                activeTab === t
-                  ? "bg-primary-600 text-white shadow-sm"
-                  : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              {t === "analytics" ? "📈 Analytics" : t === "appointments" ? "📋 Appointments" : "⚙️ Clinic & Schedule"}
-            </button>
-          ))}
-        </div>
+          <div className="flex gap-2 bg-white rounded-xl p-1.5 w-fit border border-slate-200 shadow-sm mx-auto sm:mx-0 mb-6 overflow-x-auto">
+            {["analytics", "appointments", "emergencies", "profile"].map((t) => (
+              <button
+                key={t}
+                onClick={() => setActiveTab(t)}
+                className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
+                  activeTab === t
+                    ? "bg-primary-600 text-white shadow-sm"
+                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {t === "analytics" ? "📊 Analytics" : t === "appointments" ? "📅 Appointments" : t === "emergencies" ? "🚨 SOS Emergencies" : "⚙️ Clinic & Schedule"}
+              </button>
+            ))}
+          </div>
 
         {/* Tab content */}
         {activeTab === "analytics" && (
@@ -285,6 +286,10 @@ export default function DoctorDashboard() {
             onStatusUpdate={handleStatusUpdate}
             onPaymentUpdate={handlePaymentUpdate}
           />
+        )}
+
+        {activeTab === "emergencies" && (
+          <IncomingEmergencies doctorProfile={profile} setDoctorProfile={setProfile} />
         )}
 
         {activeTab === "profile" && (

@@ -124,3 +124,24 @@ export const deleteHealthRecord = async (req, res, next) => {
     next(err);
   }
 };
+// UPDATE MEDICAL ID & EMERGENCY CONTACTS (SOS Feature)
+export const updateMedicalId = async (req, res, next) => {
+  try {
+    const { medicalId, emergencyContacts } = req.body;
+    const updateData = {};
+    
+    if (medicalId) updateData.medicalId = medicalId;
+    if (emergencyContacts) updateData.emergencyContacts = emergencyContacts;
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    return req.http.ok(user, "Medical ID updated successfully");
+  } catch (err) {
+    next(err);
+  }
+};
+
