@@ -45,10 +45,6 @@ export default function EmergencyTracking() {
     if (!successful && navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(target).catch(() => {});
     }
-
-    setCopied(true);
-    toast.success(`Copied: ${emergency?.assignedHospitalId?.name || "Hospital"}`);
-    setTimeout(() => setCopied(false), 3000);
   };
 
   const getUberUrl = (productId = null) => {
@@ -312,27 +308,13 @@ export default function EmergencyTracking() {
                       {hospital?.erBedsAvailable || 1} ER Beds Open
                     </span>
                   </div>
-                  <div className="flex items-center justify-between mt-0.5">
-                    <div>
-                      <p className="text-sm font-bold text-slate-900">{hospital?.name || "Nearest Hospital ER"}</p>
-                      <p className="text-xs text-slate-500">{hospital?.address || "Emergency Ward"}</p>
-                      <p className="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
-                        <span>⚡</span>
-                        <span>Shortest real road route ({emergency?.hospitalEtaMinutes || 10} min ETA via OSRM/Dijkstra)</span>
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyAddress()}
-                      className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-all shrink-0 ml-2 ${
-                        copied
-                          ? "bg-green-600 text-white border-green-600"
-                          : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
-                      }`}
-                      title="Copy exact ER address to clipboard"
-                    >
-                      {copied ? "✓ Copied" : "📋 Copy Address"}
-                    </button>
+                  <div className="mt-0.5">
+                    <p className="text-sm font-bold text-slate-900">{hospital?.name || "Nearest Hospital ER"}</p>
+                    <p className="text-xs text-slate-500">{hospital?.address || "Emergency Ward"}</p>
+                    <p className="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                      <span>⚡</span>
+                      <span>Shortest real road route ({emergency?.hospitalEtaMinutes || 10} min ETA via OSRM/Dijkstra)</span>
+                    </p>
                   </div>
                 </div>
               </div>
@@ -436,10 +418,6 @@ export default function EmergencyTracking() {
                     </p>
                   </div>
                 )}
-
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-center text-xs text-amber-900 leading-relaxed">
-                  📋 <b>Autofill notice:</b> Destination ER is copied to clipboard. In desktop web Uber, click the search box and press <b>Ctrl + V</b>. On mobile or via QR scan, Uber autofills natively.
-                </div>
               </div>
             )}
 
