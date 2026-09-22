@@ -243,16 +243,16 @@ export default function EmergencyTracking() {
       
       <div className={`p-6 rounded-2xl shadow-sm text-white ${isResolved ? "bg-green-600" : isUberMode ? "bg-blue-600 animate-pulse-slow" : isAmbulanceMode ? "bg-amber-500 animate-pulse-slow" : "bg-red-600 animate-pulse-slow"}`}>
         <h1 className="text-2xl md:text-3xl font-black mb-2">
-          {isResolved ? "? Emergency Resolved" : isUberMode ? "?? UBER FALLBACK TRIGGERED" : isAmbulanceMode ? "?? AMBULANCE DISPATCHED" : "?? ACTIVE SOS EMERGENCY"}
+          {isResolved ? "✅ Emergency Resolved" : isUberMode ? "🚗 UBER EMERGENCY DISPATCH" : isAmbulanceMode ? "🚑 AMBULANCE DISPATCHED" : "🚨 ACTIVE SOS EMERGENCY"}
         </h1>
         <p className="opacity-90 font-medium">
           {isResolved 
             ? "This emergency has been safely resolved and logged."
             : isAmbulanceMode 
-              ? "No doctor available nearby. Ambulance routed to your location."
+              ? "Ambulance routed to your location."
               : isUberMode
-                ? "Ambulance wait time is too long. Please request an Uber immediately."
-              : "Live tracking active. Doctor is preparing for your arrival."}
+                ? "Direct emergency hospital dispatch via Uber active. Bed reserved at nearest ER."
+              : "Live tracking active. Hospital is preparing for your arrival."}
         </p>
       </div>
 
