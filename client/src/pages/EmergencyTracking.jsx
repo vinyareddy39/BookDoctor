@@ -18,34 +18,7 @@ export default function EmergencyTracking() {
   const [uberVehicles, setUberVehicles] = useState([]);
   const [loadingUber, setLoadingUber] = useState(false);
   const [userAddress, setUserAddress] = useState("");
-  const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
-
-  const handleCopyAddress = (customText) => {
-    const target = customText || (emergency?.assignedHospitalId?.address 
-      ? `${emergency.assignedHospitalId.name}, ${emergency.assignedHospitalId.address}` 
-      : (emergency?.assignedHospitalId?.name || "Emergency Hospital"));
-      
-    let successful = false;
-    try {
-      const textArea = document.createElement("textarea");
-      textArea.value = target;
-      textArea.style.position = "fixed";
-      textArea.style.left = "-999999px";
-      textArea.style.top = "-999999px";
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      successful = document.execCommand("copy");
-      document.body.removeChild(textArea);
-    } catch (err) {
-      console.warn("Fallback execCommand copy error:", err);
-    }
-
-    if (!successful && navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(target).catch(() => {});
-    }
-  };
 
   const getUberUrl = (productId = null) => {
     const curLoc = emergency?.locationHistory?.[emergency.locationHistory.length - 1] || emergency?.location;
@@ -336,7 +309,6 @@ export default function EmergencyTracking() {
                     href={getUberUrl(v.product_id)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    onClick={() => handleCopyAddress()}
                     className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-blue-50/70 border border-slate-200 hover:border-blue-300 rounded-xl transition-all group"
                   >
                     <div className="flex items-center gap-3">
@@ -377,7 +349,6 @@ export default function EmergencyTracking() {
                   href={getUberUrl()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  onClick={() => handleCopyAddress()}
                   className="flex items-center justify-center gap-2 w-full bg-black hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-md text-sm"
                 >
                   <span className="text-lg">🚗</span>

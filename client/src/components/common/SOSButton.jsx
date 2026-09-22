@@ -66,26 +66,28 @@ export default function SOSButton() {
           });
 
           toast.dismiss(loadingToast);
-          toast.success("Fastest ER hospital found! Help is on the way.");
+          toast.success("Fastest ER hospital found! Redirecting to Uber...");
           
-          // Redirect to live tracking page
-          navigate(`/emergency/${res.data.data.emergency._id}`);
+          const hosp = res.data?.data?.emergency?.assignedHospitalId;
+          const hospLat = hosp?.lat || 17.3664;
+          const hospLng = hosp?.lng || 78.5363;
+          const hospName = hosp?.name || "Omni Hospitals Emergency ER";
+
+          const uberUrl = `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latitude}&pickup[longitude]=${longitude}&dropoff[latitude]=${hospLat}&dropoff[longitude]=${hospLng}&dropoff[nickname]=${encodeURIComponent(hospName)}`;
+
+          window.location.href = uberUrl;
         } catch (err) {
           toast.dismiss(loadingToast);
-          toast.error(err.response?.data?.message || "Failed to trigger SOS. No responders found.");
+          toast.error(err.response?.data?.message || "Failed to trigger SOS. Redirecting to nearest fallback hospital...");
           
           // CLIENT-SIDE UBER FALLBACK
-          toast.loading("Redirecting to Uber as a fallback...", { duration: 3000 });
-          setTimeout(() => {
-            const { latitude, longitude } = position.coords;
-            const hospLat = 17.3664;
-            const hospLng = 78.5363;
-            const hospName = "Omni Hospitals Emergency ER";
-            const hospAddress = "Omni Hospitals, Chaitanyapuri, Kothapet, Hyderabad";
-            const uberUrl = `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latitude}&pickup[longitude]=${longitude}&pickup[nickname]=My%20Location&dropoff[latitude]=${hospLat}&dropoff[longitude]=${hospLng}&dropoff[nickname]=${encodeURIComponent(hospName)}&dropoff[formatted_address]=${encodeURIComponent(hospAddress)}`;
-            
-            window.location.href = uberUrl;
-          }, 2000);
+          const { latitude, longitude } = position.coords;
+          const hospLat = 17.3664;
+          const hospLng = 78.5363;
+          const hospName = "Omni Hospitals Emergency ER";
+          const uberUrl = `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latitude}&pickup[longitude]=${longitude}&dropoff[latitude]=${hospLat}&dropoff[longitude]=${hospLng}&dropoff[nickname]=${encodeURIComponent(hospName)}`;
+          
+          window.location.href = uberUrl;
         } finally {
           setIsTriggering(false);
         }
