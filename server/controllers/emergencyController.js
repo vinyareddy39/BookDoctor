@@ -349,13 +349,82 @@ export const seedGhatkesarData = async (req, res, next) => {
     // Seed Mock Hospitals
     await Hospital.deleteMany({});
     await Hospital.insertMany([
-      { name: "Anurag Care Hospital", address: "Ghatkesar Main Rd", lat: 17.4450, lng: 78.6850, specialties: ["Trauma", "Cardiac"], erBedsAvailable: 5, icuBedsAvailable: 2, phone: "+91 40 1234567" },
-      { name: "Sreenidhi Lifeline", address: "Yampee Rd, Ghatkesar", lat: 17.4380, lng: 78.6900, specialties: ["General", "Orthopedic"], erBedsAvailable: 3, icuBedsAvailable: 1, phone: "+91 40 7654321" }
-    ]);
+        // ==========================================
+        // HYDERABAD & TELANGANA
+        // ==========================================
+        { name: "Omni Hospitals", address: "Chaitanyapuri, Kothapet, Hyderabad", lat: 17.3664, lng: 78.5363, specialties: ["Cardiac", "Trauma", "ER"], erBedsAvailable: 6, icuBedsAvailable: 3, phone: "+91 40 44556677" },
+        { name: "Yashoda Hospitals", address: "Nalgonda X Roads, Malakpet, Hyderabad", lat: 17.3753, lng: 78.5024, specialties: ["Cardiac", "Neuro", "Trauma"], erBedsAvailable: 8, icuBedsAvailable: 4, phone: "+91 40 45674567" },
+        { name: "Kamineni Hospitals", address: "LB Nagar, Hyderabad", lat: 17.3606, lng: 78.5524, specialties: ["Emergency", "Trauma", "Surgery"], erBedsAvailable: 7, icuBedsAvailable: 3, phone: "+91 40 39879999" },
+        { name: "Anurag Care Hospital", address: "Ghatkesar Main Rd, Hyderabad", lat: 17.4450, lng: 78.6850, specialties: ["Emergency", "Cardiac"], erBedsAvailable: 5, icuBedsAvailable: 2, phone: "+91 40 1234567" },
+        { name: "AIIMS Hospital", address: "Warangal Highway, Bibinagar, Telangana", lat: 17.4721, lng: 78.7993, specialties: ["Multi-Specialty", "Emergency", "Trauma"], erBedsAvailable: 10, icuBedsAvailable: 5, phone: "+91 86 32345678" },
+        { name: "Apollo Hospitals", address: "Road No 72, Jubilee Hills, Hyderabad", lat: 17.4165, lng: 78.4116, specialties: ["Cardiac", "Organ Transplant", "ER"], erBedsAvailable: 9, icuBedsAvailable: 4, phone: "+91 40 23607777" },
+        { name: "Care Hospitals", address: "Road No 1, Banjara Hills, Hyderabad", lat: 17.4184, lng: 78.4485, specialties: ["Cardiac", "Critical Care", "ER"], erBedsAvailable: 6, icuBedsAvailable: 3, phone: "+91 40 61656565" },
+        { name: "KIMS Hospitals", address: "Minister Rd, Secunderabad", lat: 17.4414, lng: 78.4870, specialties: ["Trauma", "Neuro", "Cardiac"], erBedsAvailable: 8, icuBedsAvailable: 4, phone: "+91 40 44885000" },
+        { name: "AIG Hospitals", address: "Mindspace Rd, Gachibowli, Hyderabad", lat: 17.4435, lng: 78.3663, specialties: ["Gastro", "Emergency", "Critical Care"], erBedsAvailable: 8, icuBedsAvailable: 4, phone: "+91 40 42444222" },
+        { name: "Continental Hospitals", address: "Financial District, Nanakramguda, Gachibowli", lat: 17.4208, lng: 78.3496, specialties: ["Emergency", "Trauma", "Cardiac"], erBedsAvailable: 7, icuBedsAvailable: 3, phone: "+91 40 67000000" },
+
+        // ==========================================
+        // BENGALURU & KARNATAKA
+        // ==========================================
+        { name: "Manipal Hospital", address: "98 HAL Old Airport Rd, Kodihalli, Bengaluru", lat: 12.9592, lng: 77.6499, specialties: ["Cardiac", "Trauma", "ER"], erBedsAvailable: 10, icuBedsAvailable: 5, phone: "+91 80 25024444" },
+        { name: "Apollo Hospitals", address: "Bannerghatta Rd, Opp IIMB, Bengaluru", lat: 12.8943, lng: 77.5991, specialties: ["Cardiac", "Emergency", "Neuro"], erBedsAvailable: 8, icuBedsAvailable: 4, phone: "+91 80 26304050" },
+        { name: "Narayana Health City", address: "258/A, Bommasandra Industrial Area, Anekal Taluk, Bengaluru", lat: 12.8123, lng: 77.6917, specialties: ["Cardiac", "Emergency", "Trauma"], erBedsAvailable: 12, icuBedsAvailable: 6, phone: "+91 80 71222222" },
+        { name: "Fortis Hospital", address: "14 Cunningham Rd, Vasanth Nagar, Bengaluru", lat: 12.9880, lng: 77.5950, specialties: ["Emergency", "Critical Care"], erBedsAvailable: 6, icuBedsAvailable: 3, phone: "+91 80 41994444" },
+
+        // ==========================================
+        // DELHI NCR & GURUGRAM
+        // ==========================================
+        { name: "AIIMS New Delhi", address: "Sri Aurobindo Marg, Ansari Nagar, New Delhi", lat: 28.5672, lng: 77.2100, specialties: ["Apex Trauma", "Emergency", "Cardiac"], erBedsAvailable: 15, icuBedsAvailable: 8, phone: "+91 11 26588500" },
+        { name: "Max Super Speciality Hospital", address: "1, 2 Press Enclave Rd, Saket, New Delhi", lat: 28.5284, lng: 77.2117, specialties: ["Cardiac", "Trauma", "Neuro"], erBedsAvailable: 9, icuBedsAvailable: 4, phone: "+91 11 26515050" },
+        { name: "Medanta - The Medicity", address: "CH Bakhtawar Singh Rd, Sector 38, Gurugram", lat: 28.4395, lng: 77.0425, specialties: ["Critical Care", "Cardiac", "Emergency"], erBedsAvailable: 14, icuBedsAvailable: 7, phone: "+91 124 4141414" },
+        { name: "Fortis Memorial Research Institute", address: "Sector 44, Opp HUDA City Centre, Gurugram", lat: 28.4595, lng: 77.0725, specialties: ["Trauma", "Cardiac", "ER"], erBedsAvailable: 8, icuBedsAvailable: 4, phone: "+91 124 4962200" },
+
+        // ==========================================
+        // MUMBAI & PUNE (MAHARASHTRA)
+        // ==========================================
+        { name: "Kokilaben Dhirubhai Ambani Hospital", address: "Rao Saheb Achutrao Patwardhan Marg, Andheri West, Mumbai", lat: 19.1311, lng: 72.8252, specialties: ["Emergency", "Trauma", "Cardiac"], erBedsAvailable: 11, icuBedsAvailable: 5, phone: "+91 22 42696969" },
+        { name: "Lilavati Hospital & Research Centre", address: "A-791, Bandra Reclamation, Bandra West, Mumbai", lat: 19.0519, lng: 72.8290, specialties: ["Cardiac", "Critical Care", "ER"], erBedsAvailable: 7, icuBedsAvailable: 3, phone: "+91 22 26751000" },
+        { name: "P.D. Hinduja Hospital", address: "Veer Savarkar Marg, Mahim, Mumbai", lat: 19.0330, lng: 72.8397, specialties: ["Emergency", "Cardiac"], erBedsAvailable: 6, icuBedsAvailable: 3, phone: "+91 22 24451515" },
+        { name: "Ruby Hall Clinic", address: "40 Sassoon Rd, Sangamvadi, Pune", lat: 18.5314, lng: 73.8777, specialties: ["Trauma", "Cardiac", "Critical Care"], erBedsAvailable: 8, icuBedsAvailable: 4, phone: "+91 20 66455100" },
+
+        // ==========================================
+        // CHENNAI & TAMIL NADU
+        // ==========================================
+        { name: "Apollo Hospitals", address: "21 Greams Lane, Thousand Lights, Chennai", lat: 13.0604, lng: 80.2505, specialties: ["Cardiac", "Emergency", "Trauma"], erBedsAvailable: 10, icuBedsAvailable: 5, phone: "+91 44 28290200" },
+        { name: "MIOT International", address: "4/112, Mount Poonamallee Rd, Manapakkam, Chennai", lat: 13.0182, lng: 80.1873, specialties: ["Orthopedic", "Trauma", "ER"], erBedsAvailable: 7, icuBedsAvailable: 3, phone: "+91 44 42002288" },
+        { name: "Fortis Malar Hospital", address: "No 52, 1st Main Rd, Gandhi Nagar, Adyar, Chennai", lat: 13.0067, lng: 80.2570, specialties: ["Cardiac", "Emergency"], erBedsAvailable: 6, icuBedsAvailable: 3, phone: "+91 44 42892222" },
+
+        // ==========================================
+        // KOLKATA & EAST INDIA
+        // ==========================================
+        { name: "Apollo Multispeciality Hospitals", address: "58 Canal Circular Rd, Kadapara, Phool Bagan, Kolkata", lat: 22.5726, lng: 88.3970, specialties: ["Cardiac", "Emergency", "Critical Care"], erBedsAvailable: 9, icuBedsAvailable: 4, phone: "+91 33 23203040" },
+        { name: "Fortis Hospital", address: "730, Anandapur, E.M. Bypass Road, Kolkata", lat: 22.5186, lng: 88.4014, specialties: ["Cardiac", "Trauma", "ER"], erBedsAvailable: 7, icuBedsAvailable: 3, phone: "+91 33 66284444" },
+
+        // ==========================================
+        // AHMEDABAD & GUJARAT
+        // ==========================================
+        { name: "Apollo Hospitals", address: "Plot No 1A, Bhat GIDC Estate, Gandhinagar/Ahmedabad", lat: 23.1118, lng: 72.6373, specialties: ["Emergency", "Cardiac", "Trauma"], erBedsAvailable: 8, icuBedsAvailable: 4, phone: "+91 79 66701800" },
+        { name: "Zydus Hospital", address: "Zydus Hospitals Rd, Thaltej, Ahmedabad", lat: 23.0560, lng: 72.5085, specialties: ["Critical Care", "ER", "Cardiac"], erBedsAvailable: 7, icuBedsAvailable: 3, phone: "+91 79 66190201" },
+
+        // ==========================================
+        // JAIPUR & RAJASTHAN
+        // ==========================================
+        { name: "Fortis Escorts Hospital", address: "Jawaharlal Nehru Marg, Malviya Nagar, Jaipur", lat: 26.8523, lng: 75.8056, specialties: ["Cardiac", "Emergency"], erBedsAvailable: 6, icuBedsAvailable: 3, phone: "+91 141 2547000" },
+
+        // ==========================================
+        // LUCKNOW & UTTAR PRADESH
+        // ==========================================
+        { name: "Medanta Hospital", address: "Sector B, Pocket 1, Amar Shaheed Path, Golf City, Lucknow", lat: 26.7725, lng: 80.9984, specialties: ["Cardiac", "Trauma", "Emergency"], erBedsAvailable: 10, icuBedsAvailable: 5, phone: "+91 522 4505050" },
+
+        // ==========================================
+        // KOCHI & KERALA
+        // ==========================================
+        { name: "Aster Medcity", address: "Kuttisahib Road, Cheranelloor, South Chittoor, Kochi", lat: 10.0538, lng: 76.2673, specialties: ["Critical Care", "Emergency", "Cardiac"], erBedsAvailable: 8, icuBedsAvailable: 4, phone: "+91 484 6699999" }
+      ]);
 
     return res.status(200).json({ 
       success: true, 
-      message: "Successfully seeded Doctors, Ambulances, and Hospitals around Ghatkesar for demo!"
+      message: "Successfully seeded Pan-India Network of Premier Hospitals and Ambulances!"
     });
   } catch (error) {
     next(error);
