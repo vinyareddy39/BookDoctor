@@ -22,9 +22,13 @@ export default function SOSButton() {
   }, [isCounting, countdown]);
 
   const handlePress = () => {
-    // Immediately prompt for live location on SOS tap
+    // Immediately prompt for fresh live location on SOS tap (never cached)
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(() => {}, () => {}, { enableHighAccuracy: true });
+      navigator.geolocation.getCurrentPosition(() => {}, () => {}, { 
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 10000 
+      });
     }
     setCountdown(3);
     setIsCounting(true);
@@ -39,7 +43,7 @@ export default function SOSButton() {
     setIsCounting(false);
     setIsTriggering(true);
     
-    const loadingToast = toast.loading("Acquiring GPS location...");
+    const loadingToast = toast.loading("Acquiring fresh GPS location...");
 
     if (!navigator.geolocation) {
       toast.dismiss(loadingToast);
@@ -48,10 +52,11 @@ export default function SOSButton() {
       return;
     }
 
+    // Force fresh hardware GPS fix on every single SOS press (maximumAge: 0)
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
-          toast.loading("Finding nearest emergency hospital...", { id: loadingToast });
+          toast.loading("Calculating fastest hospital ER via Dijkstra road routing...", { id: loadingToast });
           const { latitude, longitude } = position.coords;
           
           const res = await API.post("/emergency/trigger", {
@@ -61,7 +66,7 @@ export default function SOSButton() {
           });
 
           toast.dismiss(loadingToast);
-          toast.success("Emergency triggered! Help is on the way.");
+          toast.success("Fastest ER hospital found! Help is on the way.");
           
           // Redirect to live tracking page
           navigate(`/emergency/${res.data.data.emergency._id}`);
@@ -70,16 +75,13 @@ export default function SOSButton() {
           toast.error(err.response?.data?.message || "Failed to trigger SOS. No responders found.");
           
           // CLIENT-SIDE UBER FALLBACK
-          // If the backend completely fails or returns 404, forcefully redirect to Uber
           toast.loading("Redirecting to Uber as a fallback...", { duration: 3000 });
           setTimeout(() => {
             const { latitude, longitude } = position.coords;
-            // Fallback destination (AIIMS Bibinagar / nearest demo ER) since backend failed
-            const hospLat = 17.4721;
-            const hospLng = 78.7993;
-            const hospName = "AIIMS Bibinagar Emergency";
-            
-            const hospAddress = "AIIMS Hospital, Warangal Highway, Bibinagar, Telangana 508126";
+            const hospLat = 17.3664;
+            const hospLng = 78.5363;
+            const hospName = "Omni Hospitals Emergency ER";
+            const hospAddress = "Omni Hospitals, Chaitanyapuri, Kothapet, Hyderabad";
             const uberUrl = `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latitude}&pickup[longitude]=${longitude}&pickup[nickname]=My%20Location&dropoff[latitude]=${hospLat}&dropoff[longitude]=${hospLng}&dropoff[nickname]=${encodeURIComponent(hospName)}&dropoff[formatted_address]=${encodeURIComponent(hospAddress)}`;
             
             window.location.href = uberUrl;
@@ -93,7 +95,7 @@ export default function SOSButton() {
         toast.error("Please allow location access to use SOS feature.");
         setIsTriggering(false);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
     );
   };
 

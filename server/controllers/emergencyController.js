@@ -5,6 +5,7 @@ import Hospital from "../models/Hospital.js";
 import { calculateDistance, estimateETA } from "../utils/distance.js";
 import { getRouteAndETA } from "../utils/routing.js";
 import { getUberEstimates } from "../services/uberService.js";
+import axios from "axios";
 
 // TRIGGER EMERGENCY (Patient)
 export const triggerEmergency = async (req, res, next) => {
@@ -18,25 +19,40 @@ export const triggerEmergency = async (req, res, next) => {
     // DIRECT UBER EMERGENCY DISPATCH: Find nearest hospital with open ER beds
     const hospitals = await Hospital.find({ erBedsAvailable: { $gt: 0 } });
     
-    // Pass 1: Haversine shortlist (Top 3 closest hospitals)
-    const hospShortlist = hospitals.map(hosp => ({
-      hosp,
-      dist: calculateDistance(lat, lng, hosp.lat, hosp.lng)
-    })).sort((a, b) => a.dist - b.dist).slice(0, 3);
+    // Candidate pool: Top candidate hospitals for road evaluation
+    const hospCandidates = hospitals
+      .map(hosp => ({
+        hosp,
+        straightDist: calculateDistance(lat, lng, hosp.lat, hosp.lng)
+      }))
+      .sort((a, b) => a.straightDist - b.straightDist)
+      .slice(0, 8);
 
-    let nearestHospital = null;
-    let minHospDuration = Infinity;
-    let bestHospRoute = null;
+    // Evaluate REAL ROAD DRIVING TIME using OSRM shortest-path routing (Dijkstra/CH engine)
+    const evaluatedRoutes = await Promise.all(
+      hospCandidates.map(async (item) => {
+        const routeData = await getRouteAndETA(lat, lng, item.hosp.lat, item.hosp.lng);
+        return {
+          hosp: item.hosp,
+          durationMinutes: routeData.durationMinutes,
+          distanceKm: routeData.distanceKm,
+          routeGeoJSON: routeData.routeGeoJSON,
+          isFallback: routeData.isFallback
+        };
+      })
+    );
 
-    // Pass 2: OSRM Routing for real road driving time
-    for (const item of hospShortlist) {
-      const routeData = await getRouteAndETA(lat, lng, item.hosp.lat, item.hosp.lng);
-      if (routeData.durationMinutes < minHospDuration) {
-        minHospDuration = routeData.durationMinutes;
-        nearestHospital = item.hosp;
-        bestHospRoute = routeData.routeGeoJSON;
+    // Pick whichever has the shortest real driving time on roads
+    evaluatedRoutes.sort((a, b) => {
+      if (a.durationMinutes !== b.durationMinutes) {
+        return a.durationMinutes - b.durationMinutes;
       }
-    }
+      return a.distanceKm - b.distanceKm;
+    });
+
+    let nearestHospital = evaluatedRoutes[0]?.hosp || null;
+    let minHospDuration = evaluatedRoutes[0]?.durationMinutes || Infinity;
+    let bestHospRoute = evaluatedRoutes[0]?.routeGeoJSON || null;
 
     // Hyper-local Live Emergency Fallback:
     // If the closest database hospital is more than 8km away, dynamically query OpenStreetMap for a hospital right next to the user
@@ -256,6 +272,7 @@ export const seedGhatkesarData = async (req, res, next) => {
         { name: "Anupama Hospital", address: "Road No 2, KPHB Colony, Kukatpally, Hyderabad", lat: 17.4910, lng: 78.4010, specialties: ["Emergency", "Trauma"], erBedsAvailable: 6, icuBedsAvailable: 2, phone: "+91 40 23154567" },
         { name: "Medicover Hospitals", address: "HUDA Techno Enclave, HITEC City, Madhapur, Hyderabad", lat: 17.4475, lng: 78.3780, specialties: ["Trauma", "Cardiac", "Critical Care"], erBedsAvailable: 10, icuBedsAvailable: 5, phone: "+91 40 68334455" },
         { name: "Apollo Cradle & Children's Hospital", address: "Kothaguda Junction, Kondapur, Hyderabad", lat: 17.4640, lng: 78.3650, specialties: ["Emergency", "Pediatric", "General"], erBedsAvailable: 8, icuBedsAvailable: 3, phone: "+91 40 44242424" },
+        { name: "Omni Hospitals", address: "Near KPHB Colony, Kukatpally, Hyderabad", lat: 17.4947, lng: 78.3995, specialties: ["Emergency", "Trauma", "Cardiac"], erBedsAvailable: 8, icuBedsAvailable: 4, phone: "+91 40 44557788" },
 
         // ==========================================
         // HYDERABAD & TELANGANA

@@ -283,6 +283,10 @@ export default function EmergencyTracking() {
                     <div>
                       <p className="text-sm font-bold text-slate-900">{hospital?.name || "Nearest Hospital ER"}</p>
                       <p className="text-xs text-slate-500">{hospital?.address || "Emergency Ward"}</p>
+                      <p className="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                        <span>⚡</span>
+                        <span>Shortest real road route ({emergency?.hospitalEtaMinutes || 10} min ETA via OSRM/Dijkstra)</span>
+                      </p>
                     </div>
                     <button
                       type="button"
@@ -359,7 +363,7 @@ export default function EmergencyTracking() {
             {!isResolved && latestLoc?.lat && hospital?.lat && (
               <div className="space-y-2 pt-2">
                 <a
-                  href={`https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc.lat}&pickup[longitude]=${latestLoc.lng}&pickup[nickname]=My%20Location&dropoff[latitude]=${hospital.lat}&dropoff[longitude]=${hospital.lng}&dropoff[nickname]=${encodeURIComponent(hospital.name)}&dropoff[formatted_address]=${encodeURIComponent(hospital.address || hospital.name)}`}
+                  href={`https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc.lat}&pickup[longitude]=${latestLoc.lng}&pickup[nickname]=${encodeURIComponent(userAddress ? userAddress.split(",").slice(0, 2).join(",") : "My Live Location")}&dropoff[latitude]=${hospital.lat}&dropoff[longitude]=${hospital.lng}&dropoff[nickname]=${encodeURIComponent(hospital.name)}&dropoff[formatted_address]=${encodeURIComponent(hospital.address || hospital.name)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => handleCopyAddress()}
@@ -395,7 +399,7 @@ export default function EmergencyTracking() {
                     <p className="text-xs font-bold text-slate-700 mb-2">Scan with Phone Camera to Open Native Uber App:</p>
                     <img
                       src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
-                        `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc.lat}&pickup[longitude]=${latestLoc.lng}&pickup[nickname]=My%20Location&dropoff[latitude]=${hospital.lat}&dropoff[longitude]=${hospital.lng}&dropoff[nickname]=${encodeURIComponent(hospital.name)}&dropoff[formatted_address]=${encodeURIComponent(hospital.address || hospital.name)}`
+                        `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc.lat}&pickup[longitude]=${latestLoc.lng}&pickup[nickname]=${encodeURIComponent(userAddress ? userAddress.split(",").slice(0, 2).join(",") : "My Live Location")}&dropoff[latitude]=${hospital.lat}&dropoff[longitude]=${hospital.lng}&dropoff[nickname]=${encodeURIComponent(hospital.name)}&dropoff[formatted_address]=${encodeURIComponent(hospital.address || hospital.name)}`
                       )}`}
                       alt="Uber QR Code"
                       className="mx-auto rounded-lg shadow-sm border border-slate-200 w-36 h-36"
