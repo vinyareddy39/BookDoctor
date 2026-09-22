@@ -15,6 +15,8 @@ export default function EmergencyTracking() {
   const [emergency, setEmergency] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [uberVehicles, setUberVehicles] = useState([]);
+  const [loadingUber, setLoadingUber] = useState(false);
   
   useEffect(() => {
     let statusInterval;
@@ -71,6 +73,33 @@ export default function EmergencyTracking() {
       clearInterval(locationInterval);
     };
   }, [emergencyId, user]);
+
+
+  // Fetch live Uber vehicle estimates when in Uber mode
+  useEffect(() => {
+    if (emergency?.responseMode === "uber" && emergency?.assignedHospitalId?.lat) {
+      const hosp = emergency.assignedHospitalId;
+      const curLoc = emergency.locationHistory?.[emergency.locationHistory.length - 1] || emergency.location;
+      if (!curLoc?.lat) return;
+
+      setLoadingUber(true);
+      API.get("/emergency/uber/estimates", {
+        params: {
+          startLat: curLoc.lat,
+          startLng: curLoc.lng,
+          endLat: hosp.lat,
+          endLng: hosp.lng
+        }
+      })
+        .then((res) => {
+          if (res.data?.data && Array.isArray(res.data.data)) {
+            setUberVehicles(res.data.data);
+          }
+        })
+        .catch((err) => console.error("Uber estimates load error:", err))
+        .finally(() => setLoadingUber(false));
+    }
+  }, [emergency?.responseMode, emergency?.assignedHospitalId, emergency?.location]);
 
   const handleResolve = async () => {
     try {
@@ -147,31 +176,96 @@ export default function EmergencyTracking() {
         
         {isUberMode ? (
           <div className="bg-white p-6 rounded-2xl border border-blue-200 shadow-sm space-y-4">
-            <h2 className="text-sm font-black text-blue-700 uppercase tracking-wider">Urgent Ride Required</h2>
-            <div>
-              <p className="text-slate-700 font-medium mb-4">No ambulances are nearby or their ETA exceeds 10 minutes. Please take a cab immediately to the nearest available hospital.</p>
-              
-              <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider mt-4">Destination Hospital</h2>
-              <div className="mb-4">
-                <p className="text-lg font-bold text-slate-900">{hospital?.name}</p>
-                <p className="text-sm text-slate-500">{hospital?.address}</p>
-                <p className="text-xs text-slate-500 mt-1">ER Beds Available: <span className="font-bold text-red-500">{hospital?.erBedsAvailable}</span></p>
-              </div>
-
-              {!isResolved && latestLoc?.lat && hospital?.lat && (
-                <a 
-                  href={`https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc.lat}&pickup[longitude]=${latestLoc.lng}&dropoff[latitude]=${hospital.lat}&dropoff[longitude]=${hospital.lng}&dropoff[nickname]=${encodeURIComponent(hospital.name)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-center w-full bg-black hover:bg-slate-800 text-white font-bold py-4 rounded-xl transition-all shadow-lg"
-                >
-                  Request Uber to Hospital
-                </a>
-              )}
-              <p className="text-[10px] text-slate-400 mt-2 text-center">
-                *This is a client-side deep link. It securely opens the Uber app pre-filled with the hospital coordinates.
-              </p>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-black text-blue-700 uppercase tracking-wider">Uber Emergency Ride Options</h2>
+              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800">Live API</span>
             </div>
+            
+            <p className="text-slate-600 text-sm">
+              Ambulances are currently unavailable. Choose an Uber below to dispatch directly to the nearest available hospital.
+            </p>
+
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase">Destination ER</p>
+                  <p className="text-base font-bold text-slate-900">{hospital?.name || "Nearest Hospital ER"}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{hospital?.address}</p>
+                </div>
+                <span className="text-xs font-bold px-2 py-1 rounded-lg bg-green-100 text-green-700 whitespace-nowrap">
+                  {hospital?.erBedsAvailable || 1} ER Beds Open
+                </span>
+              </div>
+            </div>
+
+            {/* Uber Vehicle Selection List */}
+            <div className="space-y-2.5 pt-1">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Available Vehicles Near You</p>
+              
+              {loadingUber ? (
+                <div className="py-6 text-center text-slate-400 text-sm">
+                  <span className="inline-block w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2"></span>
+                  Contacting Uber API for live vehicle rates...
+                </div>
+              ) : uberVehicles.length > 0 ? (
+                uberVehicles.map((v) => {
+                  const deepLink = `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc?.lat || 17.4485}&pickup[longitude]=${latestLoc?.lng || 78.6841}&dropoff[latitude]=${hospital?.lat || 17.4721}&dropoff[longitude]=${hospital?.lng || 78.7993}&dropoff[nickname]=${encodeURIComponent(hospital?.name || "Hospital")}`;
+                  
+                  return (
+                    <a
+                      key={v.product_id}
+                      href={deepLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-blue-50/70 border border-slate-200 hover:border-blue-300 rounded-xl transition-all group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl p-2 bg-white rounded-lg shadow-sm">{v.icon || "🚗"}</span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900 text-sm">{v.display_name}</span>
+                            {v.tag && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                                {v.tag}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {v.duration_mins} mins away • {v.distance_km} km
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <p className="text-sm font-black text-slate-900">{v.estimate}</p>
+                        <span className="text-xs font-bold text-blue-600 group-hover:underline">
+                          Book Now ➔
+                        </span>
+                      </div>
+                    </a>
+                  );
+                })
+              ) : (
+                <div className="text-center py-4 text-slate-400 text-xs">
+                  Loading vehicles...
+                </div>
+              )}
+            </div>
+
+            {!isResolved && latestLoc?.lat && hospital?.lat && (
+              <a
+                href={`https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc.lat}&pickup[longitude]=${latestLoc.lng}&dropoff[latitude]=${hospital.lat}&dropoff[longitude]=${hospital.lng}&dropoff[nickname]=${encodeURIComponent(hospital.name)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-center w-full bg-black hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-md mt-2 text-sm"
+              >
+                Open in Uber App
+              </a>
+            )}
+
+            <p className="text-[10px] text-slate-400 text-center">
+              *Real-time estimates powered by Uber Developer API with automated coordinate handoff.
+            </p>
           </div>
         ) : isAmbulanceMode ? (
           <div className="bg-white p-6 rounded-2xl border border-amber-200 shadow-sm space-y-4">

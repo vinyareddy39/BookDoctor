@@ -4,6 +4,7 @@ import Ambulance from "../models/Ambulance.js";
 import Hospital from "../models/Hospital.js";
 import { calculateDistance, estimateETA } from "../utils/distance.js";
 import { getRouteAndETA } from "../utils/routing.js";
+import { getUberEstimates } from "../services/uberService.js";
 
 // TRIGGER EMERGENCY (Patient)
 export const triggerEmergency = async (req, res, next) => {
@@ -382,6 +383,26 @@ export const disableAllAmbulances = async (req, res, next) => {
       success: true, 
       message: "All ambulances disabled! Next SOS trigger will force the Uber Fallback flow."
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getUberEstimatesHandler = async (req, res, next) => {
+  try {
+    const { startLat, startLng, endLat, endLng } = req.query;
+    if (!startLat || !startLng || !endLat || !endLng) {
+      return res.status(400).json({ success: false, message: "Missing coordinates" });
+    }
+
+    const estimates = await getUberEstimates(
+      parseFloat(startLat),
+      parseFloat(startLng),
+      parseFloat(endLat),
+      parseFloat(endLng)
+    );
+
+    return res.status(200).json({ success: true, data: estimates });
   } catch (error) {
     next(error);
   }

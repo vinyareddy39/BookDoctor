@@ -9,7 +9,8 @@ import {
   markCapacityUpdated,
   seedGhatkesarData,
   disableAllDoctors,
-  disableAllAmbulances
+  disableAllAmbulances,
+  getUberEstimatesHandler
 } from "../controllers/emergencyController.js";
 
 const router = express.Router();
@@ -18,6 +19,7 @@ const router = express.Router();
 router.get("/seed-demo", seedGhatkesarData);
 router.get("/demo/disable-all-doctors", disableAllDoctors);
 router.get("/demo/disable-all-ambulances", disableAllAmbulances);
+router.get("/uber/estimates", getUberEstimatesHandler);
 
 // Patient routes
 router.post("/trigger", auth, triggerEmergency);
