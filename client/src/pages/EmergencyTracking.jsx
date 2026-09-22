@@ -185,16 +185,44 @@ export default function EmergencyTracking() {
               Ambulances are currently unavailable. Choose an Uber below to dispatch directly to the nearest available hospital.
             </p>
 
-            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase">Destination ER</p>
-                  <p className="text-base font-bold text-slate-900">{hospital?.name || "Nearest Hospital ER"}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{hospital?.address}</p>
+            {/* Transit Route Details: Pickup & Dropoff */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 shadow-inner">
+              {/* Pickup / Live Location */}
+              <div className="flex items-start gap-3">
+                <div className="mt-1 flex flex-col items-center">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping absolute" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 relative" />
+                  <div className="w-0.5 h-6 bg-slate-300 my-1" />
                 </div>
-                <span className="text-xs font-bold px-2 py-1 rounded-lg bg-green-100 text-green-700 whitespace-nowrap">
-                  {hospital?.erBedsAvailable || 1} ER Beds Open
-                </span>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-black text-emerald-700 uppercase tracking-wider">Pickup (Your Live GPS Location)</p>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 animate-pulse">
+                      Live GPS 🟢
+                    </span>
+                  </div>
+                  <p className="text-sm font-black text-slate-900 font-mono mt-0.5">
+                    {latestLoc?.lat ? `${latestLoc.lat.toFixed(5)}, ${latestLoc.lng.toFixed(5)}` : "Acquiring GPS coordinates..."}
+                  </p>
+                  <p className="text-[11px] text-slate-500">Auto-detected from phone sensor • No typing needed</p>
+                </div>
+              </div>
+
+              {/* Destination ER */}
+              <div className="flex items-start gap-3 pt-2.5 border-t border-slate-200/80">
+                <div className="mt-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-600 block" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-black text-red-600 uppercase tracking-wider">Destination ER (Nearest Hospital)</p>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-green-100 text-green-700 whitespace-nowrap">
+                      {hospital?.erBedsAvailable || 1} ER Beds Open
+                    </span>
+                  </div>
+                  <p className="text-sm font-bold text-slate-900 mt-0.5">{hospital?.name || "Nearest Hospital ER"}</p>
+                  <p className="text-xs text-slate-500">{hospital?.address || "Ghatkesar Main Rd"}</p>
+                </div>
               </div>
             </div>
 
