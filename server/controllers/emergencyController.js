@@ -407,3 +407,31 @@ export const getUberEstimatesHandler = async (req, res, next) => {
     next(error);
   }
 };
+
+export const updateLocation = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { lat, lng } = req.body;
+
+    if (lat === undefined || lng === undefined) {
+      return res.status(400).json({ success: false, message: "lat and lng are required" });
+    }
+
+    const emergency = await Emergency.findByIdAndUpdate(
+      id,
+      {
+        location: { lat: parseFloat(lat), lng: parseFloat(lng) },
+        $push: { locationHistory: { lat: parseFloat(lat), lng: parseFloat(lng), timestamp: new Date() } }
+      },
+      { new: true }
+    );
+
+    if (!emergency) {
+      return res.status(404).json({ success: false, message: "Emergency not found" });
+    }
+
+    return res.status(200).json({ success: true, data: emergency });
+  } catch (error) {
+    next(error);
+  }
+};
