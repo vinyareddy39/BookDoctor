@@ -17,6 +17,7 @@ export default function EmergencyTracking() {
   const [error, setError] = useState(null);
   const [uberVehicles, setUberVehicles] = useState([]);
   const [loadingUber, setLoadingUber] = useState(false);
+  const [userAddress, setUserAddress] = useState("");
   
   useEffect(() => {
     let statusInterval;
@@ -74,6 +75,25 @@ export default function EmergencyTracking() {
     };
   }, [emergencyId, user]);
 
+
+
+  // Reverse geocode live GPS to human-readable area name (e.g. Kothapet, Ghatkesar)
+  useEffect(() => {
+    const curLoc = emergency?.locationHistory?.[emergency.locationHistory.length - 1] || emergency?.location;
+    if (curLoc?.lat && curLoc?.lng && !userAddress) {
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${curLoc.lat}&lon=${curLoc.lng}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.address) {
+            const sub = data.address.suburb || data.address.neighbourhood || data.address.residential || data.address.road || "";
+            const city = data.address.city || data.address.town || data.address.state_district || "Hyderabad";
+            const formatted = sub ? `${sub}, ${city}` : (data.display_name?.split(",").slice(0, 2).join(",") || "Your Current Location");
+            setUserAddress(formatted);
+          }
+        })
+        .catch(() => setUserAddress("Live GPS Location"));
+    }
+  }, [emergency?.locationHistory, emergency?.location, userAddress]);
 
   // Fetch live Uber vehicle estimates when in Uber mode
   useEffect(() => {
@@ -201,10 +221,12 @@ export default function EmergencyTracking() {
                       Live GPS 🟢
                     </span>
                   </div>
-                  <p className="text-sm font-black text-slate-900 font-mono mt-0.5">
-                    {latestLoc?.lat ? `${latestLoc.lat.toFixed(5)}, ${latestLoc.lng.toFixed(5)}` : "Acquiring GPS coordinates..."}
+                  <p className="text-sm font-black text-slate-900 mt-0.5">
+                    {userAddress ? userAddress : (latestLoc?.lat ? `${latestLoc.lat.toFixed(5)}, ${latestLoc.lng.toFixed(5)}` : "Acquiring GPS coordinates...")}
                   </p>
-                  <p className="text-[11px] text-slate-500">Auto-detected from phone sensor • No typing needed</p>
+                  <p className="text-[11px] text-slate-500 font-mono">
+                    Live GPS: {latestLoc?.lat ? `${latestLoc.lat.toFixed(4)}, ${latestLoc.lng.toFixed(4)}` : "Locating..."} • Auto-detected (No typing)
+                  </p>
                 </div>
               </div>
 
