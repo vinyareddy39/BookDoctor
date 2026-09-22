@@ -11,9 +11,6 @@ export default function SOSButton() {
   const [countdown, setCountdown] = useState(3);
   const [isTriggering, setIsTriggering] = useState(false);
 
-  // Only show for logged in patients
-  if (!isLoggedIn || user?.role !== "patient") return null;
-
   useEffect(() => {
     let timer;
     if (isCounting && countdown > 0) {
@@ -79,6 +76,9 @@ export default function SOSButton() {
       { enableHighAccuracy: true, timeout: 10000 }
     );
   };
+
+  // Only show for logged in patients (Must be after all hooks!)
+  if (!isLoggedIn || user?.role !== "patient") return null;
 
   return (
     <>
