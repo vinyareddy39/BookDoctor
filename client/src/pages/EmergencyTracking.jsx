@@ -51,6 +51,33 @@ export default function EmergencyTracking() {
     setTimeout(() => setCopied(false), 3000);
   };
 
+  const getUberUrl = (productId = null) => {
+    const pLat = latestLoc?.lat || 17.4485;
+    const pLng = latestLoc?.lng || 78.6841;
+    const pAddr = userAddress || "My Current Location";
+    const dLat = hospital?.lat || 17.3664;
+    const dLng = hospital?.lng || 78.5363;
+    const dName = hospital?.name || "Omni Hospitals";
+    const dAddr = (hospital?.name ? hospital.name + ", " : "") + (hospital?.address || "Hyderabad");
+
+    let url = `https://m.uber.com/ul/?client_id=DfjKZC3xXnBEObgCRl1ChUSdRJDnjwBP&action=setPickup&pickup[latitude]=${pLat}&pickup[longitude]=${pLng}&pickup[formatted_address]=${encodeURIComponent(pAddr)}&dropoff[latitude]=${dLat}&dropoff[longitude]=${dLng}&dropoff[nickname]=${encodeURIComponent(dName)}&dropoff[formatted_address]=${encodeURIComponent(dAddr)}`;
+
+    if (productId) {
+      url += `&product_id=${productId}`;
+    }
+    return url;
+  };
+
+  const getGoogleMapsUrl = () => {
+    const pLat = latestLoc?.lat || 17.4485;
+    const pLng = latestLoc?.lng || 78.6841;
+    const dLat = hospital?.lat || 17.3664;
+    const dLng = hospital?.lng || 78.5363;
+    const dName = hospital?.name || "Omni Hospitals";
+    const dAddr = hospital?.address || "";
+    return `https://www.google.com/maps/dir/?api=1&origin=${pLat},${pLng}&destination=${encodeURIComponent(dName + " " + dAddr)}&travelmode=driving`;
+  };
+
   useEffect(() => {
     let statusInterval;
     let locationInterval;
@@ -315,44 +342,40 @@ export default function EmergencyTracking() {
                   Contacting Uber API for live vehicle rates...
                 </div>
               ) : uberVehicles.length > 0 ? (
-                uberVehicles.map((v) => {
-                  const deepLink = `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc?.lat || 17.4485}&pickup[longitude]=${latestLoc?.lng || 78.6841}&pickup[nickname]=My%20Location&dropoff[latitude]=${hospital?.lat || 17.4721}&dropoff[longitude]=${hospital?.lng || 78.7993}&dropoff[nickname]=${encodeURIComponent(hospital?.name || "Hospital ER")}&dropoff[formatted_address]=${encodeURIComponent(hospital?.address || hospital?.name || "Nearest Hospital ER")}`;
-                  
-                  return (
-                    <a
-                      key={v.product_id}
-                      href={deepLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => handleCopyAddress()}
-                      className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-blue-50/70 border border-slate-200 hover:border-blue-300 rounded-xl transition-all group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl p-2 bg-white rounded-lg shadow-sm">{v.icon || "🚗"}</span>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-900 text-sm">{v.display_name}</span>
-                            {v.tag && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
-                                {v.tag}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            {v.duration_mins} mins away • {v.distance_km} km
-                          </p>
+                uberVehicles.map((v) => (
+                  <a
+                    key={v.product_id}
+                    href={getUberUrl(v.product_id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => handleCopyAddress()}
+                    className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-blue-50/70 border border-slate-200 hover:border-blue-300 rounded-xl transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl p-2 bg-white rounded-lg shadow-sm">{v.icon || "🚗"}</span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 text-sm">{v.display_name}</span>
+                          {v.tag && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                              {v.tag}
+                            </span>
+                          )}
                         </div>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {v.duration_mins} mins away • {v.distance_km} km
+                        </p>
                       </div>
+                    </div>
 
-                      <div className="text-right">
-                        <p className="text-sm font-black text-slate-900">{v.estimate}</p>
-                        <span className="text-xs font-bold text-blue-600 group-hover:underline">
-                          Book Now ➔
-                        </span>
-                      </div>
-                    </a>
-                  );
-                })
+                    <div className="text-right">
+                      <p className="text-sm font-black text-slate-900">{v.estimate}</p>
+                      <span className="text-xs font-bold text-blue-600 group-hover:underline">
+                        Book Now ➔
+                      </span>
+                    </div>
+                  </a>
+                ))
               ) : (
                 <div className="text-center py-4 text-slate-400 text-xs">
                   Loading vehicles...
@@ -363,25 +386,25 @@ export default function EmergencyTracking() {
             {!isResolved && latestLoc?.lat && hospital?.lat && (
               <div className="space-y-2 pt-2">
                 <a
-                  href={`https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc.lat}&pickup[longitude]=${latestLoc.lng}&pickup[nickname]=${encodeURIComponent(userAddress ? userAddress.split(",").slice(0, 2).join(",") : "My Live Location")}&dropoff[latitude]=${hospital.lat}&dropoff[longitude]=${hospital.lng}&dropoff[nickname]=${encodeURIComponent(hospital.name)}&dropoff[formatted_address]=${encodeURIComponent(hospital.address || hospital.name)}`}
+                  href={getUberUrl()}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => handleCopyAddress()}
                   className="flex items-center justify-center gap-2 w-full bg-black hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-md text-sm"
                 >
                   <span className="text-lg">🚗</span>
-                  <span>Open in Uber App (Auto-Copies Address)</span>
+                  <span>Open in Uber App (Pre-filled Dispatch)</span>
                 </a>
 
                 <div className="grid grid-cols-2 gap-2">
                   <a
-                    href={`https://www.google.com/maps/dir/?api=1&origin=${latestLoc.lat},${latestLoc.lng}&destination=${hospital.lat},${hospital.lng}&travelmode=driving`}
+                    href={getGoogleMapsUrl()}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-xl text-xs border border-blue-200 transition"
                   >
                     <span>🗺️</span>
-                    <span>Google Maps Route</span>
+                    <span>Google Maps (100% Autofill)</span>
                   </a>
 
                   <button
@@ -398,20 +421,18 @@ export default function EmergencyTracking() {
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-center animate-fade-in-up">
                     <p className="text-xs font-bold text-slate-700 mb-2">Scan with Phone Camera to Open Native Uber App:</p>
                     <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
-                        `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc.lat}&pickup[longitude]=${latestLoc.lng}&pickup[nickname]=${encodeURIComponent(userAddress ? userAddress.split(",").slice(0, 2).join(",") : "My Live Location")}&dropoff[latitude]=${hospital.lat}&dropoff[longitude]=${hospital.lng}&dropoff[nickname]=${encodeURIComponent(hospital.name)}&dropoff[formatted_address]=${encodeURIComponent(hospital.address || hospital.name)}`
-                      )}`}
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(getUberUrl())}`}
                       alt="Uber QR Code"
                       className="mx-auto rounded-lg shadow-sm border border-slate-200 w-36 h-36"
                     />
                     <p className="text-[11px] text-slate-500 mt-2">
-                      Points directly into the mobile Uber App with hospital pre-filled.
+                      Points directly into the native mobile Uber App with hospital ER pre-filled.
                     </p>
                   </div>
                 )}
 
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-center text-[11px] text-amber-800">
-                  📋 <b>Tip:</b> Hospital destination is copied to your clipboard. On desktop Uber, press <b>Ctrl + V</b> in the search bar.
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-center text-xs text-amber-900 leading-relaxed">
+                  📋 <b>Autofill notice:</b> Destination ER is copied to clipboard. In desktop web Uber, click the search box and press <b>Ctrl + V</b>. On mobile or via QR scan, Uber autofills natively.
                 </div>
               </div>
             )}
