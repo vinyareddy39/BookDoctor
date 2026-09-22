@@ -167,3 +167,44 @@ export const markCapacityUpdated = async (req, res, next) => {
   }
 };
 
+
+// HACKATHON DEMO: Seed Ghatkesar Doctors via GET request (Bypasses local ISP blocks by running on Render)
+export const seedGhatkesarData = async (req, res, next) => {
+  try {
+    const doctors = await Doctor.find().limit(5);
+    if (!doctors || doctors.length === 0) {
+      return res.status(404).json({ success: false, message: "No doctors found in DB to update." });
+    }
+
+    // Ghatkesar Area Coordinates (for realistic local testing)
+    const GHATKESAR_LOCATIONS = [
+      { lat: 17.4485, lng: 78.6841 }, // Ghatkesar Center
+      { lat: 17.4550, lng: 78.6700 }, // Near ORR Ghatkesar
+      { lat: 17.4350, lng: 78.6900 }, // South Ghatkesar
+      { lat: 17.4600, lng: 78.6800 }, // North Ghatkesar
+      { lat: 17.4400, lng: 78.6750 }  // Edulabad Road
+    ];
+
+    for (let i = 0; i < doctors.length; i++) {
+      const doc = doctors[i];
+      const loc = GHATKESAR_LOCATIONS[i % GHATKESAR_LOCATIONS.length];
+      
+      doc.acceptingEmergencies = true;
+      doc.erCapacity = Math.floor(Math.random() * 5) + 2; // 2 to 6 beds
+      doc.lat = loc.lat;
+      doc.lng = loc.lng;
+      doc.city = "Ghatkesar, Hyderabad";
+      
+      await doc.save();
+    }
+
+    return res.status(200).json({ 
+      success: true, 
+      message: "Successfully seeded 5 doctors around Ghatkesar! They are now accepting emergencies with ER capacity.",
+      count: doctors.length
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
