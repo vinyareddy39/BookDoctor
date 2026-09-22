@@ -15,7 +15,8 @@ export const SocketProvider = ({ children }) => {
     // Only connect if the user is logged in
     if (isLoggedIn && user?._id) {
       // Connect to the backend server
-      const socketUrl = import.meta.env.VITE_API_URL.replace("/api", ""); // fallback to root URL
+      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+      const socketUrl = apiUrl.replace("/api", "");
       const newSocket = io(socketUrl, {
         withCredentials: true,
       });
