@@ -373,3 +373,16 @@ export const disableAllDoctors = async (req, res, next) => {
     next(error);
   }
 };
+
+// HACKATHON DEMO: Disable all ambulances to force the Uber fallback
+export const disableAllAmbulances = async (req, res, next) => {
+  try {
+    await Ambulance.updateMany({}, { isAvailable: false });
+    return res.status(200).json({ 
+      success: true, 
+      message: "All ambulances disabled! Next SOS trigger will force the Uber Fallback flow."
+    });
+  } catch (error) {
+    next(error);
+  }
+};

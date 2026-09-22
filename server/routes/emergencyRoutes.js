@@ -8,7 +8,8 @@ import {
   getIncomingEmergencies,
   markCapacityUpdated,
   seedGhatkesarData,
-  disableAllDoctors
+  disableAllDoctors,
+  disableAllAmbulances
 } from "../controllers/emergencyController.js";
 
 const router = express.Router();
@@ -16,6 +17,7 @@ const router = express.Router();
 // HACKATHON DEMO SEED ROUTE (Unprotected so you can trigger it easily)
 router.get("/seed-demo", seedGhatkesarData);
 router.get("/demo/disable-all-doctors", disableAllDoctors);
+router.get("/demo/disable-all-ambulances", disableAllAmbulances);
 
 // Patient routes
 router.post("/trigger", auth, triggerEmergency);
