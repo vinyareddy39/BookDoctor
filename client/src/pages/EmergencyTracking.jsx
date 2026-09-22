@@ -18,7 +18,39 @@ export default function EmergencyTracking() {
   const [uberVehicles, setUberVehicles] = useState([]);
   const [loadingUber, setLoadingUber] = useState(false);
   const [userAddress, setUserAddress] = useState("");
-  
+  const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
+
+  const handleCopyAddress = (customText) => {
+    const target = customText || (emergency?.assignedHospitalId?.address 
+      ? `${emergency.assignedHospitalId.name}, ${emergency.assignedHospitalId.address}` 
+      : (emergency?.assignedHospitalId?.name || "Emergency Hospital"));
+      
+    let successful = false;
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = target;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      successful = document.execCommand("copy");
+      document.body.removeChild(textArea);
+    } catch (err) {
+      console.warn("Fallback execCommand copy error:", err);
+    }
+
+    if (!successful && navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(target).catch(() => {});
+    }
+
+    setCopied(true);
+    toast.success(`Copied: ${emergency?.assignedHospitalId?.name || "Hospital"}`);
+    setTimeout(() => setCopied(false), 3000);
+  };
+
   useEffect(() => {
     let statusInterval;
     let locationInterval;
@@ -247,8 +279,24 @@ export default function EmergencyTracking() {
                       {hospital?.erBedsAvailable || 1} ER Beds Open
                     </span>
                   </div>
-                  <p className="text-sm font-bold text-slate-900 mt-0.5">{hospital?.name || "Nearest Hospital ER"}</p>
-                  <p className="text-xs text-slate-500">{hospital?.address || "Ghatkesar Main Rd"}</p>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">{hospital?.name || "Nearest Hospital ER"}</p>
+                      <p className="text-xs text-slate-500">{hospital?.address || "Emergency Ward"}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyAddress()}
+                      className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-all shrink-0 ml-2 ${
+                        copied
+                          ? "bg-green-600 text-white border-green-600"
+                          : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
+                      }`}
+                      title="Copy exact ER address to clipboard"
+                    >
+                      {copied ? "✓ Copied" : "📋 Copy Address"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -264,7 +312,7 @@ export default function EmergencyTracking() {
                 </div>
               ) : uberVehicles.length > 0 ? (
                 uberVehicles.map((v) => {
-                  const deepLink = `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc?.lat || 17.4485}&pickup[longitude]=${latestLoc?.lng || 78.6841}&pickup[nickname]=My%20Current%20Location&dropoff[latitude]=${hospital?.lat || 17.4721}&dropoff[longitude]=${hospital?.lng || 78.7993}&dropoff[nickname]=${encodeURIComponent(hospital?.name || "Hospital ER")}&dropoff[formatted_address]=${encodeURIComponent(hospital?.address || "Nearest Hospital ER, Hyderabad")}`;
+                  const deepLink = `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc?.lat || 17.4485}&pickup[longitude]=${latestLoc?.lng || 78.6841}&pickup[nickname]=My%20Location&dropoff[latitude]=${hospital?.lat || 17.4721}&dropoff[longitude]=${hospital?.lng || 78.7993}&dropoff[nickname]=${encodeURIComponent(hospital?.name || "Hospital ER")}&dropoff[formatted_address]=${encodeURIComponent(hospital?.address || hospital?.name || "Nearest Hospital ER")}`;
                   
                   return (
                     <a
@@ -272,6 +320,7 @@ export default function EmergencyTracking() {
                       href={deepLink}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() => handleCopyAddress()}
                       className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-blue-50/70 border border-slate-200 hover:border-blue-300 rounded-xl transition-all group"
                     >
                       <div className="flex items-center gap-3">
@@ -308,19 +357,59 @@ export default function EmergencyTracking() {
             </div>
 
             {!isResolved && latestLoc?.lat && hospital?.lat && (
-              <a
-                href={`https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc.lat}&pickup[longitude]=${latestLoc.lng}&pickup[nickname]=My%20Location&dropoff[latitude]=${hospital.lat}&dropoff[longitude]=${hospital.lng}&dropoff[nickname]=${encodeURIComponent(hospital.name)}&dropoff[formatted_address]=${encodeURIComponent(hospital.address || hospital.name)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => {
-                  const target = hospital?.address ? `${hospital.name}, ${hospital.address}` : (hospital?.name || "Emergency Hospital");
-                  navigator.clipboard.writeText(target);
-                  toast.success(`Destination ER copied: ${hospital?.name || "Hospital"}`);
-                }}
-                className="block text-center w-full bg-black hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-md mt-2 text-sm"
-              >
-                Open in Uber App (Auto-Copies ER Address)
-              </a>
+              <div className="space-y-2 pt-2">
+                <a
+                  href={`https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc.lat}&pickup[longitude]=${latestLoc.lng}&pickup[nickname]=My%20Location&dropoff[latitude]=${hospital.lat}&dropoff[longitude]=${hospital.lng}&dropoff[nickname]=${encodeURIComponent(hospital.name)}&dropoff[formatted_address]=${encodeURIComponent(hospital.address || hospital.name)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => handleCopyAddress()}
+                  className="flex items-center justify-center gap-2 w-full bg-black hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-md text-sm"
+                >
+                  <span className="text-lg">🚗</span>
+                  <span>Open in Uber App (Auto-Copies Address)</span>
+                </a>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&origin=${latestLoc.lat},${latestLoc.lng}&destination=${hospital.lat},${hospital.lng}&travelmode=driving`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-xl text-xs border border-blue-200 transition"
+                  >
+                    <span>🗺️</span>
+                    <span>Google Maps Route</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowQR(!showQR)}
+                    className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs border border-slate-300 transition"
+                  >
+                    <span>📱</span>
+                    <span>{showQR ? "Hide Mobile QR" : "Scan for Phone"}</span>
+                  </button>
+                </div>
+
+                {showQR && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-center animate-fade-in-up">
+                    <p className="text-xs font-bold text-slate-700 mb-2">Scan with Phone Camera to Open Native Uber App:</p>
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
+                        `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc.lat}&pickup[longitude]=${latestLoc.lng}&pickup[nickname]=My%20Location&dropoff[latitude]=${hospital.lat}&dropoff[longitude]=${hospital.lng}&dropoff[nickname]=${encodeURIComponent(hospital.name)}&dropoff[formatted_address]=${encodeURIComponent(hospital.address || hospital.name)}`
+                      )}`}
+                      alt="Uber QR Code"
+                      className="mx-auto rounded-lg shadow-sm border border-slate-200 w-36 h-36"
+                    />
+                    <p className="text-[11px] text-slate-500 mt-2">
+                      Points directly into the mobile Uber App with hospital pre-filled.
+                    </p>
+                  </div>
+                )}
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-center text-[11px] text-amber-800">
+                  📋 <b>Tip:</b> Hospital destination is copied to your clipboard. On desktop Uber, press <b>Ctrl + V</b> in the search bar.
+                </div>
+              </div>
             )}
 
             <p className="text-[10px] text-slate-400 text-center">
