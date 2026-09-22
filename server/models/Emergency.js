@@ -27,7 +27,7 @@ const emergencySchema = new mongoose.Schema(
     // New fields for fallback flow
     responseMode: {
       type: String,
-      enum: ["doctor", "ambulance"],
+      enum: ["doctor", "ambulance", "uber"],
       default: "doctor",
     },
     assignedAmbulanceId: {

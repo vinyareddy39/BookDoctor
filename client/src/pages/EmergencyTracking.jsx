@@ -93,6 +93,7 @@ export default function EmergencyTracking() {
   const doctor = emergency.assignedDoctorId;
   const isResolved = emergency.status === "resolved";
   const isAmbulanceMode = emergency.responseMode === "ambulance";
+  const isUberMode = emergency.responseMode === "uber";
   const ambulance = emergency.assignedAmbulanceId;
   const hospital = emergency.assignedHospitalId;
 
@@ -127,22 +128,52 @@ export default function EmergencyTracking() {
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-6 animate-fade-in">
       
-      <div className={`p-6 rounded-2xl shadow-sm text-white ${isResolved ? "bg-green-600" : isAmbulanceMode ? "bg-amber-500 animate-pulse-slow" : "bg-red-600 animate-pulse-slow"}`}>
+      <div className={`p-6 rounded-2xl shadow-sm text-white ${isResolved ? "bg-green-600" : isUberMode ? "bg-blue-600 animate-pulse-slow" : isAmbulanceMode ? "bg-amber-500 animate-pulse-slow" : "bg-red-600 animate-pulse-slow"}`}>
         <h1 className="text-2xl md:text-3xl font-black mb-2">
-          {isResolved ? "? Emergency Resolved" : isAmbulanceMode ? "?? AMBULANCE DISPATCHED" : "?? ACTIVE SOS EMERGENCY"}
+          {isResolved ? "? Emergency Resolved" : isUberMode ? "?? UBER FALLBACK TRIGGERED" : isAmbulanceMode ? "?? AMBULANCE DISPATCHED" : "?? ACTIVE SOS EMERGENCY"}
         </h1>
         <p className="opacity-90 font-medium">
           {isResolved 
             ? "This emergency has been safely resolved and logged."
             : isAmbulanceMode 
               ? "No doctor available nearby. Ambulance routed to your location."
+              : isUberMode
+                ? "Ambulance wait time is too long. Please request an Uber immediately."
               : "Live tracking active. Doctor is preparing for your arrival."}
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        {isAmbulanceMode ? (
+        {isUberMode ? (
+          <div className="bg-white p-6 rounded-2xl border border-blue-200 shadow-sm space-y-4">
+            <h2 className="text-sm font-black text-blue-700 uppercase tracking-wider">Urgent Ride Required</h2>
+            <div>
+              <p className="text-slate-700 font-medium mb-4">No ambulances are nearby or their ETA exceeds 10 minutes. Please take a cab immediately to the nearest available hospital.</p>
+              
+              <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider mt-4">Destination Hospital</h2>
+              <div className="mb-4">
+                <p className="text-lg font-bold text-slate-900">{hospital?.name}</p>
+                <p className="text-sm text-slate-500">{hospital?.address}</p>
+                <p className="text-xs text-slate-500 mt-1">ER Beds Available: <span className="font-bold text-red-500">{hospital?.erBedsAvailable}</span></p>
+              </div>
+
+              {!isResolved && latestLoc?.lat && hospital?.lat && (
+                <a 
+                  href={`https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc.lat}&pickup[longitude]=${latestLoc.lng}&dropoff[latitude]=${hospital.lat}&dropoff[longitude]=${hospital.lng}&dropoff[nickname]=${encodeURIComponent(hospital.name)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-center w-full bg-black hover:bg-slate-800 text-white font-bold py-4 rounded-xl transition-all shadow-lg"
+                >
+                  Request Uber to Hospital
+                </a>
+              )}
+              <p className="text-[10px] text-slate-400 mt-2 text-center">
+                *This is a client-side deep link. It securely opens the Uber app pre-filled with the hospital coordinates.
+              </p>
+            </div>
+          </div>
+        ) : isAmbulanceMode ? (
           <div className="bg-white p-6 rounded-2xl border border-amber-200 shadow-sm space-y-4">
             <h2 className="text-sm font-black text-amber-700 uppercase tracking-wider">Dispatched Ambulance</h2>
             <div>
@@ -207,14 +238,16 @@ export default function EmergencyTracking() {
                   {latestLoc?.lat?.toFixed(5)}, {latestLoc?.lng?.toFixed(5)}
                 </span>
               </div>
-              {isAmbulanceMode ? (
+              {(isAmbulanceMode || isUberMode) ? (
                 <>
-                  <div>
-                    <span className="text-xs text-slate-400 font-bold uppercase block">Ambulance Location</span>
-                    <span className="text-sm font-mono bg-amber-50 px-2 py-1 rounded text-amber-700">
-                      {ambulance?.lat?.toFixed(5) || "--"}, {ambulance?.lng?.toFixed(5) || "--"}
-                    </span>
-                  </div>
+                  {!isUberMode && (
+    <div>
+      <span className="text-xs text-slate-400 font-bold uppercase block">Ambulance Location</span>
+      <span className="text-sm font-mono bg-amber-50 px-2 py-1 rounded text-amber-700">
+        {ambulance?.lat?.toFixed(5) || "--"}, {ambulance?.lng?.toFixed(5) || "--"}
+      </span>
+    </div>
+  )}
                   <div>
                     <span className="text-xs text-slate-400 font-bold uppercase block">Hospital Location</span>
                     <span className="text-sm font-mono bg-slate-100 px-2 py-1 rounded text-slate-700">
@@ -245,7 +278,7 @@ export default function EmergencyTracking() {
       </div>
 
       <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm relative z-0">
-        {isAmbulanceMode ? (
+        {(isAmbulanceMode || isUberMode) ? (
           <div className="w-full h-80 rounded-xl overflow-hidden">
             {latestLoc?.lat && (
               <MapContainer 
@@ -258,11 +291,11 @@ export default function EmergencyTracking() {
                 
                 {/* Markers */}
                 {latestLoc && <Marker position={[latestLoc.lat, latestLoc.lng]}><Popup>You are here</Popup></Marker>}
-                {ambulance?.lat && <Marker position={[ambulance.lat, ambulance.lng]}><Popup>Ambulance</Popup></Marker>}
+                {!isUberMode && ambulance?.lat && <Marker position={[ambulance.lat, ambulance.lng]}><Popup>Ambulance</Popup></Marker>}
                 {hospital?.lat && <Marker position={[hospital.lat, hospital.lng]}><Popup>Destination Hospital</Popup></Marker>}
                 
                 {/* OSRM Routes */}
-                {ambRouteCoords.length > 0 && <Polyline positions={ambRouteCoords} color="#f59e0b" weight={5} opacity={0.8} />}
+                {!isUberMode && ambRouteCoords.length > 0 && <Polyline positions={ambRouteCoords} color="#f59e0b" weight={5} opacity={0.8} />}
                 {hospRouteCoords.length > 0 && <Polyline positions={hospRouteCoords} color="#ef4444" weight={5} opacity={0.8} dashArray="10, 10" />}
               </MapContainer>
             )}

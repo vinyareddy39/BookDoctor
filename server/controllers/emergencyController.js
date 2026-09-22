@@ -103,10 +103,41 @@ export const triggerEmergency = async (req, res, next) => {
       }
     }
 
-    if (!nearestAmbulance || !nearestHospital) {
+    
+    // Check if we need to fall back to Uber (no ambulance OR ambulance > 10 mins)
+    const UBER_THRESHOLD_MINS = 10;
+    const requiresUberFallback = !nearestAmbulance || minAmbDuration > UBER_THRESHOLD_MINS;
+
+    if (!nearestHospital) {
       return req.http.notFound("No responders or hospital beds currently available. Please call 911 directly.");
     }
 
+    if (requiresUberFallback) {
+      const emergency = await Emergency.create({
+        patientId: req.user._id,
+        responseMode: "uber",
+        assignedHospitalId: nearestHospital._id,
+        hospitalEtaMinutes: minHospDuration,
+        hospitalRouteGeoJSON: bestHospRoute,
+        location: { lat, lng },
+        emergencyType,
+        status: "active",
+        locationHistory: [{ lat, lng, timestamp: new Date() }]
+      });
+
+      await Hospital.findByIdAndUpdate(nearestHospital._id, { $inc: { erBedsAvailable: -1 } });
+
+      const populatedEmergency = await Emergency.findById(emergency._id)
+        .populate("patientId", "name phone medicalId")
+        .populate("assignedHospitalId");
+
+      return req.http.created({
+        emergency: populatedEmergency,
+        message: "No ambulance available quickly. Uber fallback suggested."
+      });
+    }
+
+    // Otherwise, dispatch the ambulance normally
     const emergency = await Emergency.create({
       patientId: req.user._id,
       responseMode: "ambulance",
@@ -139,6 +170,7 @@ export const triggerEmergency = async (req, res, next) => {
     return req.http.created({
       emergency: populatedEmergency,
       message: "No doctor available. Ambulance dispatched."
+
     });
 
   } catch (err) {
