@@ -1,75 +1,20 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import toast from "react-hot-toast";
-import API from "../services/api";
-import { useAuth } from "../context/AuthContext";
-import { MapContainer, TileLayer, Marker, Polyline, Popup } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
 
-export default function EmergencyTracking() {
-  const { emergencyId } = useParams();
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  
-  const [emergency, setEmergency] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  
-  // Fetch initial emergency status and start polling
-  useEffect(() => {
-    let statusInterval;
-    let locationInterval;
+import fs from "fs";
 
-    const fetchStatus = async () => {
-      try {
-        const res = await API.get(`/emergency/${emergencyId}/status`);
-        const data = res.data?.data || res.data;
-        setEmergency(data);
-        
-        // If resolved, stop polling and show alert
-        if (data.status === "resolved") {
-          toast.success("This emergency has been resolved.");
-          clearInterval(statusInterval);
-          clearInterval(locationInterval);
-        }
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load emergency details.");
-        clearInterval(statusInterval);
-      } finally {
-        setLoading(false);
-      }
-    };
+const file = "client/src/pages/EmergencyTracking.jsx";
+let code = fs.readFileSync(file, "utf8");
 
-    fetchStatus(); // initial fetch
+// Import leaflet
+if (!code.includes("react-leaflet")) {
+  code = code.replace(
+    `import { useAuth } from "../context/AuthContext";`,
+    `import { useAuth } from "../context/AuthContext";\nimport { MapContainer, TileLayer, Marker, Polyline, Popup } from "react-leaflet";\nimport "leaflet/dist/leaflet.css";`
+  );
+}
 
-    // Poll status every 5 seconds
-    statusInterval = setInterval(fetchStatus, 5000);
+const returnStart = code.indexOf("  const isAmbulanceMode = emergency.responseMode === \"ambulance\";");
 
-    // Watch patient location and POST updates every 5 seconds (only if active patient)
-    if (user?.role === "patient") {
-      const updateLocation = () => {
-        if (!navigator.geolocation) return;
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            try {
-              await API.post(`/emergency/${emergencyId}/location`, {
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude
-              });
-            } catch (err) {
-              console.error("Failed to update live location", err);
-            }
-          },
-          (err) => console.error(err),
-          { enableHighAccuracy: true }
-        );
-      };
-
-      locationInterval = setInterval(updateLocation, 5000);
-    }
-
-    const isAmbulanceMode = emergency.responseMode === "ambulance";
+const newReturn = `  const isAmbulanceMode = emergency.responseMode === "ambulance";
   const ambulance = emergency.assignedAmbulanceId;
   const hospital = emergency.assignedHospitalId;
 
@@ -91,12 +36,12 @@ export default function EmergencyTracking() {
   // If doctor mode, we fallback to straight line Haversine for display if we want, or just markers.
   // Actually, doctor mode just shows a marker.
 
-  const doctorLocationUrl = `https://maps.google.com/maps?q=${doctor?.lat || 0},${doctor?.lng || 0}&output=embed`;
+  const doctorLocationUrl = \`https://maps.google.com/maps?q=\${doctor?.lat || 0},\${doctor?.lng || 0}&output=embed\`;
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-6 animate-fade-in">
       
-      <div className={`p-6 rounded-2xl shadow-sm text-white ${isResolved ? "bg-green-600" : isAmbulanceMode ? "bg-amber-500 animate-pulse-slow" : "bg-red-600 animate-pulse-slow"}`}>
+      <div className={\`p-6 rounded-2xl shadow-sm text-white \${isResolved ? "bg-green-600" : isAmbulanceMode ? "bg-amber-500 animate-pulse-slow" : "bg-red-600 animate-pulse-slow"}\`}>
         <h1 className="text-2xl md:text-3xl font-black mb-2">
           {isResolved ? "? Emergency Resolved" : isAmbulanceMode ? "?? AMBULANCE DISPATCHED" : "?? ACTIVE SOS EMERGENCY"}
         </h1>
@@ -125,7 +70,7 @@ export default function EmergencyTracking() {
                 <div className="flex justify-between items-center">
                   <div className="text-right w-full">
                     <p className="text-xs font-bold text-amber-600 uppercase">Ambulance ETA</p>
-                    <p className="text-xl font-black text-slate-800">{etaAmbToPatient !== "--" ? `${etaAmbToPatient} mins` : "--"}</p>
+                    <p className="text-xl font-black text-slate-800">{etaAmbToPatient !== "--" ? \`\${etaAmbToPatient} mins\` : "--"}</p>
                     <p className="text-[10px] text-amber-600 font-medium uppercase mt-1">(Traffic-Aware Routing)</p>
                   </div>
                 </div>
@@ -153,11 +98,11 @@ export default function EmergencyTracking() {
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-xs font-bold text-red-500 uppercase">Distance</p>
-                    <p className="text-xl font-black text-slate-800">{distKm > 0 ? `${distKm.toFixed(1)} km` : "Tracking..."}</p>
+                    <p className="text-xl font-black text-slate-800">{distKm > 0 ? \`\${distKm.toFixed(1)} km\` : "Tracking..."}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-bold text-red-500 uppercase">Estimated ETA</p>
-                    <p className="text-xl font-black text-slate-800">{etaMins > 0 ? `${etaMins} mins` : "--"}</p>
+                    <p className="text-xl font-black text-slate-800">{etaMins > 0 ? \`\${etaMins} mins\` : "--"}</p>
                   </div>
                 </div>
               </div>
@@ -256,3 +201,9 @@ export default function EmergencyTracking() {
     </div>
   );
 }
+`;
+
+code = code.substring(0, returnStart) + newReturn;
+
+fs.writeFileSync(file, code);
+

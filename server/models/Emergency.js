@@ -46,6 +46,12 @@ const emergencySchema = new mongoose.Schema(
     hospitalEtaMinutes: {
       type: Number,
     },
+    ambulanceRouteGeoJSON: {
+      type: mongoose.Schema.Types.Mixed,
+    },
+    hospitalRouteGeoJSON: {
+      type: mongoose.Schema.Types.Mixed,
+    },
     locationHistory: [
       {
         lat: { type: Number },

@@ -1,12 +1,22 @@
-import Emergency from "../models/Emergency.js";
-import Doctor from "../models/Doctor.js";
-import Ambulance from "../models/Ambulance.js";
-import Hospital from "../models/Hospital.js";
-import { calculateDistance, estimateETA } from "../utils/distance.js";
-import { getRouteAndETA } from "../utils/routing.js";
 
-// TRIGGER EMERGENCY (Patient)
-export const triggerEmergency = async (req, res, next) => {
+import fs from "fs";
+
+const file = "server/controllers/emergencyController.js";
+let code = fs.readFileSync(file, "utf8");
+
+// Add getRouteAndETA import
+if (!code.includes("getRouteAndETA")) {
+  code = code.replace(
+    `import { calculateDistance, estimateETA } from "../utils/distance.js";`,
+    `import { calculateDistance, estimateETA } from "../utils/distance.js";\nimport { getRouteAndETA } from "../utils/routing.js";`
+  );
+}
+
+// 1. Replace triggerEmergency
+const triggerStart = code.indexOf("export const triggerEmergency = async (req, res, next) => {");
+const triggerEnd = code.indexOf("// UPDATE LOCATION (Patient)");
+
+const newTrigger = `export const triggerEmergency = async (req, res, next) => {
   try {
     const { lat, lng, emergencyType = "general" } = req.body;
 
@@ -146,35 +156,15 @@ export const triggerEmergency = async (req, res, next) => {
   }
 };
 
-// UPDATE LOCATION (Patient)
- async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { lat, lng } = req.body;
+`;
 
-    if (!lat || !lng) {
-      return req.http.badRequest("Location (lat, lng) is required.");
-    }
+code = code.substring(0, triggerStart) + newTrigger + code.substring(triggerEnd);
 
-    const emergency = await Emergency.findOneAndUpdate(
-      { _id: id, patientId: req.user._id, status: "active" },
-      { 
-        $set: { location: { lat, lng } },
-        $push: { locationHistory: { lat, lng, timestamp: new Date() } }
-      },
-      { new: true }
-    );
+// 2. Replace getEmergencyStatus
+const getStatusStart = code.indexOf("export const getEmergencyStatus = async (req, res, next) => {");
+const resolveStart = code.indexOf("// RESOLVE EMERGENCY");
 
-    if (!emergency) return req.http.notFound("Active emergency not found");
-
-    return req.http.ok(emergency, "Location updated");
-  } catch (err) {
-    next(err);
-  }
-};
-
-// GET EMERGENCY STATUS (Patient/Doctor)
-export const getEmergencyStatus = async (req, res, next) => {
+const newGetStatus = `export const getEmergencyStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
     const emergency = await Emergency.findById(id)
@@ -218,126 +208,8 @@ export const getEmergencyStatus = async (req, res, next) => {
   }
 };
 
-// RESOLVE EMERGENCY (Patient/Doctor)
-export const resolveEmergency = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    
-    const emergency = await Emergency.findById(id);
-    if (!emergency) return req.http.notFound("Emergency not found");
+`;
 
-    emergency.status = "resolved";
-    emergency.resolvedAt = new Date();
-    await emergency.save();
+code = code.substring(0, getStatusStart) + newGetStatus + code.substring(resolveStart);
+fs.writeFileSync(file, code);
 
-    // Free up the bed/capacity for the doctor
-    if (emergency.assignedDoctorId) {
-      await Doctor.findByIdAndUpdate(emergency.assignedDoctorId, { $inc: { erCapacity: 1 } });
-    }
-
-    return req.http.ok(emergency, "Emergency resolved");
-  } catch (err) {
-    next(err);
-  }
-};
-
-// GET INCOMING EMERGENCIES (Doctor Dashboard)
-export const getIncomingEmergencies = async (req, res, next) => {
-  try {
-    // Assuming req.user is a doctor. Find their Doctor record.
-    const doctor = await Doctor.findOne({ userId: req.user._id });
-    if (!doctor) return req.http.forbidden("User is not a doctor");
-
-    const emergencies = await Emergency.find({ assignedDoctorId: doctor._id, status: "active" })
-      .populate("patientId", "name phone medicalId")
-      .sort({ createdAt: -1 });
-
-    return req.http.ok(emergencies, "Incoming emergencies retrieved");
-  } catch (err) {
-    next(err);
-  }
-};
-
-// UPDATE ER CAPACITY (Doctor Dashboard)
-export const markCapacityUpdated = async (req, res, next) => {
-  try {
-    const { acceptingEmergencies, erCapacity } = req.body;
-    
-    const doctor = await Doctor.findOne({ userId: req.user._id });
-    if (!doctor) return req.http.forbidden("User is not a doctor");
-
-    if (acceptingEmergencies !== undefined) doctor.acceptingEmergencies = acceptingEmergencies;
-    if (erCapacity !== undefined) doctor.erCapacity = erCapacity;
-
-    await doctor.save();
-
-    return req.http.ok({ acceptingEmergencies: doctor.acceptingEmergencies, erCapacity: doctor.erCapacity }, "Emergency capacity updated");
-  } catch (err) {
-    next(err);
-  }
-};
-
-
-// HACKATHON DEMO: Seed Ghatkesar Doctors via GET request (Bypasses local ISP blocks by running on Render)
-export const seedGhatkesarData = async (req, res, next) => {
-  try {
-    const doctors = await Doctor.find().limit(5);
-    
-    const GHATKESAR_LOCATIONS = [
-      { lat: 17.4485, lng: 78.6841 }, // Ghatkesar Center
-      { lat: 17.4550, lng: 78.6700 }, // Near ORR Ghatkesar
-      { lat: 17.4350, lng: 78.6900 }, // South Ghatkesar
-      { lat: 17.4600, lng: 78.6800 }, // North Ghatkesar
-      { lat: 17.4400, lng: 78.6750 }  // Edulabad Road
-    ];
-
-    if (doctors && doctors.length > 0) {
-      for (let i = 0; i < doctors.length; i++) {
-        const doc = doctors[i];
-        const loc = GHATKESAR_LOCATIONS[i % GHATKESAR_LOCATIONS.length];
-        
-        doc.acceptingEmergencies = true;
-        doc.erCapacity = Math.floor(Math.random() * 5) + 2; // 2 to 6 beds
-        doc.lat = loc.lat;
-        doc.lng = loc.lng;
-        doc.city = "Ghatkesar, Hyderabad";
-        
-        await doc.save();
-      }
-    }
-
-    // Seed Mock Ambulances
-    await Ambulance.deleteMany({});
-    await Ambulance.insertMany([
-      { driverName: "Ramesh Ambulance", phone: "+91 9876543210", vehicleNumber: "TS 07 EA 1234", lat: 17.4490, lng: 78.6830, isAvailable: true },
-      { driverName: "Suresh Rescue", phone: "+91 9876543211", vehicleNumber: "TS 08 AB 5678", lat: 17.4500, lng: 78.6800, isAvailable: true }
-    ]);
-
-    // Seed Mock Hospitals
-    await Hospital.deleteMany({});
-    await Hospital.insertMany([
-      { name: "Anurag Care Hospital", address: "Ghatkesar Main Rd", lat: 17.4450, lng: 78.6850, specialties: ["Trauma", "Cardiac"], erBedsAvailable: 5, icuBedsAvailable: 2, phone: "+91 40 1234567" },
-      { name: "Sreenidhi Lifeline", address: "Yampee Rd, Ghatkesar", lat: 17.4380, lng: 78.6900, specialties: ["General", "Orthopedic"], erBedsAvailable: 3, icuBedsAvailable: 1, phone: "+91 40 7654321" }
-    ]);
-
-    return res.status(200).json({ 
-      success: true, 
-      message: "Successfully seeded Doctors, Ambulances, and Hospitals around Ghatkesar for demo!"
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// HACKATHON DEMO: Disable all doctors to force the ambulance fallback
-export const disableAllDoctors = async (req, res, next) => {
-  try {
-    await Doctor.updateMany({}, { acceptingEmergencies: false, erCapacity: 0 });
-    return res.status(200).json({ 
-      success: true, 
-      message: "All doctors disabled! Next SOS trigger will force the Ambulance Fallback flow."
-    });
-  } catch (error) {
-    next(error);
-  }
-};
