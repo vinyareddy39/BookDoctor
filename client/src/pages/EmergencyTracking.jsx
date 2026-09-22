@@ -52,15 +52,48 @@ export default function EmergencyTracking() {
     const dLat = hosp?.lat;
     const dLng = hosp?.lng;
     const dName = hosp?.name || "Hospital ER";
+    const dAddr = hosp?.address || "Emergency Department";
+    const pAddr = userAddress || "Live GPS Location";
 
     if (!pLat || !dLat) return "#";
 
-    let url = `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${pLat}&pickup[longitude]=${pLng}&dropoff[latitude]=${dLat}&dropoff[longitude]=${dLng}&dropoff[nickname]=${encodeURIComponent(dName)}`;
+    const clientId = "DfjKZC3xXnBEObgCRl1ChUSdRJDnjwBP";
+
+    // Official Uber Universal Deep Link Location Objects
+    const pickupObj = {
+      latitude: Number(pLat),
+      longitude: Number(pLng),
+      addressLine1: "Live Location",
+      addressLine2: pAddr,
+    };
+
+    const dropObj = {
+      latitude: Number(dLat),
+      longitude: Number(dLng),
+      addressLine1: dName,
+      addressLine2: dAddr,
+    };
+
+    const params = new URLSearchParams();
+    if (clientId) params.append("client_id", clientId);
+    params.append("pickup", JSON.stringify(pickupObj));
+    params.append("drop[0]", JSON.stringify(dropObj));
+
+    // Standard setPickup query parameters for legacy mobile apps
+    params.append("action", "setPickup");
+    params.append("pickup[latitude]", String(pLat));
+    params.append("pickup[longitude]", String(pLng));
+    params.append("pickup[nickname]", "Live Location");
+    params.append("dropoff[latitude]", String(dLat));
+    params.append("dropoff[longitude]", String(dLng));
+    params.append("dropoff[nickname]", dName);
+    params.append("dropoff[formatted_address]", dAddr);
 
     if (productId) {
-      url += `&product_id=${productId}`;
+      params.append("product_id", productId);
     }
-    return url;
+
+    return `https://m.uber.com/looking?${params.toString()}`;
   };
 
   const getGoogleMapsUrl = () => {

@@ -81,8 +81,34 @@ export default function SOSButton() {
           const hospLat = 17.3664;
           const hospLng = 78.5363;
           const hospName = "Omni Hospitals Emergency ER";
-          const uberUrl = `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latitude}&pickup[longitude]=${longitude}&dropoff[latitude]=${hospLat}&dropoff[longitude]=${hospLng}&dropoff[nickname]=${encodeURIComponent(hospName)}`;
-          
+          const clientId = "DfjKZC3xXnBEObgCRl1ChUSdRJDnjwBP";
+
+          const pickupObj = {
+            latitude: Number(latitude),
+            longitude: Number(longitude),
+            addressLine1: "Live Location",
+            addressLine2: "My GPS Location",
+          };
+
+          const dropObj = {
+            latitude: hospLat,
+            longitude: hospLng,
+            addressLine1: hospName,
+            addressLine2: "Kothapet, Hyderabad",
+          };
+
+          const params = new URLSearchParams();
+          params.append("client_id", clientId);
+          params.append("pickup", JSON.stringify(pickupObj));
+          params.append("drop[0]", JSON.stringify(dropObj));
+          params.append("action", "setPickup");
+          params.append("pickup[latitude]", String(latitude));
+          params.append("pickup[longitude]", String(longitude));
+          params.append("dropoff[latitude]", String(hospLat));
+          params.append("dropoff[longitude]", String(hospLng));
+          params.append("dropoff[nickname]", hospName);
+
+          const uberUrl = `https://m.uber.com/looking?${params.toString()}`;
           window.location.href = uberUrl;
         } finally {
           setIsTriggering(false);
