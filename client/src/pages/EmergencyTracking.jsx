@@ -19,6 +19,28 @@ export default function EmergencyTracking() {
   const [loadingUber, setLoadingUber] = useState(false);
   const [userAddress, setUserAddress] = useState("");
   const [showQR, setShowQR] = useState(false);
+  const [redirectCountdown, setRedirectCountdown] = useState(4);
+  const [autoRedirectCancelled, setAutoRedirectCancelled] = useState(false);
+
+  // Auto-redirect to pre-filled Uber URL after showing 2nd pic
+  useEffect(() => {
+    if (emergency?.responseMode !== "uber" || autoRedirectCancelled || emergency?.status === "resolved") return;
+    const curLoc = emergency?.locationHistory?.[emergency.locationHistory.length - 1] || emergency?.location;
+    const hosp = emergency?.assignedHospitalId;
+    if (!curLoc?.lat || !hosp?.lat) return;
+
+    if (redirectCountdown > 0) {
+      const timer = setTimeout(() => {
+        setRedirectCountdown((c) => c - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (redirectCountdown === 0) {
+      const uberUrl = getUberUrl();
+      if (uberUrl && uberUrl !== "#") {
+        window.location.href = uberUrl;
+      }
+    }
+  }, [redirectCountdown, emergency?.responseMode, autoRedirectCancelled, emergency?.status, emergency]);
 
   const getUberUrl = (productId = null) => {
     const curLoc = emergency?.locationHistory?.[emergency.locationHistory.length - 1] || emergency?.location;
@@ -240,9 +262,42 @@ export default function EmergencyTracking() {
               <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800">Live API</span>
             </div>
             
-            <p className="text-slate-600 text-sm">
-              Ambulances are currently unavailable. Choose an Uber below to dispatch directly to the nearest available hospital.
-            </p>
+            {/* Auto-Redirect to Uber Banner */}
+            {!autoRedirectCancelled && !isResolved && (
+              <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white p-4 rounded-xl shadow-md flex items-center justify-between gap-3 animate-fade-in border border-blue-400/30">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl animate-bounce">🚗</span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-black text-sm">
+                        Redirecting to Uber in
+                      </p>
+                      <span className="bg-white text-blue-700 font-black text-xs px-2 py-0.5 rounded-full shadow-sm">
+                        {redirectCountdown}s
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-blue-100 mt-0.5">
+                      Live Pickup & {hospital?.name || "Hospital ER"} Drop-off 100% pre-filled.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAutoRedirectCancelled(true)}
+                    className="text-xs bg-white/20 hover:bg-white/30 text-white font-bold px-3 py-1.5 rounded-lg transition border border-white/20"
+                  >
+                    Stay on Map
+                  </button>
+                  <a
+                    href={getUberUrl()}
+                    className="text-xs bg-white text-blue-700 hover:bg-blue-50 font-black px-3 py-1.5 rounded-lg transition shadow-sm"
+                  >
+                    Open Uber Now ➔
+                  </a>
+                </div>
+              </div>
+            )}
 
             {/* Transit Route Details: Pickup & Dropoff */}
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 shadow-inner">

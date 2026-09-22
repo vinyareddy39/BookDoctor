@@ -12,21 +12,23 @@ export default function ChatWindow({ appointment, onClose }) {
   const { user } = useAuth();
   const socketContext = useSocket();
   const socket = socketContext?.socket || socketContext;
-  const [messages, setMessages] = useState(messageCache[appointment._id] || []);
+  const apptId = appointment?._id;
+  const [messages, setMessages] = useState(apptId ? (messageCache[apptId] || []) : []);
   const [newMessage, setNewMessage] = useState("");
-  const [loading, setLoading] = useState(!messageCache[appointment._id]);
+  const [loading, setLoading] = useState(apptId ? !messageCache[apptId] : false);
   const messagesEndRef = useRef(null);
 
   const isDoctor = user?.role === "doctor";
   const otherPersonName = isDoctor 
-    ? (appointment.patientId?.name || "Patient") 
-    : (appointment.doctorId?.userId?.name || "Doctor");
+    ? (appointment?.patientId?.name || "Patient") 
+    : (appointment?.doctorId?.userId?.name || appointment?.doctorId?.name || "Doctor");
 
   useEffect(() => {
+    if (!apptId) return;
     fetchMessages();
     
     if (socket && typeof socket.emit === "function") {
-      socket.emit("join-chat", appointment._id);
+      socket.emit("join-chat", apptId);
       
       const handleNewMessage = (msg) => {
         if (msg.appointmentId === appointment._id) {
