@@ -209,7 +209,7 @@ export default function EmergencyTracking() {
                 </div>
               ) : uberVehicles.length > 0 ? (
                 uberVehicles.map((v) => {
-                  const deepLink = `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc?.lat || 17.4485}&pickup[longitude]=${latestLoc?.lng || 78.6841}&dropoff[latitude]=${hospital?.lat || 17.4721}&dropoff[longitude]=${hospital?.lng || 78.7993}&dropoff[nickname]=${encodeURIComponent(hospital?.name || "Hospital")}`;
+                  const deepLink = `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc?.lat || 17.4485}&pickup[longitude]=${latestLoc?.lng || 78.6841}&pickup[nickname]=My%20Current%20Location&dropoff[latitude]=${hospital?.lat || 17.4721}&dropoff[longitude]=${hospital?.lng || 78.7993}&dropoff[nickname]=${encodeURIComponent(hospital?.name || "Hospital ER")}&dropoff[formatted_address]=${encodeURIComponent(hospital?.address || "Nearest Hospital ER, Hyderabad")}`;
                   
                   return (
                     <a
@@ -254,7 +254,7 @@ export default function EmergencyTracking() {
 
             {!isResolved && latestLoc?.lat && hospital?.lat && (
               <a
-                href={`https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc.lat}&pickup[longitude]=${latestLoc.lng}&dropoff[latitude]=${hospital.lat}&dropoff[longitude]=${hospital.lng}&dropoff[nickname]=${encodeURIComponent(hospital.name)}`}
+                href={`https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latestLoc.lat}&pickup[longitude]=${latestLoc.lng}&pickup[nickname]=My%20Location&dropoff[latitude]=${hospital.lat}&dropoff[longitude]=${hospital.lng}&dropoff[nickname]=${encodeURIComponent(hospital.name)}&dropoff[formatted_address]=${encodeURIComponent(hospital.address || hospital.name)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block text-center w-full bg-black hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-md mt-2 text-sm"

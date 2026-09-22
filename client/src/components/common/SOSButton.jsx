@@ -75,7 +75,8 @@ export default function SOSButton() {
             const hospLng = 78.7993;
             const hospName = "AIIMS Bibinagar Emergency";
             
-            const uberUrl = `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latitude}&pickup[longitude]=${longitude}&dropoff[latitude]=${hospLat}&dropoff[longitude]=${hospLng}&dropoff[nickname]=${encodeURIComponent(hospName)}`;
+            const hospAddress = "AIIMS Hospital, Warangal Highway, Bibinagar, Telangana 508126";
+            const uberUrl = `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${latitude}&pickup[longitude]=${longitude}&pickup[nickname]=My%20Location&dropoff[latitude]=${hospLat}&dropoff[longitude]=${hospLng}&dropoff[nickname]=${encodeURIComponent(hospName)}&dropoff[formatted_address]=${encodeURIComponent(hospAddress)}`;
             
             window.location.href = uberUrl;
           }, 2000);

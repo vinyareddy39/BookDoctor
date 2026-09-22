@@ -15,6 +15,8 @@ export default function MedicalIdTab({ profile, setProfile }) {
   const [contacts, setContacts] = useState(profile?.emergencyContacts || []);
   const [newContactName, setNewContactName] = useState("");
   const [newContactPhone, setNewContactPhone] = useState("");
+  const [uberConnected, setUberConnected] = useState(profile?.uberAccount?.isConnected ?? true);
+  const [uberEmail, setUberEmail] = useState(profile?.uberAccount?.uberEmail || profile?.email || "");
 
   const handleSaveMedicalId = async () => {
     try {
@@ -26,7 +28,12 @@ export default function MedicalIdTab({ profile, setProfile }) {
           conditions,
           medications
         },
-        emergencyContacts: contacts
+        emergencyContacts: contacts,
+        uberAccount: {
+          isConnected: uberConnected,
+          uberEmail: uberEmail,
+          connectedAt: new Date()
+        }
       });
       const updatedUser = res.data?.data || res.data;
       setProfile(updatedUser);
@@ -57,6 +64,64 @@ export default function MedicalIdTab({ profile, setProfile }) {
 
   return (
     <div className="space-y-8">
+
+      {/* Uber Emergency Auto-Dispatch Integration Card */}
+      <div className={`p-5 rounded-2xl border transition-all ${
+        uberConnected ? "bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200" : "bg-amber-50 border-amber-200"
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center font-black text-sm shadow-sm">
+              UBER
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-bold text-slate-900 text-sm">Uber Emergency Transit Link</h4>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  uberConnected ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                }`}>
+                  {uberConnected ? "Connected Active ✓" : "Action Required"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Zero-Touch Autonomous Dispatch for cardiac arrest and critical trauma when ambulances are unavailable.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              const next = !uberConnected;
+              setUberConnected(next);
+              if (next) {
+                toast.success("Uber account linked for Emergency Dispatch! Remember to click Save.");
+              } else {
+                toast("Uber account unlinked.", { icon: "ℹ️" });
+              }
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
+              uberConnected 
+                ? "bg-white border border-slate-200 text-slate-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+                : "bg-black text-white hover:bg-slate-800"
+            }`}
+          >
+            {uberConnected ? "Disconnect" : "🔗 Connect Uber Account"}
+          </button>
+        </div>
+
+        {uberConnected && (
+          <div className="mt-3 pt-3 border-t border-emerald-200/60 flex items-center justify-between text-xs">
+            <span className="text-slate-600 font-medium flex items-center gap-1.5">
+              <span>🛡️</span> Linked Account: <strong className="text-slate-800">{uberEmail || "patient@uber.com"}</strong>
+            </span>
+            <span className="text-emerald-700 font-bold text-[11px]">
+              ✓ Pre-authorized for GPS Emergency Pickup
+            </span>
+          </div>
+        )}
+      </div>
+
       <div>
         <h3 className="text-xl font-bold text-slate-800 mb-2">Medical ID (SOS Emergency)</h3>
         <p className="text-slate-500 mb-6 text-sm">

@@ -32,9 +32,9 @@ export default function Register() {
         password, 
         role: "patient",
         uberAccount: {
-          isConnected: true,
-          uberEmail: email,
-          connectedAt: new Date()
+          isConnected: uberConnected,
+          uberEmail: uberConnected ? email : "",
+          connectedAt: uberConnected ? new Date() : null
         }
       });
       toast.success("Account created! Welcome to BookDoctor 🎉");
@@ -237,7 +237,7 @@ export default function Register() {
                     </>
                   ) : (
                     <>
-                      <span>🔗</span> Connect Uber Account (Required for SOS)
+                      <span>🔗</span> Connect Uber Account (Optional)
                     </>
                   )}
                 </button>

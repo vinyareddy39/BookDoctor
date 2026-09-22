@@ -127,11 +127,12 @@ export const deleteHealthRecord = async (req, res, next) => {
 // UPDATE MEDICAL ID & EMERGENCY CONTACTS (SOS Feature)
 export const updateMedicalId = async (req, res, next) => {
   try {
-    const { medicalId, emergencyContacts } = req.body;
+    const { medicalId, emergencyContacts, uberAccount } = req.body;
     const updateData = {};
     
     if (medicalId) updateData.medicalId = medicalId;
     if (emergencyContacts) updateData.emergencyContacts = emergencyContacts;
+      if (uberAccount) updateData.uberAccount = uberAccount;
 
     const user = await User.findByIdAndUpdate(
       req.user._id,
