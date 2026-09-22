@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -15,7 +16,6 @@ export default function EmergencyTracking() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Fetch initial emergency status and start polling
   useEffect(() => {
     let statusInterval;
     let locationInterval;
@@ -26,7 +26,6 @@ export default function EmergencyTracking() {
         const data = res.data?.data || res.data;
         setEmergency(data);
         
-        // If resolved, stop polling and show alert
         if (data.status === "resolved") {
           toast.success("This emergency has been resolved.");
           clearInterval(statusInterval);
@@ -41,12 +40,10 @@ export default function EmergencyTracking() {
       }
     };
 
-    fetchStatus(); // initial fetch
+    fetchStatus();
 
-    // Poll status every 5 seconds
     statusInterval = setInterval(fetchStatus, 5000);
 
-    // Watch patient location and POST updates every 5 seconds (only if active patient)
     if (user?.role === "patient") {
       const updateLocation = () => {
         if (!navigator.geolocation) return;
@@ -69,17 +66,54 @@ export default function EmergencyTracking() {
       locationInterval = setInterval(updateLocation, 5000);
     }
 
-    const isAmbulanceMode = emergency.responseMode === "ambulance";
+    return () => {
+      clearInterval(statusInterval);
+      clearInterval(locationInterval);
+    };
+  }, [emergencyId, user]);
+
+  const handleResolve = async () => {
+    try {
+      await API.patch(`/emergency/${emergencyId}/resolve`);
+      toast.success("Emergency marked as resolved.");
+      navigate("/");
+    } catch (err) {
+      toast.error("Failed to resolve emergency.");
+    }
+  };
+
+  if (loading) {
+    return <div className="p-8 text-center text-slate-500 font-bold">Loading Live Tracking...</div>;
+  }
+
+  if (error || !emergency) {
+    return <div className="p-8 text-center text-red-500 font-bold">{error || "Emergency not found."}</div>;
+  }
+
+  const doctor = emergency.assignedDoctorId;
+  const isResolved = emergency.status === "resolved";
+  const isAmbulanceMode = emergency.responseMode === "ambulance";
   const ambulance = emergency.assignedAmbulanceId;
   const hospital = emergency.assignedHospitalId;
 
   const latestLoc = emergency.locationHistory?.[emergency.locationHistory.length - 1] || emergency.location;
 
-  // Use the pre-calculated ETA from the backend OSRM routing
+  const getDistance = (lat1, lon1, lat2, lon2) => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+    const p = 0.017453292519943295;    
+    const c = Math.cos;
+    const a = 0.5 - c((lat2 - lat1) * p)/2 + 
+            c(lat1 * p) * c(lat2 * p) * 
+            (1 - c((lon2 - lon1) * p))/2;
+    return 12742 * Math.asin(Math.sqrt(a));
+  };
+
+  const distKm = getDistance(latestLoc?.lat, latestLoc?.lng, doctor?.lat, doctor?.lng);
+  const etaMins = Math.round((distKm / 40) * 60);
+
   const etaPatientToHosp = emergency.hospitalEtaMinutes || "--";
   const etaAmbToPatient = emergency.ambulanceEtaMinutes || "--";
 
-  // Coordinates flipping since OSRM gives [lng, lat] and Leaflet wants [lat, lng]
   const getFlippedCoords = (geoJSON) => {
     if (!geoJSON || !geoJSON.coordinates) return [];
     return geoJSON.coordinates.map(c => [c[1], c[0]]);
@@ -87,9 +121,6 @@ export default function EmergencyTracking() {
 
   const ambRouteCoords = getFlippedCoords(emergency.ambulanceRouteGeoJSON);
   const hospRouteCoords = getFlippedCoords(emergency.hospitalRouteGeoJSON);
-
-  // If doctor mode, we fallback to straight line Haversine for display if we want, or just markers.
-  // Actually, doctor mode just shows a marker.
 
   const doctorLocationUrl = `https://maps.google.com/maps?q=${doctor?.lat || 0},${doctor?.lng || 0}&output=embed`;
 
@@ -256,3 +287,4 @@ export default function EmergencyTracking() {
     </div>
   );
 }
+
