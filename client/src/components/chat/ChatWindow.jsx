@@ -10,7 +10,8 @@ const messageCache = {};
 
 export default function ChatWindow({ appointment, onClose }) {
   const { user } = useAuth();
-  const socket = useSocket();
+  const socketContext = useSocket();
+  const socket = socketContext?.socket || socketContext;
   const [messages, setMessages] = useState(messageCache[appointment._id] || []);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(!messageCache[appointment._id]);
@@ -24,7 +25,7 @@ export default function ChatWindow({ appointment, onClose }) {
   useEffect(() => {
     fetchMessages();
     
-    if (socket) {
+    if (socket && typeof socket.emit === "function") {
       socket.emit("join-chat", appointment._id);
       
       const handleNewMessage = (msg) => {
@@ -53,13 +54,19 @@ export default function ChatWindow({ appointment, onClose }) {
         }
       };
       
-      socket.on("receive-message", handleNewMessage);
-      socket.on("messages-read", handleMessagesRead);
+      if (typeof socket.on === "function") {
+        socket.on("receive-message", handleNewMessage);
+        socket.on("messages-read", handleMessagesRead);
+      }
       
       return () => {
-        socket.emit("leave-chat", appointment._id);
-        socket.off("receive-message", handleNewMessage);
-        socket.off("messages-read", handleMessagesRead);
+        if (typeof socket.emit === "function") {
+          socket.emit("leave-chat", appointment._id);
+        }
+        if (typeof socket.off === "function") {
+          socket.off("receive-message", handleNewMessage);
+          socket.off("messages-read", handleMessagesRead);
+        }
       };
     }
   }, [socket, appointment._id]);
@@ -107,8 +114,18 @@ export default function ChatWindow({ appointment, onClose }) {
     });
 
     try {
+      if (socket && typeof socket.emit === "function") {
+        socket.emit("send-message", {
+          appointmentId: appointment._id,
+          senderId: user._id,
+          senderName: user?.name,
+          receiverId: isDoctor ? (appointment.patientId?._id || appointment.patientId) : (appointment.doctorId?.userId?._id || appointment.doctorId?.userId),
+          text: msgData.text,
+        });
+      }
       await API.post(`/chat/${appointment._id}`, msgData);
     } catch (err) {
+      console.warn("Chat post error:", err);
       toast.error("Failed to send message");
       setMessages(prev => {
         const reverted = prev.filter(m => m._id !== tempMsg._id);

@@ -69,7 +69,7 @@ export default function Chat() {
 
   // Join socket room and listen for messages
   useEffect(() => {
-    if (!user || !socket) return;
+    if (!user || !socket || typeof socket.emit !== "function") return;
 
     socket.emit("register", user._id);
     socket.emit("join-chat", appointmentId);
@@ -82,13 +82,19 @@ export default function Chat() {
       });
     };
 
-    socket.on("receive-message", handleReceive);
-    socket.on("chat-error", (err) => toast.error(err.message));
+    if (typeof socket.on === "function") {
+      socket.on("receive-message", handleReceive);
+      socket.on("chat-error", (err) => toast.error(err?.message || "Chat error"));
+    }
 
     return () => {
-      socket.emit("leave-chat", appointmentId);
-      socket.off("receive-message", handleReceive);
-      socket.off("chat-error");
+      if (typeof socket.emit === "function") {
+        socket.emit("leave-chat", appointmentId);
+      }
+      if (typeof socket.off === "function") {
+        socket.off("receive-message", handleReceive);
+        socket.off("chat-error");
+      }
     };
   }, [appointmentId, user, socket]);
 
@@ -101,14 +107,21 @@ export default function Chat() {
     (e) => {
       e.preventDefault();
       const trimmed = text.trim();
-      if (!trimmed || !receiverId || !socket) return;
+      if (!trimmed || !receiverId) return;
 
-      socket.emit("send-message", {
-        appointmentId,
-        senderId: user._id,
-        senderName: user.name,
-        receiverId,
-        text: trimmed,
+      if (socket && typeof socket.emit === "function") {
+        socket.emit("send-message", {
+          appointmentId,
+          senderId: user._id,
+          senderName: user.name,
+          receiverId,
+          text: trimmed,
+        });
+      }
+
+      // REST fallback ensures persistence in MongoDB
+      API.post(`/chat/${appointmentId}`, { text: trimmed, receiverId }).catch((err) => {
+        console.warn("REST chat post fallback:", err);
       });
 
       setText("");

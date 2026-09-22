@@ -15,10 +15,14 @@ export const SocketProvider = ({ children }) => {
     // Only connect if the user is logged in
     if (isLoggedIn && user?._id) {
       // Connect to the backend server
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      const socketUrl = apiUrl.replace("/api", "");
+      let apiUrl = import.meta.env.VITE_API_URL || "https://bookdoctor-9ns2.onrender.com";
+      if (!apiUrl.startsWith("http")) {
+        apiUrl = "https://bookdoctor-9ns2.onrender.com";
+      }
+      const socketUrl = apiUrl.replace(/\/api\/?$/, "");
       const newSocket = io(socketUrl, {
         withCredentials: true,
+        transports: ["websocket", "polling"],
       });
 
       setSocket(newSocket);
@@ -30,7 +34,6 @@ export const SocketProvider = ({ children }) => {
 
       // Listen for notifications
       newSocket.on("notification", (payload) => {
-        // Display a toast using react-hot-toast
         toast(
           () => (
             <div className="flex flex-col gap-1">
@@ -48,11 +51,22 @@ export const SocketProvider = ({ children }) => {
       return () => {
         newSocket.disconnect();
       };
+    } else {
+      setSocket(null);
     }
-  }, [isLoggedIn, user]);
+  }, [isLoggedIn, user?._id]);
+
+  // Context value supports both `const socket = useSocket()` and `const { socket } = useSocket()`
+  const value = {
+    socket,
+    emit: (...args) => (socket && typeof socket.emit === "function" ? socket.emit(...args) : undefined),
+    on: (...args) => (socket && typeof socket.on === "function" ? socket.on(...args) : undefined),
+    off: (...args) => (socket && typeof socket.off === "function" ? socket.off(...args) : undefined),
+    connected: !!socket?.connected,
+  };
 
   return (
-    <SocketContext.Provider value={{ socket }}>
+    <SocketContext.Provider value={value}>
       {children}
     </SocketContext.Provider>
   );

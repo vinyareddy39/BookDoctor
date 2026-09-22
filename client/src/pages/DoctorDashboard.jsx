@@ -35,7 +35,7 @@ export default function DoctorDashboard() {
 
 
   useEffect(() => {
-    if (socket) {
+    if (socket && typeof socket.on === "function") {
       const handleDashboardUpdate = () => {
         // Refetch appointments and analytics when backend says there is an update
         fetchAppointments();
@@ -44,7 +44,9 @@ export default function DoctorDashboard() {
       
       socket.on("DASHBOARD_UPDATE", handleDashboardUpdate);
       return () => {
-        socket.off("DASHBOARD_UPDATE", handleDashboardUpdate);
+        if (typeof socket.off === "function") {
+          socket.off("DASHBOARD_UPDATE", handleDashboardUpdate);
+        }
       };
     }
   }, [socket]);
