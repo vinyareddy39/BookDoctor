@@ -20,7 +20,22 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     // Log to console in dev; swap with a logging service (e.g. Sentry) in prod
-    console.error("[ErrorBoundary] Uncaught error:", error, info.componentStack);
+    console.error("[ErrorBoundary] Uncaught error:", error, info?.componentStack);
+    
+    // Auto-recover from stale dynamic chunk hash mismatches after deployments
+    const errMsg = (error?.message || error?.toString() || "").toLowerCase();
+    if (
+      errMsg.includes("failed to fetch dynamically imported module") ||
+      errMsg.includes("loading chunk") ||
+      errMsg.includes("dynamically imported module")
+    ) {
+      const lastReload = sessionStorage.getItem("last_chunk_reload");
+      const now = Date.now();
+      if (!lastReload || now - parseInt(lastReload, 10) > 10000) {
+        sessionStorage.setItem("last_chunk_reload", now.toString());
+        window.location.reload();
+      }
+    }
   }
 
   handleReset = () => {

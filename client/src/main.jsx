@@ -7,6 +7,11 @@ import ErrorBoundary from './components/common/ErrorBoundary.jsx'
 import './index.css'
 import App from './App.jsx'
 
+// Handle dynamic import chunk failures after deployments
+window.addEventListener('vite:preloadError', (event) => {
+  window.location.reload();
+});
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>

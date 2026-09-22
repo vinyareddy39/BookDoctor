@@ -21,6 +21,7 @@ import { useAuth } from "./context/AuthContext";
 import Navbar  from "./components/common/Navbar.jsx";
 import Footer  from "./components/common/Footer.jsx";
 import SOSButton from "./components/common/SOSButton.jsx";
+import EmergencyTracking from "./pages/EmergencyTracking.jsx";
 
 // Lazy-loaded pages (split into separate chunks — faster initial load)
 const Home            = lazy(() => import("./pages/Home.jsx"));
@@ -42,7 +43,6 @@ const ForgotPassword = lazy(() => import("./pages/ForgotPassword.jsx"));
 const ResetPassword   = lazy(() => import("./pages/ResetPassword.jsx"));
 const VerifyEmail     = lazy(() => import("./pages/VerifyEmail.jsx"));
 const VideoConsultation = lazy(() => import("./components/appointment/VideoConsultation.jsx"));
-const EmergencyTracking = lazy(() => import("./pages/EmergencyTracking.jsx"));
 const AmbulanceDashboard = lazy(() => import("./pages/AmbulanceDashboard.jsx"));
 
 // Page loader fallback
