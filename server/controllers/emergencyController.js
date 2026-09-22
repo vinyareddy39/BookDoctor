@@ -279,3 +279,16 @@ export const seedGhatkesarData = async (req, res, next) => {
     next(error);
   }
 };
+
+// HACKATHON DEMO: Disable all doctors to force the ambulance fallback
+export const disableAllDoctors = async (req, res, next) => {
+  try {
+    await Doctor.updateMany({}, { acceptingEmergencies: false, erCapacity: 0 });
+    return res.status(200).json({ 
+      success: true, 
+      message: "All doctors disabled! Next SOS trigger will force the Ambulance Fallback flow."
+    });
+  } catch (error) {
+    next(error);
+  }
+};
