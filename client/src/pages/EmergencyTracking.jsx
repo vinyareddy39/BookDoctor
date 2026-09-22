@@ -52,15 +52,18 @@ export default function EmergencyTracking() {
   };
 
   const getUberUrl = (productId = null) => {
-    const pLat = latestLoc?.lat || 17.4485;
-    const pLng = latestLoc?.lng || 78.6841;
-    const pAddr = userAddress || "My Current Location";
-    const dLat = hospital?.lat || 17.3664;
-    const dLng = hospital?.lng || 78.5363;
-    const dName = hospital?.name || "Omni Hospitals";
-    const dAddr = (hospital?.name ? hospital.name + ", " : "") + (hospital?.address || "Hyderabad");
+    const curLoc = emergency?.locationHistory?.[emergency.locationHistory.length - 1] || emergency?.location;
+    const hosp = emergency?.assignedHospitalId;
 
-    let url = `https://m.uber.com/ul/?client_id=DfjKZC3xXnBEObgCRl1ChUSdRJDnjwBP&action=setPickup&pickup[latitude]=${pLat}&pickup[longitude]=${pLng}&pickup[formatted_address]=${encodeURIComponent(pAddr)}&dropoff[latitude]=${dLat}&dropoff[longitude]=${dLng}&dropoff[nickname]=${encodeURIComponent(dName)}&dropoff[formatted_address]=${encodeURIComponent(dAddr)}`;
+    const pLat = curLoc?.lat;
+    const pLng = curLoc?.lng;
+    const dLat = hosp?.lat;
+    const dLng = hosp?.lng;
+    const dName = hosp?.name || "Hospital ER";
+
+    if (!pLat || !dLat) return "#";
+
+    let url = `https://m.uber.com/ul/?action=setPickup&pickup[latitude]=${pLat}&pickup[longitude]=${pLng}&dropoff[latitude]=${dLat}&dropoff[longitude]=${dLng}&dropoff[nickname]=${encodeURIComponent(dName)}`;
 
     if (productId) {
       url += `&product_id=${productId}`;
@@ -69,12 +72,15 @@ export default function EmergencyTracking() {
   };
 
   const getGoogleMapsUrl = () => {
-    const pLat = latestLoc?.lat || 17.4485;
-    const pLng = latestLoc?.lng || 78.6841;
-    const dLat = hospital?.lat || 17.3664;
-    const dLng = hospital?.lng || 78.5363;
-    const dName = hospital?.name || "Omni Hospitals";
-    const dAddr = hospital?.address || "";
+    const curLoc = emergency?.locationHistory?.[emergency.locationHistory.length - 1] || emergency?.location;
+    const hosp = emergency?.assignedHospitalId;
+    const pLat = curLoc?.lat;
+    const pLng = curLoc?.lng;
+    const dLat = hosp?.lat;
+    const dLng = hosp?.lng;
+    const dName = hosp?.name || "Hospital ER";
+    const dAddr = hosp?.address || "";
+    if (!pLat || !dLat) return "#";
     return `https://www.google.com/maps/dir/?api=1&origin=${pLat},${pLng}&destination=${encodeURIComponent(dName + " " + dAddr)}&travelmode=driving`;
   };
 
