@@ -22,6 +22,10 @@ export default function SOSButton() {
   }, [isCounting, countdown]);
 
   const handlePress = () => {
+    // Immediately prompt for live location on SOS tap
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(() => {}, () => {}, { enableHighAccuracy: true });
+    }
     setCountdown(3);
     setIsCounting(true);
   };
@@ -117,7 +121,7 @@ export default function SOSButton() {
             
             <h3 className="text-2xl font-bold text-slate-800 mb-2">Triggering SOS</h3>
             <p className="text-slate-500 mb-8">
-              Finding nearest available emergency doctor and sharing your live location...
+              Acquiring live GPS location and dispatching Emergency Uber to nearest hospital ER...
             </p>
             
             <button 

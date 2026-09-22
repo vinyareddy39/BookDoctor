@@ -15,76 +15,10 @@ export const triggerEmergency = async (req, res, next) => {
       return req.http.badRequest("Location (lat, lng) is required to trigger an SOS.");
     }
 
-    // Phase 1: Try to find nearest doctor
-    const availableDoctors = await Doctor.find({
-      acceptingEmergencies: true,
-      erCapacity: { $gt: 0 },
-      lat: { $exists: true },
-      lng: { $exists: true }
-    }).populate("userId", "name phone");
-
-    let nearestDoctor = null;
-    let minDistance = Infinity;
-
-    for (const doc of availableDoctors) {
-      const distance = calculateDistance(lat, lng, doc.lat, doc.lng);
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearestDoctor = doc;
-      }
-    }
-
-    if (nearestDoctor) {
-      const etaMinutes = estimateETA(minDistance);
-      const emergency = await Emergency.create({
-        patientId: req.user._id,
-        assignedDoctorId: nearestDoctor._id,
-        responseMode: "doctor",
-        location: { lat, lng },
-        emergencyType,
-        status: "active",
-        locationHistory: [{ lat, lng, timestamp: new Date() }]
-      });
-
-      const populatedEmergency = await Emergency.findById(emergency._id)
-        .populate("patientId", "name phone medicalId")
-        .populate({ path: "assignedDoctorId", populate: { path: "userId", select: "name phone" } });
-
-      await Doctor.findByIdAndUpdate(nearestDoctor._id, { $inc: { erCapacity: -1 } });
-
-      return req.http.created({
-        emergency: populatedEmergency,
-        distanceKm: minDistance.toFixed(2),
-        etaMinutes
-      }, "Emergency triggered successfully.");
-    }
-
-    // Phase 2: Fallback to Ambulance + Hospital with Two-Pass Routing
-    const ambulances = await Ambulance.find({ isAvailable: true });
-    
-    // Pass 1: Haversine shortlist (Top 3)
-    const ambShortlist = ambulances.map(amb => ({
-      amb,
-      dist: calculateDistance(lat, lng, amb.lat, amb.lng)
-    })).sort((a, b) => a.dist - b.dist).slice(0, 3);
-
-    let nearestAmbulance = null;
-    let minAmbDuration = Infinity;
-    let bestAmbRoute = null;
-
-    // Pass 2: OSRM Routing
-    for (const item of ambShortlist) {
-      const routeData = await getRouteAndETA(item.amb.lat, item.amb.lng, lat, lng);
-      if (routeData.durationMinutes < minAmbDuration) {
-        minAmbDuration = routeData.durationMinutes;
-        nearestAmbulance = item.amb;
-        bestAmbRoute = routeData.routeGeoJSON;
-      }
-    }
-
+    // DIRECT UBER EMERGENCY DISPATCH: Find nearest hospital with open ER beds
     const hospitals = await Hospital.find({ erBedsAvailable: { $gt: 0 } });
     
-    // Pass 1: Haversine shortlist (Top 3)
+    // Pass 1: Haversine shortlist (Top 3 closest hospitals)
     const hospShortlist = hospitals.map(hosp => ({
       hosp,
       dist: calculateDistance(lat, lng, hosp.lat, hosp.lng)
@@ -94,7 +28,7 @@ export const triggerEmergency = async (req, res, next) => {
     let minHospDuration = Infinity;
     let bestHospRoute = null;
 
-    // Pass 2: OSRM Routing
+    // Pass 2: OSRM Routing for real road driving time
     for (const item of hospShortlist) {
       const routeData = await getRouteAndETA(lat, lng, item.hosp.lat, item.hosp.lng);
       if (routeData.durationMinutes < minHospDuration) {
@@ -104,49 +38,20 @@ export const triggerEmergency = async (req, res, next) => {
       }
     }
 
-    
-    // Check if we need to fall back to Uber (no ambulance OR ambulance > 10 mins)
-    const UBER_THRESHOLD_MINS = 10;
-    const requiresUberFallback = !nearestAmbulance || minAmbDuration > UBER_THRESHOLD_MINS;
+    if (!nearestHospital && hospitals.length > 0) {
+      nearestHospital = hospitals[0];
+    }
 
     if (!nearestHospital) {
-      return req.http.notFound("No responders or hospital beds currently available. Please call 911 directly.");
+      return req.http.notFound("No emergency hospital beds currently available. Please call 108/911 directly.");
     }
 
-    if (requiresUberFallback) {
-      const emergency = await Emergency.create({
-        patientId: req.user._id,
-        responseMode: "uber",
-        assignedHospitalId: nearestHospital._id,
-        hospitalEtaMinutes: minHospDuration,
-        hospitalRouteGeoJSON: bestHospRoute,
-        location: { lat, lng },
-        emergencyType,
-        status: "active",
-        locationHistory: [{ lat, lng, timestamp: new Date() }]
-      });
-
-      await Hospital.findByIdAndUpdate(nearestHospital._id, { $inc: { erBedsAvailable: -1 } });
-
-      const populatedEmergency = await Emergency.findById(emergency._id)
-        .populate("patientId", "name phone medicalId")
-        .populate("assignedHospitalId");
-
-      return req.http.created({
-        emergency: populatedEmergency,
-        message: "No ambulance available quickly. Uber fallback suggested."
-      });
-    }
-
-    // Otherwise, dispatch the ambulance normally
+    // Create Emergency directly in UBER response mode
     const emergency = await Emergency.create({
       patientId: req.user._id,
-      responseMode: "ambulance",
-      assignedAmbulanceId: nearestAmbulance._id,
+      responseMode: "uber",
       assignedHospitalId: nearestHospital._id,
-      ambulanceEtaMinutes: minAmbDuration,
-      hospitalEtaMinutes: minHospDuration,
-      ambulanceRouteGeoJSON: bestAmbRoute,
+      hospitalEtaMinutes: minHospDuration !== Infinity ? minHospDuration : 15,
       hospitalRouteGeoJSON: bestHospRoute,
       location: { lat, lng },
       emergencyType,
@@ -154,59 +59,22 @@ export const triggerEmergency = async (req, res, next) => {
       locationHistory: [{ lat, lng, timestamp: new Date() }]
     });
 
-    // Lock the ambulance
-    await Ambulance.findByIdAndUpdate(nearestAmbulance._id, { 
-      isAvailable: false, 
-      currentEmergencyId: emergency._id 
-    });
-
-    // Decrement hospital bed
+    // Reserve 1 ER bed at destination hospital
     await Hospital.findByIdAndUpdate(nearestHospital._id, { $inc: { erBedsAvailable: -1 } });
 
     const populatedEmergency = await Emergency.findById(emergency._id)
       .populate("patientId", "name phone medicalId")
-      .populate("assignedAmbulanceId")
       .populate("assignedHospitalId");
 
     return req.http.created({
       emergency: populatedEmergency,
-      message: "No doctor available. Ambulance dispatched."
-
+      message: "Emergency Uber mode triggered. Direct hospital dispatch active."
     });
-
   } catch (err) {
     next(err);
   }
 };
 
-// UPDATE LOCATION (Patient)
- async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { lat, lng } = req.body;
-
-    if (!lat || !lng) {
-      return req.http.badRequest("Location (lat, lng) is required.");
-    }
-
-    const emergency = await Emergency.findOneAndUpdate(
-      { _id: id, patientId: req.user._id, status: "active" },
-      { 
-        $set: { location: { lat, lng } },
-        $push: { locationHistory: { lat, lng, timestamp: new Date() } }
-      },
-      { new: true }
-    );
-
-    if (!emergency) return req.http.notFound("Active emergency not found");
-
-    return req.http.ok(emergency, "Location updated");
-  } catch (err) {
-    next(err);
-  }
-};
-
-// GET EMERGENCY STATUS (Patient/Doctor)
 export const getEmergencyStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
