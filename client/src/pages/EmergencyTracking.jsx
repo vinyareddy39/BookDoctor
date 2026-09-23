@@ -45,9 +45,11 @@ export default function EmergencyTracking() {
     openUberRide({
       userLat: curLoc.lat,
       userLng: curLoc.lng,
+      userAddress: userAddress || "Live GPS Location",
       hospLat: hosp.lat,
       hospLng: hosp.lng,
-      hospitalName: hosp.name || "Hospital ER"
+      hospitalName: hosp.name || "Hospital ER",
+      hospitalAddress: hosp.address || "Emergency Department"
     });
   };
 

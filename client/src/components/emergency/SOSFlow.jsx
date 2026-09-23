@@ -197,9 +197,11 @@ export default function SOSFlow({ isOpen, onClose }) {
     openUberRide({
       userLat: userLocation.latitude,
       userLng: userLocation.longitude,
+      userAddress: userAddress || "Live GPS Location",
       hospLat: nearestHospitalData.lat,
       hospLng: nearestHospitalData.lng,
-      hospitalName: nearestHospitalData.name
+      hospitalName: nearestHospitalData.name,
+      hospitalAddress: nearestHospitalData.address || "Emergency Department"
     });
   };
 
