@@ -13,6 +13,7 @@ import {
 import {
   checkBedAllocation,
   fetchCandidateHospitals,
+  selectFastestHospitalByRoad,
   fetchRoadWeights
 } from "../../services/hospitalService";
 import { findNearestHospital } from "../../utils/dijkstra";
@@ -152,32 +153,35 @@ export default function SOSFlow({ isOpen, onClose }) {
   };
 
   /**
-   * STEP 3: Find Nearest Hospital via Dijkstra's Algorithm
+   * STEP 3: Find Nearest Hospital via Road Duration Ranking
    */
   const handleFindNearestHospital = async (loc) => {
     setStage("DIJKSTRA_ROUTING");
-    setLoadingMessage("Finding nearest hospital ER via Dijkstra road algorithm...");
+    setLoadingMessage("Locating nearest emergency hospitals (Overpass API)...");
 
     try {
-      // 1. Fetch candidate hospitals (~10km radius)
-      const candidates = await fetchCandidateHospitals(loc, 10);
+      // 1. Fetch closest 8 candidate hospitals (2km -> 5km -> 10km Overpass)
+      const candidates = await fetchCandidateHospitals(loc);
       if (!candidates || candidates.length === 0) {
         throw new Error("No emergency hospitals found in your vicinity.");
       }
 
-      // 2. Fetch road distance/duration weights via OSRM (or Haversine fallback)
-      setLoadingMessage("Calculating road network weights via OSRM...");
-      const roadWeights = await fetchRoadWeights(loc, candidates);
-
-      // 3. Run Dijkstra with MinHeap priority queue
-      setLoadingMessage("Executing Dijkstra's shortest path algorithm...");
-      const selected = findNearestHospital(loc, candidates, roadWeights);
+      // 2. Compute exact road driving durations via single OSRM Table API call
+      setLoadingMessage("Calculating road travel times via OSRM Table Matrix...");
+      let selected;
+      try {
+        selected = await selectFastestHospitalByRoad(loc, candidates);
+      } catch (tableErr) {
+        // Offline Dijkstra fallback
+        const roadWeights = await fetchRoadWeights(loc, candidates);
+        selected = findNearestHospital(loc, candidates, roadWeights);
+      }
 
       setNearestHospitalData(selected);
       // Move to STEP 4: Show Information First
       setStage("SHOW_INFO");
     } catch (err) {
-      console.error("Dijkstra hospital search failed:", err);
+      console.error("Hospital search failed:", err);
       setErrorMessage(err.message || "Could not calculate nearest hospital route.");
       setStage("ERROR");
     }

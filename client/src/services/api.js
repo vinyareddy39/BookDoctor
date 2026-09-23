@@ -1,6 +1,6 @@
 import axios from "axios";
 
-let baseURL = import.meta.env.VITE_API_URL || "/api";
+let baseURL = (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) || "/api";
 if (baseURL && baseURL.startsWith("http") && !baseURL.endsWith("/api")) {
   baseURL = baseURL.replace(/\/$/, "") + "/api";
 }
