@@ -10,7 +10,8 @@ import {
   seedGhatkesarData,
   disableAllDoctors,
   disableAllAmbulances,
-  getUberEstimatesHandler
+  getUberEstimatesHandler,
+  requestUberRideHandler
 } from "../controllers/emergencyController.js";
 
 const router = express.Router();
@@ -24,6 +25,7 @@ router.get("/uber/estimates", getUberEstimatesHandler);
 // Patient routes
 router.post("/trigger", auth, triggerEmergency);
 router.post("/:id/location", auth, updateLocation);
+router.post("/:id/uber-ride", auth, requestUberRideHandler);
 
 // Shared routes
 router.get("/:id/status", auth, getEmergencyStatus);

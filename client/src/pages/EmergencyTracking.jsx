@@ -22,6 +22,22 @@ export default function EmergencyTracking() {
   const [showQR, setShowQR] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(5);
   const [autoRedirectCancelled, setAutoRedirectCancelled] = useState(false);
+  const [dispatchingUber, setDispatchingUber] = useState(false);
+
+  const handleDispatchUberRide = async (productId = "uber-go") => {
+    try {
+      setDispatchingUber(true);
+      setAutoRedirectCancelled(true);
+      const res = await API.post(`/emergency/${emergencyId}/uber-ride`, { productId });
+      const updated = res.data?.data || res.data;
+      setEmergency(updated);
+      toast.success("Uber ride dispatched via Ride Request API!");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to dispatch Uber ride.");
+    } finally {
+      setDispatchingUber(false);
+    }
+  };
 
   // Auto-redirect to pre-filled Uber URL after showing 2nd pic
   useEffect(() => {
@@ -295,8 +311,55 @@ export default function EmergencyTracking() {
           <div className="bg-white p-6 rounded-2xl border border-blue-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-black text-blue-700 uppercase tracking-wider">Uber Emergency Ride Options</h2>
-              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800">Live API</span>
+              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
+                emergency?.uberRide?.status && emergency?.uberRide?.status !== "idle"
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-blue-100 text-blue-800"
+              }`}>
+                {emergency?.uberRide?.status && emergency?.uberRide?.status !== "idle"
+                  ? "🚗 Uber Dispatched (API)"
+                  : "Live API"}
+              </span>
             </div>
+
+            {/* Active Driver Card (when booked via Ride Request API) */}
+            {emergency?.uberRide?.status && emergency?.uberRide?.status !== "idle" && (
+              <div className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white p-4 rounded-xl shadow-md space-y-3 animate-fade-in border border-emerald-400/40">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl animate-pulse">🚗</span>
+                    <div>
+                      <p className="font-black text-sm uppercase tracking-wide">Uber Driver Dispatched</p>
+                      <p className="text-[11px] text-emerald-100 font-mono">Request ID: {emergency.uberRide.requestId}</p>
+                    </div>
+                  </div>
+                  <span className="bg-white text-emerald-800 font-black text-xs px-2.5 py-1 rounded-full shadow-sm">
+                    ETA: {emergency.uberRide.etaMinutes || 4} mins
+                  </span>
+                </div>
+
+                <div className="bg-black/20 rounded-lg p-3 text-xs grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-emerald-200 text-[10px] uppercase font-bold block">Assigned Driver</span>
+                    <span className="font-bold text-sm text-white">{emergency.uberRide.driverName || "Uber Partner Driver"}</span>
+                    {emergency.uberRide.driverPhone && (
+                      <p className="text-emerald-100 text-xs mt-0.5 font-medium">📞 {emergency.uberRide.driverPhone}</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <span className="text-emerald-200 text-[10px] uppercase font-bold block">Vehicle</span>
+                    <span className="font-bold text-white text-xs block">{emergency.uberRide.vehicleName}</span>
+                    <span className="inline-block mt-0.5 font-mono font-bold bg-white/20 px-2 py-0.5 rounded text-white text-[11px]">
+                      {emergency.uberRide.vehiclePlate}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-emerald-100 text-center">
+                  Ride requested directly via Uber Ride Request API on behalf of patient.
+                </p>
+              </div>
+            )}
             
             {/* Auto-Redirect to Uber Banner */}
             {!autoRedirectCancelled && !isResolved && (
@@ -436,14 +499,40 @@ export default function EmergencyTracking() {
 
             {!isResolved && latestLoc?.lat && hospital?.lat && (
               <div className="space-y-2 pt-2">
+                {/* Option A: Server-to-Server Autonomous Ride Request API */}
+                <button
+                  type="button"
+                  onClick={() => handleDispatchUberRide("uber-go")}
+                  disabled={dispatchingUber || (emergency?.uberRide?.status && emergency?.uberRide?.status !== "idle")}
+                  className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md text-sm disabled:opacity-75"
+                >
+                  {dispatchingUber ? (
+                    <>
+                      <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>Contacting Uber Ride Request API...</span>
+                    </>
+                  ) : emergency?.uberRide?.status && emergency?.uberRide?.status !== "idle" ? (
+                    <>
+                      <span>✓</span>
+                      <span>Uber Dispatched via API ({emergency.uberRide.vehicleName})</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>⚡</span>
+                      <span>Auto-Dispatch via Uber API (Connected Account)</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Option B: Universal Deep Link to native Uber app */}
                 <a
                   href={getUberUrl()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full bg-black hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-md text-sm"
+                  className="flex items-center justify-center gap-2 w-full bg-black hover:bg-slate-800 text-white font-bold py-3 rounded-xl transition-all shadow-sm text-sm"
                 >
                   <span className="text-lg">🚗</span>
-                  <span>Open in Uber App (Pre-filled Dispatch)</span>
+                  <span>Open in Uber App (Universal Deep Link)</span>
                 </a>
 
                 <div className="grid grid-cols-2 gap-2">

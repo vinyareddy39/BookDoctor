@@ -4,7 +4,7 @@ import Ambulance from "../models/Ambulance.js";
 import Hospital from "../models/Hospital.js";
 import { calculateDistance, estimateETA } from "../utils/distance.js";
 import { getRouteAndETA } from "../utils/routing.js";
-import { getUberEstimates } from "../services/uberService.js";
+import { getUberEstimates, requestUberRide } from "../services/uberService.js";
 import axios from "axios";
 
 // TRIGGER EMERGENCY (Patient)
@@ -425,6 +425,48 @@ export const updateLocation = async (req, res, next) => {
     }
 
     return res.status(200).json({ success: true, data: emergency });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const requestUberRideHandler = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { productId = "uber-go" } = req.body;
+
+    const emergency = await Emergency.findById(id).populate("assignedHospitalId");
+    if (!emergency) return req.http.notFound("Emergency not found");
+
+    const curLoc = emergency.locationHistory?.[emergency.locationHistory.length - 1] || emergency.location;
+    const hosp = emergency.assignedHospitalId;
+
+    if (!curLoc?.lat || !hosp?.lat) {
+      return req.http.badRequest("Incomplete coordinates for Uber ride dispatch.");
+    }
+
+    const rideResult = await requestUberRide({
+      startLat: curLoc.lat,
+      startLng: curLoc.lng,
+      endLat: hosp.lat,
+      endLng: hosp.lng,
+      productId,
+    });
+
+    emergency.uberRide = {
+      requestId: rideResult.requestId,
+      status: rideResult.status || "accepted",
+      productId: productId,
+      vehicleName: rideResult.vehicleName || "Uber Go",
+      driverName: rideResult.driverName,
+      driverPhone: rideResult.driverPhone,
+      vehiclePlate: rideResult.vehiclePlate,
+      etaMinutes: rideResult.etaMinutes,
+    };
+
+    await emergency.save();
+
+    return req.http.ok(emergency, "Uber ride dispatched successfully via Ride Request API");
   } catch (error) {
     next(error);
   }

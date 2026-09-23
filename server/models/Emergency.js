@@ -62,6 +62,21 @@ const emergencySchema = new mongoose.Schema(
     resolvedAt: {
       type: Date,
     },
+    // Uber Ride Request API integration state
+    uberRide: {
+      requestId: { type: String, default: null },
+      status: {
+        type: String,
+        enum: ["idle", "processing", "accepted", "arriving", "in_progress", "completed", "cancelled"],
+        default: "idle",
+      },
+      productId: { type: String, default: "uber-go" },
+      vehicleName: { type: String, default: "Uber Go" },
+      driverName: { type: String, default: null },
+      driverPhone: { type: String, default: null },
+      vehiclePlate: { type: String, default: null },
+      etaMinutes: { type: Number, default: null },
+    },
   },
   { timestamps: true }
 );
