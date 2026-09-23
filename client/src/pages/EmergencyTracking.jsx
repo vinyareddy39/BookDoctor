@@ -6,6 +6,7 @@ import API from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { MapContainer, TileLayer, Marker, Polyline, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
+import { openUberRide } from "../utils/uberDeepLink";
 
 export default function EmergencyTracking() {
   const { emergencyId } = useParams();
@@ -20,14 +21,11 @@ export default function EmergencyTracking() {
   const [loadingUber, setLoadingUber] = useState(false);
   const [userAddress, setUserAddress] = useState("");
   const [showQR, setShowQR] = useState(false);
-  const [redirectCountdown, setRedirectCountdown] = useState(5);
-  const [autoRedirectCancelled, setAutoRedirectCancelled] = useState(false);
   const [dispatchingUber, setDispatchingUber] = useState(false);
 
   const handleDispatchUberRide = async (productId = "uber-go") => {
     try {
       setDispatchingUber(true);
-      setAutoRedirectCancelled(true);
       const res = await API.post(`/emergency/${emergencyId}/uber-ride`, { productId });
       const updated = res.data?.data || res.data;
       setEmergency(updated);
@@ -39,25 +37,19 @@ export default function EmergencyTracking() {
     }
   };
 
-  // Auto-redirect to pre-filled Uber URL after showing 2nd pic
-  useEffect(() => {
-    if (emergency?.responseMode !== "uber" || autoRedirectCancelled || emergency?.status === "resolved") return;
+  const handleOpenUberNow = () => {
     const curLoc = emergency?.locationHistory?.[emergency.locationHistory.length - 1] || emergency?.location;
     const hosp = emergency?.assignedHospitalId;
     if (!curLoc?.lat || !hosp?.lat) return;
 
-    if (redirectCountdown > 0) {
-      const timer = setTimeout(() => {
-        setRedirectCountdown((c) => c - 1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    } else if (redirectCountdown === 0) {
-      const uberUrl = getUberUrl();
-      if (uberUrl && uberUrl !== "#") {
-        window.location.href = uberUrl;
-      }
-    }
-  }, [redirectCountdown, emergency?.responseMode, autoRedirectCancelled, emergency?.status, emergency]);
+    openUberRide({
+      userLat: curLoc.lat,
+      userLng: curLoc.lng,
+      hospLat: hosp.lat,
+      hospLng: hosp.lng,
+      hospitalName: hosp.name || "Hospital ER"
+    });
+  };
 
   const getUberUrl = (productId = null) => {
     const curLoc = emergency?.locationHistory?.[emergency.locationHistory.length - 1] || emergency?.location;
@@ -367,38 +359,38 @@ export default function EmergencyTracking() {
               </div>
             )}
             
-            {/* Auto-Redirect to Uber Banner */}
-            {!autoRedirectCancelled && !isResolved && (
-              <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white p-4 rounded-xl shadow-md flex items-center justify-between gap-3 animate-fade-in border border-blue-400/30">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl animate-bounce">🚗</span>
-                  <div>
-                    <div className="flex items-center gap-2">
+            {/* Explicit Uber Dispatch Card (Triggered ONLY on user click, never automatically) */}
+            {!isResolved && (
+              <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white p-4 rounded-xl shadow-md space-y-3 animate-fade-in border border-blue-400/30">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-2xl">🚗</span>
+                    <div>
                       <p className="font-black text-sm">
-                        Redirecting to Uber in
+                        Uber Transit Available
                       </p>
-                      <span className="bg-white text-blue-700 font-black text-xs px-2 py-0.5 rounded-full shadow-sm">
-                        {redirectCountdown}s
-                      </span>
+                      <p className="text-[11px] text-blue-100">
+                        Live Pickup & {hospital?.name || "Hospital ER"} Drop-off 100% pre-filled.
+                      </p>
                     </div>
-                    <p className="text-[11px] text-blue-100 mt-0.5">
-                      Live Pickup & {hospital?.name || "Hospital ER"} Drop-off 100% pre-filled.
-                    </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+
+                <div className="flex flex-col sm:flex-row gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => setAutoRedirectCancelled(true)}
-                    className="text-xs bg-white/20 hover:bg-white/30 text-white font-bold px-3 py-1.5 rounded-lg transition border border-white/20"
+                    onClick={handleOpenUberNow}
+                    className="flex-1 py-2.5 px-3 bg-white text-blue-700 hover:bg-blue-50 font-black rounded-lg transition text-xs flex items-center justify-center gap-1.5 shadow-sm"
                   >
-                    Stay on Map
+                    <span>Open Uber Now</span>
+                    <span>➔</span>
                   </button>
                   <a
-                    href={getUberUrl()}
-                    className="text-xs bg-white text-blue-700 hover:bg-blue-50 font-black px-3 py-1.5 rounded-lg transition shadow-sm"
+                    href="tel:108"
+                    className="py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition text-xs flex items-center justify-center gap-1 shadow-sm"
                   >
-                    Open Uber Now ➔
+                    <span>🚑</span>
+                    <span>108 Ambulance</span>
                   </a>
                 </div>
               </div>
@@ -531,15 +523,14 @@ export default function EmergencyTracking() {
                 </button>
 
                 {/* Option B: Universal Deep Link to native Uber app */}
-                <a
-                  href={getUberUrl()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full bg-black hover:bg-slate-800 text-white font-bold py-3 rounded-xl transition-all shadow-sm text-sm"
+                <button
+                  type="button"
+                  onClick={handleOpenUberNow}
+                  className="flex items-center justify-center gap-2 w-full bg-black hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-md text-sm"
                 >
                   <span className="text-lg">🚗</span>
-                  <span>Open in Uber App (Universal Deep Link)</span>
-                </a>
+                  <span>Open Uber Now (Pre-filled Dispatch)</span>
+                </button>
 
                 <div className="grid grid-cols-2 gap-2">
                   <a
