@@ -64,6 +64,8 @@ export default function SOSFlow({ isOpen, onClose }) {
   // Manual Location Fallback
   const [manualInput, setManualInput] = useState("");
   const [isGeocodingManual, setIsGeocodingManual] = useState(false);
+  const [redirectCountdown, setRedirectCountdown] = useState(3);
+  const [autoRedirectCancelled, setAutoRedirectCancelled] = useState(false);
 
   // Initiate flow whenever modal is opened
   useEffect(() => {
@@ -82,7 +84,24 @@ export default function SOSFlow({ isOpen, onClose }) {
     setAllocatedData(null);
     setNearestHospitalData(null);
     setManualInput("");
+    setRedirectCountdown(3);
+    setAutoRedirectCancelled(false);
   };
+
+  // Auto-redirect to pre-filled Uber URL in 3 seconds once nearest hospital is shown
+  useEffect(() => {
+    if (stage !== "SHOW_INFO" || autoRedirectCancelled) return;
+    if (!userLocation || !nearestHospitalData) return;
+
+    if (redirectCountdown > 0) {
+      const timer = setTimeout(() => {
+        setRedirectCountdown((c) => c - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (redirectCountdown === 0) {
+      handleOpenUberClick();
+    }
+  }, [stage, redirectCountdown, autoRedirectCancelled, userLocation, nearestHospitalData]);
 
   /**
    * STEP 1: SOS Button Click & Live Location Acquisition
@@ -189,9 +208,10 @@ export default function SOSFlow({ isOpen, onClose }) {
   };
 
   /**
-   * STEP 5: Redirect to Uber ONLY on Button Click
+   * STEP 5: Redirect to Uber
    */
   const handleOpenUberClick = () => {
+    setAutoRedirectCancelled(true);
     if (!userLocation || !nearestHospitalData) return;
 
     openUberRide({
@@ -377,8 +397,32 @@ export default function SOSFlow({ isOpen, onClose }) {
                 </div>
               )}
 
-              {/* STEP 5: ACTION BUTTONS (REDIRECT ONLY ON CLICK) */}
+              {/* STEP 5: ACTION BUTTONS (AUTO-REDIRECT IN 3S WITH MANUAL OVERRIDE) */}
               <div className="pt-2 space-y-2.5">
+                {/* 3-Second Auto-Redirect Alert */}
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl animate-bounce">🚗</span>
+                    <span className="text-xs font-bold text-slate-800">
+                      {autoRedirectCancelled ? "Uber Dispatch Available" : "Redirecting to Uber in"}
+                    </span>
+                    {!autoRedirectCancelled && (
+                      <span className="bg-blue-600 text-white font-black text-xs px-2 py-0.5 rounded-full shadow-sm animate-pulse">
+                        {redirectCountdown}s
+                      </span>
+                    )}
+                  </div>
+                  {!autoRedirectCancelled && (
+                    <button
+                      type="button"
+                      onClick={() => setAutoRedirectCancelled(true)}
+                      className="text-[11px] bg-white hover:bg-slate-100 text-slate-700 font-bold px-2.5 py-1 rounded-lg border border-slate-200 shadow-sm transition whitespace-nowrap"
+                    >
+                      Stay on Map
+                    </button>
+                  )}
+                </div>
+
                 <button
                   type="button"
                   onClick={handleOpenUberClick}

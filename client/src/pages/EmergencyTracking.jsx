@@ -22,10 +22,13 @@ export default function EmergencyTracking() {
   const [userAddress, setUserAddress] = useState("");
   const [showQR, setShowQR] = useState(false);
   const [dispatchingUber, setDispatchingUber] = useState(false);
+  const [redirectCountdown, setRedirectCountdown] = useState(3);
+  const [autoRedirectCancelled, setAutoRedirectCancelled] = useState(false);
 
   const handleDispatchUberRide = async (productId = "uber-go") => {
     try {
       setDispatchingUber(true);
+      setAutoRedirectCancelled(true);
       const res = await API.post(`/emergency/${emergencyId}/uber-ride`, { productId });
       const updated = res.data?.data || res.data;
       setEmergency(updated);
@@ -38,6 +41,7 @@ export default function EmergencyTracking() {
   };
 
   const handleOpenUberNow = () => {
+    setAutoRedirectCancelled(true);
     const curLoc = emergency?.locationHistory?.[emergency.locationHistory.length - 1] || emergency?.location;
     const hosp = emergency?.assignedHospitalId;
     if (!curLoc?.lat || !hosp?.lat) return;
@@ -52,6 +56,26 @@ export default function EmergencyTracking() {
       hospitalAddress: hosp.address || "Emergency Department"
     });
   };
+
+  // Auto-redirect to pre-filled Uber URL in 3 seconds
+  useEffect(() => {
+    if (emergency?.responseMode !== "uber" || autoRedirectCancelled || emergency?.status === "resolved") return;
+    const curLoc = emergency?.locationHistory?.[emergency.locationHistory.length - 1] || emergency?.location;
+    const hosp = emergency?.assignedHospitalId;
+    if (!curLoc?.lat || !hosp?.lat) return;
+
+    if (redirectCountdown > 0) {
+      const timer = setTimeout(() => {
+        setRedirectCountdown((c) => c - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (redirectCountdown === 0) {
+      const uberUrl = getUberUrl();
+      if (uberUrl && uberUrl !== "#") {
+        window.location.href = uberUrl;
+      }
+    }
+  }, [redirectCountdown, emergency?.responseMode, autoRedirectCancelled, emergency?.status, emergency]);
 
   const getUberUrl = (productId = null) => {
     const curLoc = emergency?.locationHistory?.[emergency.locationHistory.length - 1] || emergency?.location;
@@ -328,21 +352,37 @@ export default function EmergencyTracking() {
               </div>
             )}
             
-            {/* Explicit Uber Dispatch Card (Triggered ONLY on user click, never automatically) */}
+            {/* Auto-Redirect to Uber Banner (3-second countdown) */}
             {!isResolved && (
               <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white p-4 rounded-xl shadow-md space-y-3 animate-fade-in border border-blue-400/30">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <span className="text-2xl">🚗</span>
+                    <span className="text-2xl animate-bounce">🚗</span>
                     <div>
-                      <p className="font-black text-sm">
-                        Uber Transit Available
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-black text-sm">
+                          {autoRedirectCancelled ? "Uber Transit Available" : "Redirecting to Uber in"}
+                        </p>
+                        {!autoRedirectCancelled && (
+                          <span className="bg-white text-blue-700 font-black text-xs px-2 py-0.5 rounded-full shadow-sm animate-pulse">
+                            {redirectCountdown}s
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-blue-100">
                         Live Pickup & {hospital?.name || "Hospital ER"} Drop-off 100% pre-filled.
                       </p>
                     </div>
                   </div>
+                  {!autoRedirectCancelled && (
+                    <button
+                      type="button"
+                      onClick={() => setAutoRedirectCancelled(true)}
+                      className="text-xs bg-white/20 hover:bg-white/30 text-white font-bold px-2.5 py-1 rounded-lg transition border border-white/20 whitespace-nowrap"
+                    >
+                      Stay on Map
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2 pt-1">
