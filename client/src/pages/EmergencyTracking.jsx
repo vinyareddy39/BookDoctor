@@ -6,7 +6,7 @@ import API from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { MapContainer, TileLayer, Marker, Polyline, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import { openUberRide } from "../utils/uberDeepLink";
+import { openUberRide, buildUberUniversalUrl } from "../utils/uberDeepLink";
 
 export default function EmergencyTracking() {
   const { emergencyId } = useParams();
@@ -67,49 +67,16 @@ export default function EmergencyTracking() {
 
     if (!pLat || !dLat) return "#";
 
-    const clientId = "DfjKZC3xXnBEObgCRl1ChUSdRJDnjwBP";
-
-    // Official Uber Universal Deep Link Location Objects
-    const pickupObj = {
-      latitude: Number(pLat),
-      longitude: Number(pLng),
-      addressLine1: "Live Location",
-      addressLine2: pAddr,
-    };
-
-    const dropObj = {
-      latitude: Number(dLat),
-      longitude: Number(dLng),
-      addressLine1: dName,
-      addressLine2: dAddr,
-    };
-
-    const params = new URLSearchParams();
-    if (clientId) params.append("client_id", clientId);
-    params.append("pickup", JSON.stringify(pickupObj));
-    params.append("drop[0]", JSON.stringify(dropObj));
-
-    // Standard setPickup query parameters for Uber Universal Deep Links & Web App
-    params.append("action", "setPickup");
-    params.append("pickup[latitude]", String(pLat));
-    params.append("pickup[longitude]", String(pLng));
-    params.append("pickup[nickname]", "Live Location");
-    params.append("pickup[formatted_address]", pAddr);
-    params.append("dropoff[latitude]", String(dLat));
-    params.append("dropoff[longitude]", String(dLng));
-    params.append("dropoff[nickname]", dName);
-    params.append("dropoff[formatted_address]", `${dName}, ${dAddr}`);
-
-    if (productId) {
-      params.append("product_id", productId);
-    }
-
-    // Try copying to clipboard for convenience
-    try {
-      navigator.clipboard?.writeText?.(`${dName}, ${dAddr}`);
-    } catch (_) {}
-
-    return `https://m.uber.com/ul/?${params.toString()}`;
+    return buildUberUniversalUrl({
+      userLat: pLat,
+      userLng: pLng,
+      userAddress: pAddr,
+      hospLat: dLat,
+      hospLng: dLng,
+      hospitalName: dName,
+      hospitalAddress: dAddr,
+      productId
+    });
   };
 
   const getGoogleMapsUrl = () => {
