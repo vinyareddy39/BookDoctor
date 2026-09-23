@@ -95,21 +95,27 @@ export default function EmergencyTracking() {
     params.append("pickup", JSON.stringify(pickupObj));
     params.append("drop[0]", JSON.stringify(dropObj));
 
-    // Standard setPickup query parameters for legacy mobile apps
+    // Standard setPickup query parameters for Uber Universal Deep Links & Web App
     params.append("action", "setPickup");
     params.append("pickup[latitude]", String(pLat));
     params.append("pickup[longitude]", String(pLng));
     params.append("pickup[nickname]", "Live Location");
+    params.append("pickup[formatted_address]", pAddr);
     params.append("dropoff[latitude]", String(dLat));
     params.append("dropoff[longitude]", String(dLng));
     params.append("dropoff[nickname]", dName);
-    params.append("dropoff[formatted_address]", dAddr);
+    params.append("dropoff[formatted_address]", `${dName}, ${dAddr}`);
 
     if (productId) {
       params.append("product_id", productId);
     }
 
-    return `https://m.uber.com/looking?${params.toString()}`;
+    // Try copying to clipboard for convenience
+    try {
+      navigator.clipboard?.writeText?.(`${dName}, ${dAddr}`);
+    } catch (_) {}
+
+    return `https://m.uber.com/ul/?${params.toString()}`;
   };
 
   const getGoogleMapsUrl = () => {
