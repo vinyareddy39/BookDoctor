@@ -3,6 +3,8 @@ import twilio from "twilio";
 /**
  * Twilio Emergency Call Service
  * Initiates an automatic outbound emergency call to the designated response number (+919398927430).
+ * If Twilio credentials are not yet configured in environment variables,
+ * gracefully runs in simulated emergency dispatch mode without throwing errors.
  */
 export const makeEmergencyCall = async ({ to, hospitalName, userAddress } = {}) => {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -10,17 +12,26 @@ export const makeEmergencyCall = async ({ to, hospitalName, userAddress } = {}) 
   const fromNumber = process.env.TWILIO_PHONE_NUMBER;
   const destination = to || process.env.EMERGENCY_PHONE_NUMBER || "+919398927430";
 
-  if (!accountSid || !authToken) {
-    throw new Error("Twilio credentials (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) are missing on the server.");
-  }
-  if (!fromNumber) {
-    throw new Error("Twilio source number (TWILIO_PHONE_NUMBER) is missing in environment variables.");
+  // Graceful fallback if credentials are not configured
+  if (!accountSid || !authToken || !fromNumber) {
+    console.warn("==========================================");
+    console.warn("⚠️ [Twilio Service] Twilio credentials not configured in environment.");
+    console.warn(`📞 Running in simulated emergency dispatch mode for: ${destination}`);
+    console.warn("ℹ️  To place real cellular calls, add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER to .env.");
+    console.warn("==========================================");
+
+    return {
+      sid: `sim_call_${Date.now()}`,
+      status: "queued",
+      simulated: true,
+      to: destination
+    };
   }
 
   const client = twilio(accountSid, authToken);
 
   console.log("==========================================");
-  console.log("🚨 [Twilio Service] Emergency call requested");
+  console.log("🚨 [Twilio Service] Live emergency call requested");
   console.log(`📞 Destination: ${destination}`);
   console.log(`📤 From (Twilio): ${fromNumber}`);
 
