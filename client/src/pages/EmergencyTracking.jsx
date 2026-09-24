@@ -7,6 +7,12 @@ import { useAuth } from "../context/AuthContext";
 import { MapContainer, TileLayer, Marker, Polyline, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { openUberRide, buildUberUniversalUrl } from "../utils/uberDeepLink";
+import {
+  formatDialNumber,
+  formatDisplayNumber,
+  initiateDeviceCall,
+  EMERGENCY_NUMBERS
+} from "../services/locationService";
 
 export default function EmergencyTracking() {
   const { emergencyId } = useParams();
@@ -26,32 +32,24 @@ export default function EmergencyTracking() {
   const [autoRedirectCancelled, setAutoRedirectCancelled] = useState(false);
   const [callingTwilio, setCallingTwilio] = useState(false);
 
-  const handleEmergencyCall = async (e) => {
-    if (e) e.preventDefault();
-    if (callingTwilio) return;
+  const handleEmergencyCall = (e, targetNumber) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const rawNumber = targetNumber || EMERGENCY_NUMBERS.AMBULANCE_INDIA;
+    const dialNumber = formatDialNumber(rawNumber);
+    const displayNumber = formatDisplayNumber(rawNumber);
 
-    try {
-      setCallingTwilio(true);
-      toast.loading("Connecting emergency dispatch to +91 9398927430...", { id: "twilio-call" });
+    // 1. Immediately initiate native device phone call using tel: URI
+    initiateDeviceCall(dialNumber);
 
-      const res = await API.post("/emergency-call", {
-        to: "+919398927430",
-        hospitalName: emergency?.assignedHospitalId?.name,
-        userAddress: userAddress || ""
-      });
+    // 2. Visual feedback
+    toast.success(`Calling ${displayNumber}...`, { id: "emergency-call" });
 
-      if (res.data?.success) {
-        toast.success("Emergency call placed! +91 9398927430 is ringing.", { id: "twilio-call" });
-      } else {
-        toast.success("Emergency alert registered for +91 9398927430.", { id: "twilio-call" });
-      }
-    } catch (err) {
-      console.warn("Emergency API fallback to native dialer:", err);
-      toast.success("Emergency alert placed for 9398927430.", { id: "twilio-call" });
-      window.location.href = "tel:+919398927430";
-    } finally {
-      setTimeout(() => setCallingTwilio(false), 2500);
-    }
+    // 3. Optional asynchronous backend notification without blocking device dialer
+    API.post("/emergency-call", {
+      to: dialNumber,
+      hospitalName: emergency?.assignedHospitalId?.name || "",
+      userAddress: userAddress || ""
+    }).catch(() => {});
   };
 
   const handleDispatchUberRide = async (productId = "uber-go") => {
@@ -425,14 +423,11 @@ export default function EmergencyTracking() {
                   </button>
                   <button
                     type="button"
-                    disabled={callingTwilio}
-                    onClick={handleEmergencyCall}
-                    className={`py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition text-xs flex items-center justify-center gap-1 shadow-sm ${
-                      callingTwilio ? "opacity-60 cursor-not-allowed animate-pulse" : "active:scale-95"
-                    }`}
+                    onClick={(e) => handleEmergencyCall(e)}
+                    className="py-2.5 px-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold rounded-lg transition text-xs flex items-center justify-center gap-1 shadow-sm"
                   >
                     <span>🚑</span>
-                    <span>{callingTwilio ? "Calling..." : "9398927430"}</span>
+                    <span>{formatDisplayNumber()}</span>
                   </button>
                 </div>
               </div>
@@ -695,9 +690,9 @@ export default function EmergencyTracking() {
                   <span>⚡</span>
                   <span>Shortest road route: {emergency?.hospitalEtaMinutes || 3} min ETA via OSRM/Dijkstra</span>
                 </span>
-                {hospital?.phone && !hospital.phone.includes("108") && !hospital.phone.includes("9398927430") ? (
+                {hospital?.phone && !hospital.phone.includes("108") && !hospital.phone.includes("9398927430") && !hospital.phone.includes("7993149379") ? (
                   <a
-                    href={`tel:${hospital.phone.startsWith("+") ? hospital.phone.replace(/\s+/g, "") : "+91" + hospital.phone.replace(/\s+/g, "")}`}
+                    href={`tel:${formatDialNumber(hospital.phone)}`}
                     className="text-xs text-slate-500 hover:text-red-600 font-medium flex items-center gap-1 transition"
                   >
                     <span>📞</span>
@@ -706,12 +701,11 @@ export default function EmergencyTracking() {
                 ) : (
                   <button
                     type="button"
-                    disabled={callingTwilio}
-                    onClick={handleEmergencyCall}
-                    className="text-xs text-red-600 hover:text-red-700 font-bold flex items-center gap-1 transition disabled:opacity-50"
+                    onClick={(e) => handleEmergencyCall(e)}
+                    className="text-xs text-red-600 hover:text-red-700 font-bold flex items-center gap-1 transition active:scale-95"
                   >
                     <span>📞</span>
-                    <span>{callingTwilio ? "Calling..." : "9398927430"}</span>
+                    <span>{formatDisplayNumber()}</span>
                   </button>
                 )}
               </div>

@@ -583,7 +583,7 @@ export const requestUberRideHandler = async (req, res, next) => {
 export const triggerEmergencyCall = async (req, res, next) => {
   try {
     const { to, hospitalName, userAddress } = req.body || {};
-    const destination = to || process.env.EMERGENCY_PHONE_NUMBER || "+919398927430";
+    const destination = to || process.env.EMERGENCY_PHONE_NUMBER || "+917993149379";
 
     const call = await makeEmergencyCall({
       to: destination,
@@ -594,7 +594,7 @@ export const triggerEmergencyCall = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       message: call.simulated
-        ? "Emergency dispatch alert registered for +91 9398927430"
+        ? `Emergency dispatch alert registered for ${destination}`
         : "Emergency call initiated successfully via Twilio",
       callSid: call.sid,
       status: call.status,
@@ -603,11 +603,11 @@ export const triggerEmergencyCall = async (req, res, next) => {
     });
   } catch (error) {
     console.warn("⚠️ Emergency Call Safe Fallback:", error.message);
-    const destination = req.body?.to || process.env.EMERGENCY_PHONE_NUMBER || "+919398927430";
+    const destination = req.body?.to || process.env.EMERGENCY_PHONE_NUMBER || "+917993149379";
     return res.status(200).json({
       success: true,
       simulated: true,
-      message: "Emergency alert registered. Connecting dispatch to +91 9398927430.",
+      message: `Emergency alert registered. Connecting dispatch to ${destination}.`,
       callSid: `fallback_${Date.now()}`,
       to: destination
     });

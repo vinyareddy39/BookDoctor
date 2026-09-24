@@ -10,7 +10,10 @@ import {
   getFreshLocation,
   reverseGeocode,
   geocodeManualLocation,
-  EMERGENCY_NUMBERS
+  EMERGENCY_NUMBERS,
+  formatDialNumber,
+  formatDisplayNumber,
+  initiateDeviceCall
 } from "../../services/locationService";
 import {
   checkBedAllocation,
@@ -71,32 +74,24 @@ export default function SOSFlow({ isOpen, onClose }) {
   const [autoRedirectCancelled, setAutoRedirectCancelled] = useState(false);
   const [callingTwilio, setCallingTwilio] = useState(false);
 
-  const handleEmergencyCall = async (e) => {
-    if (e) e.preventDefault();
-    if (callingTwilio) return;
+  const handleEmergencyCall = (e, targetNumber) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const rawNumber = targetNumber || EMERGENCY_NUMBERS.AMBULANCE_INDIA;
+    const dialNumber = formatDialNumber(rawNumber);
+    const displayNumber = formatDisplayNumber(rawNumber);
 
-    try {
-      setCallingTwilio(true);
-      toast.loading("Connecting emergency dispatch to +91 9398927430...", { id: "twilio-call" });
+    // 1. Immediately initiate native device phone call using tel: URI
+    initiateDeviceCall(dialNumber);
 
-      const res = await API.post("/emergency-call", {
-        to: "+919398927430",
-        hospitalName: nearestHospitalData?.hospital?.name || allocatedData?.hospital?.name || "",
-        userAddress: userAddress || ""
-      });
+    // 2. Visual feedback
+    toast.success(`Calling ${displayNumber}...`, { id: "emergency-call" });
 
-      if (res.data?.success) {
-        toast.success("Emergency call placed! +91 9398927430 is ringing.", { id: "twilio-call" });
-      } else {
-        toast.success("Emergency alert registered for +91 9398927430.", { id: "twilio-call" });
-      }
-    } catch (err) {
-      console.warn("Emergency API fallback to native dialer:", err);
-      toast.success("Emergency alert placed for 9398927430.", { id: "twilio-call" });
-      window.location.href = "tel:+919398927430";
-    } finally {
-      setTimeout(() => setCallingTwilio(false), 2500);
-    }
+    // 3. Optional asynchronous backend notification without blocking device dialer
+    API.post("/emergency-call", {
+      to: dialNumber,
+      hospitalName: nearestHospitalData?.hospital?.name || allocatedData?.hospital?.name || "",
+      userAddress: userAddress || ""
+    }).catch(() => {});
   };
 
   // Initiate flow whenever modal is opened
@@ -472,14 +467,11 @@ export default function SOSFlow({ isOpen, onClose }) {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    disabled={callingTwilio}
-                    onClick={handleEmergencyCall}
-                    className={`py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition text-center ${
-                      callingTwilio ? "opacity-60 cursor-not-allowed animate-pulse" : "active:scale-95"
-                    }`}
+                    onClick={(e) => handleEmergencyCall(e)}
+                    className="py-2.5 px-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition text-center"
                   >
                     <span>🚑</span>
-                    <span>{callingTwilio ? "Calling..." : "9398927430"}</span>
+                    <span>{formatDisplayNumber()}</span>
                   </button>
 
                   <a
@@ -551,14 +543,11 @@ export default function SOSFlow({ isOpen, onClose }) {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    disabled={callingTwilio}
-                    onClick={handleEmergencyCall}
-                    className={`py-3 bg-red-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition hover:bg-red-700 ${
-                      callingTwilio ? "opacity-60 cursor-not-allowed animate-pulse" : "active:scale-95"
-                    }`}
+                    onClick={(e) => handleEmergencyCall(e)}
+                    className="py-3 bg-red-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition hover:bg-red-700 active:scale-95"
                   >
                     <span>🚑</span>
-                    <span>{callingTwilio ? "Calling..." : "9398927430"}</span>
+                    <span>{formatDisplayNumber()}</span>
                   </button>
                   <a
                     href={`tel:${EMERGENCY_NUMBERS.NATIONAL_EMERGENCY}`}

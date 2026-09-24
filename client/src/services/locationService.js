@@ -4,9 +4,49 @@
  * reverse-geocoding, and manual fallback parsing.
  */
 
+/**
+ * Dynamically retrieves the configured emergency telephone number.
+ * Can be configured via VITE_EMERGENCY_PHONE_NUMBER or defaults to 7993149379.
+ */
+export const getEmergencyPhoneNumber = () => {
+  return import.meta.env.VITE_EMERGENCY_PHONE_NUMBER || "7993149379";
+};
+
+/**
+ * Formats a raw number for device telephony dialer (+917993149379).
+ */
+export const formatDialNumber = (rawNumber) => {
+  const num = (rawNumber || getEmergencyPhoneNumber()).toString().replace(/[^\d+]/g, "");
+  if (num.startsWith("+")) return num;
+  if (num.length === 10) return `+91${num}`;
+  if (num.startsWith("91") && num.length === 12) return `+${num}`;
+  return `+91${num.slice(-10)}`;
+};
+
+/**
+ * Formats a raw number for visual UI display (7993149379).
+ */
+export const formatDisplayNumber = (rawNumber) => {
+  const num = (rawNumber || getEmergencyPhoneNumber()).toString().replace(/[^\d]/g, "");
+  return num.slice(-10) || "7993149379";
+};
+
+/**
+ * Initiates an immediate phone call using the native device calling functionality.
+ * Uses the web standard 'tel:' URI scheme without page reload or external app redirection.
+ */
+export const initiateDeviceCall = (phoneNumber) => {
+  const dial = formatDialNumber(phoneNumber);
+  window.location.href = `tel:${dial}`;
+};
+
 export const EMERGENCY_NUMBERS = {
-  AMBULANCE_INDIA: "+919398927430",
-  AMBULANCE_DISPLAY: "9398927430",
+  get AMBULANCE_INDIA() {
+    return formatDialNumber();
+  },
+  get AMBULANCE_DISPLAY() {
+    return formatDisplayNumber();
+  },
   NATIONAL_EMERGENCY: "112",
   POLICE: "100"
 };
