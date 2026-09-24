@@ -19,6 +19,7 @@ import googleRoutes      from "./routes/googleroutes.js";
 import chatRoutes        from "./routes/chatroutes.js";
 import emergencyRoutes   from "./routes/emergencyRoutes.js";
 import ambulanceRoutes   from "./routes/ambulanceRoutes.js";
+import { triggerEmergencyCall } from "./controllers/emergencyController.js";
 
 // Swagger
 import swaggerUi from "swagger-ui-express";
@@ -146,6 +147,7 @@ app.use("/api/payments",     paymentRoutes);
 app.use("/api/google",       googleRoutes);
 app.use("/api/chat",         chatRoutes);
 app.use("/api/emergency",    emergencyRoutes);
+app.post("/api/emergency-call", triggerEmergencyCall);
 
 // Swagger API Docs
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));

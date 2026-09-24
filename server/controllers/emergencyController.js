@@ -5,6 +5,7 @@ import Hospital from "../models/Hospital.js";
 import { calculateDistance, estimateETA } from "../utils/distance.js";
 import { getRouteAndETA } from "../utils/routing.js";
 import { getUberEstimates, requestUberRide } from "../services/uberService.js";
+import { makeEmergencyCall } from "../services/twilioService.js";
 import axios from "axios";
 
 /**
@@ -572,5 +573,39 @@ export const requestUberRideHandler = async (req, res, next) => {
     return req.http.ok(emergency, "Uber ride dispatched successfully via Ride Request API");
   } catch (error) {
     next(error);
+  }
+};
+
+/**
+ * Initiates an automatic outbound emergency call using Twilio
+ * POST /api/emergency-call or POST /api/emergency/call
+ */
+export const triggerEmergencyCall = async (req, res, next) => {
+  try {
+    const { to, hospitalName, userAddress } = req.body || {};
+    const destination = to || process.env.EMERGENCY_PHONE_NUMBER || "+919398927430";
+
+    const call = await makeEmergencyCall({
+      to: destination,
+      hospitalName,
+      userAddress
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Emergency call initiated successfully via Twilio",
+      callSid: call.sid,
+      status: call.status,
+      to: destination
+    });
+  } catch (error) {
+    console.error("❌ Twilio Emergency Call Error:", error.message);
+    const isConfigError = error.message.includes("missing") || error.message.includes("credentials");
+    return res.status(isConfigError ? 400 : 500).json({
+      success: false,
+      message: isConfigError
+        ? error.message
+        : "Unable to initiate emergency call via Twilio. Please verify destination number or try again."
+    });
   }
 };

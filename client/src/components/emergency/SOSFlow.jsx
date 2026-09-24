@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import toast from "react-hot-toast";
+import API from "../../services/api";
 
 import {
   getFreshLocation,
@@ -67,6 +69,34 @@ export default function SOSFlow({ isOpen, onClose }) {
   const [isGeocodingManual, setIsGeocodingManual] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(3);
   const [autoRedirectCancelled, setAutoRedirectCancelled] = useState(false);
+  const [callingTwilio, setCallingTwilio] = useState(false);
+
+  const handleEmergencyCall = async (e) => {
+    if (e) e.preventDefault();
+    if (callingTwilio) return;
+
+    try {
+      setCallingTwilio(true);
+      toast.loading("Dialing emergency dispatch via Twilio...", { id: "twilio-call" });
+
+      const res = await API.post("/emergency-call", {
+        to: "+919398927430",
+        hospitalName: nearestHospitalData?.hospital?.name || allocatedData?.hospital?.name || "",
+        userAddress: userAddress || ""
+      });
+
+      if (res.data?.success) {
+        toast.success("Emergency call placed! +91 9398927430 is ringing.", { id: "twilio-call" });
+      } else {
+        toast.error(res.data?.message || "Failed to initiate call.", { id: "twilio-call" });
+      }
+    } catch (err) {
+      console.error("Twilio call failed:", err);
+      toast.error(err.response?.data?.message || "Emergency call failed to connect.", { id: "twilio-call" });
+    } finally {
+      setTimeout(() => setCallingTwilio(false), 2500);
+    }
+  };
 
   // Initiate flow whenever modal is opened
   useEffect(() => {
@@ -439,13 +469,17 @@ export default function SOSFlow({ isOpen, onClose }) {
 
                 {/* Prominent Ambulance Option Next to Uber */}
                 <div className="grid grid-cols-2 gap-2">
-                  <a
-                    href="tel:+919398927430"
-                    className="py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition text-center"
+                  <button
+                    type="button"
+                    disabled={callingTwilio}
+                    onClick={handleEmergencyCall}
+                    className={`py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition text-center ${
+                      callingTwilio ? "opacity-60 cursor-not-allowed animate-pulse" : "active:scale-95"
+                    }`}
                   >
                     <span>🚑</span>
-                    <span>9398927430</span>
-                  </a>
+                    <span>{callingTwilio ? "Calling..." : "9398927430"}</span>
+                  </button>
 
                   <a
                     href={`tel:${EMERGENCY_NUMBERS.NATIONAL_EMERGENCY}`}
@@ -514,13 +548,17 @@ export default function SOSFlow({ isOpen, onClose }) {
                   Immediate Emergency Assistance
                 </p>
                 <div className="grid grid-cols-2 gap-2">
-                  <a
-                    href="tel:+919398927430"
-                    className="py-3 bg-red-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition hover:bg-red-700"
+                  <button
+                    type="button"
+                    disabled={callingTwilio}
+                    onClick={handleEmergencyCall}
+                    className={`py-3 bg-red-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition hover:bg-red-700 ${
+                      callingTwilio ? "opacity-60 cursor-not-allowed animate-pulse" : "active:scale-95"
+                    }`}
                   >
                     <span>🚑</span>
-                    <span>9398927430</span>
-                  </a>
+                    <span>{callingTwilio ? "Calling..." : "9398927430"}</span>
+                  </button>
                   <a
                     href={`tel:${EMERGENCY_NUMBERS.NATIONAL_EMERGENCY}`}
                     className="py-3 bg-slate-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition hover:bg-black"

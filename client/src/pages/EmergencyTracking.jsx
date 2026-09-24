@@ -24,6 +24,34 @@ export default function EmergencyTracking() {
   const [dispatchingUber, setDispatchingUber] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(3);
   const [autoRedirectCancelled, setAutoRedirectCancelled] = useState(false);
+  const [callingTwilio, setCallingTwilio] = useState(false);
+
+  const handleEmergencyCall = async (e) => {
+    if (e) e.preventDefault();
+    if (callingTwilio) return;
+
+    try {
+      setCallingTwilio(true);
+      toast.loading("Dialing emergency dispatch via Twilio...", { id: "twilio-call" });
+
+      const res = await API.post("/emergency-call", {
+        to: "+919398927430",
+        hospitalName: emergency?.assignedHospitalId?.name,
+        userAddress: userAddress || ""
+      });
+
+      if (res.data?.success) {
+        toast.success("Emergency call placed! +91 9398927430 is ringing.", { id: "twilio-call" });
+      } else {
+        toast.error(res.data?.message || "Failed to initiate call.", { id: "twilio-call" });
+      }
+    } catch (err) {
+      console.error("Twilio call failed:", err);
+      toast.error(err.response?.data?.message || "Emergency call failed to connect.", { id: "twilio-call" });
+    } finally {
+      setTimeout(() => setCallingTwilio(false), 2500);
+    }
+  };
 
   const handleDispatchUberRide = async (productId = "uber-go") => {
     try {
@@ -394,13 +422,17 @@ export default function EmergencyTracking() {
                     <span>Open Uber Now</span>
                     <span>➔</span>
                   </button>
-                  <a
-                    href="tel:+919398927430"
-                    className="py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition text-xs flex items-center justify-center gap-1 shadow-sm"
+                  <button
+                    type="button"
+                    disabled={callingTwilio}
+                    onClick={handleEmergencyCall}
+                    className={`py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition text-xs flex items-center justify-center gap-1 shadow-sm ${
+                      callingTwilio ? "opacity-60 cursor-not-allowed animate-pulse" : "active:scale-95"
+                    }`}
                   >
                     <span>🚑</span>
-                    <span>9398927430</span>
-                  </a>
+                    <span>{callingTwilio ? "Calling..." : "9398927430"}</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -662,22 +694,24 @@ export default function EmergencyTracking() {
                   <span>⚡</span>
                   <span>Shortest road route: {emergency?.hospitalEtaMinutes || 3} min ETA via OSRM/Dijkstra</span>
                 </span>
-                {hospital?.phone ? (
+                {hospital?.phone && !hospital.phone.includes("108") && !hospital.phone.includes("9398927430") ? (
                   <a
-                    href={`tel:${hospital.phone.includes("108") ? "+919398927430" : (hospital.phone.startsWith("+") ? hospital.phone.replace(/\s+/g, "") : "+91" + hospital.phone.replace(/\s+/g, ""))}`}
+                    href={`tel:${hospital.phone.startsWith("+") ? hospital.phone.replace(/\s+/g, "") : "+91" + hospital.phone.replace(/\s+/g, "")}`}
                     className="text-xs text-slate-500 hover:text-red-600 font-medium flex items-center gap-1 transition"
                   >
                     <span>📞</span>
-                    <span>{hospital.phone.includes("108") ? "9398927430" : hospital.phone}</span>
+                    <span>{hospital.phone}</span>
                   </a>
                 ) : (
-                  <a
-                    href="tel:+919398927430"
-                    className="text-xs text-slate-500 hover:text-red-600 font-medium flex items-center gap-1 transition"
+                  <button
+                    type="button"
+                    disabled={callingTwilio}
+                    onClick={handleEmergencyCall}
+                    className="text-xs text-red-600 hover:text-red-700 font-bold flex items-center gap-1 transition disabled:opacity-50"
                   >
                     <span>📞</span>
-                    <span>9398927430</span>
-                  </a>
+                    <span>{callingTwilio ? "Calling..." : "9398927430"}</span>
+                  </button>
                 )}
               </div>
             </div>
