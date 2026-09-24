@@ -8,7 +8,10 @@
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
 
-  html { scroll-behavior: smooth; }
+  html { 
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
 
   body {
     @apply bg-surface text-slate-800 font-sans antialiased;
@@ -36,11 +39,11 @@
 /* ─── Reusable component classes ─────────────────────────────── */
 @layer components {
 
-  /* Buttons */
+  /* Buttons (44px min touch target compliant) */
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2
            bg-primary-600 hover:bg-primary-700 active:bg-primary-800
-           text-white font-semibold rounded-xl px-6 py-3
+           text-white font-semibold rounded-xl px-5 py-3 min-h-[44px]
            shadow-md shadow-primary-500/20
            transition-all duration-200
            hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary-500/25
@@ -50,7 +53,7 @@
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2
            bg-white hover:bg-slate-50 active:bg-slate-100
-           text-slate-700 font-semibold rounded-xl px-6 py-3
+           text-slate-700 font-semibold rounded-xl px-5 py-3 min-h-[44px]
            border border-slate-200 hover:border-slate-300
            shadow-sm transition-all duration-200
            hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2;
@@ -59,7 +62,7 @@
   .btn-outline {
     @apply inline-flex items-center justify-center gap-2
            bg-transparent hover:bg-primary-50
-           text-primary-600 font-semibold rounded-xl px-6 py-3
+           text-primary-600 font-semibold rounded-xl px-5 py-3 min-h-[44px]
            border border-primary-200 hover:border-primary-400
            transition-all duration-200
            focus:outline-none focus:ring-2 focus:ring-primary-300 focus:ring-offset-2;
@@ -68,7 +71,7 @@
   .btn-danger {
     @apply inline-flex items-center justify-center gap-2
            bg-red-500 hover:bg-red-600 active:bg-red-700
-           text-white font-semibold rounded-xl px-6 py-3
+           text-white font-semibold rounded-xl px-5 py-3 min-h-[44px]
            shadow-sm transition-all duration-200
            focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2;
   }
@@ -83,12 +86,12 @@
     @apply card hover:shadow-card-lg hover:-translate-y-1 hover:border-primary-100;
   }
 
-  /* Inputs */
+  /* Inputs (min 44px touch height, 16px font on mobile to prevent iOS zoom) */
   .input {
-    @apply w-full px-4 py-3 rounded-xl border border-slate-200
+    @apply w-full px-4 py-3 rounded-xl border border-slate-200 min-h-[44px]
            bg-white text-slate-800 placeholder:text-slate-400
            focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent
-           transition-all duration-200 text-sm font-medium;
+           transition-all duration-200 text-base md:text-sm font-medium;
   }
 
   .input-label {
@@ -120,3 +123,56 @@
 .delay-400 { animation-delay: 400ms; }
 .delay-500 { animation-delay: 500ms; }
 .delay-600 { animation-delay: 600ms; }
+
+/* ─── Multi-Device Touch & Viewport Enhancements ────────────── */
+@layer utilities {
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .safe-top {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+}
+
+/* Enforce 44x44px touch targets on touchscreens (iPad, phones, tablets) */
+@media (pointer: coarse) {
+  button, 
+  [role="button"],
+  .touch-target-coarse {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  button, a {
+    touch-action: manipulation;
+  }
+}
+
+/* Prevent iOS Safari 16px zoom bug on inputs */
+@media screen and (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Table Responsive Horizontal Container */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Dynamic Viewport Height for mobile browsers with dynamic address bars */
+.min-h-screen-dynamic {
+  min-height: 100vh;
+  min-height: 100dvh;
+}

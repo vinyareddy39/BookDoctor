@@ -150,8 +150,12 @@ export default function ChatWindow({ appointment, onClose }) {
               <p className="text-xs text-primary-100 opacity-90">In-App Consultation Chat</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors">
-            X
+          <button 
+            onClick={onClose} 
+            aria-label="Close chat"
+            className="w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-colors font-bold text-white text-base"
+          >
+            ✕
           </button>
         </div>
 

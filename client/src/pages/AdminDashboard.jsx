@@ -81,21 +81,21 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-surface py-10 px-4">
       <div className="max-w-6xl mx-auto space-y-8">
         
-        <div className="flex justify-between items-end">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-black text-slate-900">Admin Dashboard</h1>
-            <p className="text-slate-500 mt-1">Platform overview and statistics</p>
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Admin Dashboard</h1>
+            <p className="text-slate-500 text-xs sm:text-sm mt-1">Platform overview and statistics</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             <button 
               onClick={() => exportToCSV(analytics, "admin-analytics.csv")}
-              className="btn-primary py-2 text-sm bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
+              className="flex-1 sm:flex-none btn-secondary py-2.5 px-4 text-xs sm:text-sm font-bold min-h-[44px]"
             >
               Export CSV
             </button>
             <button 
               onClick={() => exportToPDF(analytics, "Admin Analytics (Last 30 Days)", "admin-analytics.pdf")}
-              className="btn-primary py-2 text-sm"
+              className="flex-1 sm:flex-none btn-primary py-2.5 px-4 text-xs sm:text-sm font-bold min-h-[44px]"
             >
               Export PDF
             </button>
@@ -103,16 +103,16 @@ export default function AdminDashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           {[
             { label: "Total Users", val: data?.stats?.users, color: "bg-blue-50 text-blue-700" },
             { label: "Total Doctors", val: data?.stats?.doctors, color: "bg-indigo-50 text-indigo-700" },
             { label: "Appointments", val: data?.stats?.appointments, color: "bg-green-50 text-green-700" },
             { label: "Pending", val: data?.stats?.pending, color: "bg-amber-50 text-amber-700" },
           ].map((s) => (
-            <div key={s.label} className={`card p-5 ${s.color}`}>
-              <p className="text-xs font-bold uppercase tracking-wider opacity-70">{s.label}</p>
-              <p className="text-3xl font-black mt-2">{s.val}</p>
+            <div key={s.label} className={`card p-4 sm:p-5 ${s.color}`}>
+              <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider opacity-70">{s.label}</p>
+              <p className="text-2xl sm:text-3xl font-black mt-1 sm:mt-2">{s.val}</p>
             </div>
           ))}
         </div>

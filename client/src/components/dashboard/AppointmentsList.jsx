@@ -174,35 +174,35 @@ export default function AppointmentsList({ appts, loading, onStatusUpdate, onPay
                   <button
                     type="button"
                     onClick={() => onPaymentUpdate(a._id, "paid")}
-                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors flex items-center gap-1.5"
+                    className="text-xs font-bold px-3 py-2 min-h-[44px] rounded-xl bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors flex items-center gap-1.5"
                     title="Click to mark as Unpaid"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Paid ✓
+                    <span className="w-2 h-2 rounded-full bg-green-500" /> Paid ✓
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={() => onPaymentUpdate(a._id, "pending")}
-                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors flex items-center gap-1.5"
+                    className="text-xs font-bold px-3 py-2 min-h-[44px] rounded-xl bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors flex items-center gap-1.5"
                     title="Click to mark as Paid"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" /> Unpaid ✗
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" /> Unpaid ✗
                   </button>
                 )}
 
                 {/* Appointment action buttons */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {a.status === "pending" && (
                     <>
                       <button
                         onClick={() => onStatusUpdate(a._id, "confirmed")}
-                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-bold shadow-sm hover:shadow transition-all"
+                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 min-h-[44px] rounded-xl font-bold shadow-sm hover:shadow transition-all flex items-center justify-center"
                       >
                         Accept
                       </button>
                       <button
                         onClick={() => onStatusUpdate(a._id, "cancelled")}
-                        className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 px-3.5 py-2 rounded-xl font-bold transition-all border border-rose-200/50"
+                        className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 px-3.5 py-2.5 min-h-[44px] rounded-xl font-bold transition-all border border-rose-200/50 flex items-center justify-center"
                       >
                         Decline
                       </button>
@@ -211,7 +211,7 @@ export default function AppointmentsList({ appts, loading, onStatusUpdate, onPay
                   {a.status === "confirmed" && (
                     <button
                       onClick={() => onStatusUpdate(a._id, "completed")}
-                      className="text-xs bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-xl font-bold shadow-sm hover:shadow transition-all"
+                      className="text-xs bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 min-h-[44px] rounded-xl font-bold shadow-sm hover:shadow transition-all flex items-center justify-center"
                     >
                       Complete Appointment
                     </button>
@@ -220,13 +220,13 @@ export default function AppointmentsList({ appts, loading, onStatusUpdate, onPay
                     <>
                       <button
                         onClick={() => setSelectedRescheduleAppt(a)}
-                        className="text-xs bg-slate-50 hover:bg-slate-100 text-slate-700 px-3.5 py-2 rounded-xl font-bold transition-all border border-slate-200"
+                        className="text-xs bg-slate-50 hover:bg-slate-100 text-slate-700 px-3.5 py-2.5 min-h-[44px] rounded-xl font-bold transition-all border border-slate-200 flex items-center justify-center"
                       >
                         Reschedule
                       </button>
                       <button
                         onClick={() => setSelectedChatAppt(a)}
-                        className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-3.5 py-2 rounded-xl font-bold transition-all border border-blue-200 flex items-center gap-1.5"
+                        className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-3.5 py-2.5 min-h-[44px] rounded-xl font-bold transition-all border border-blue-200 flex items-center justify-center gap-1.5"
                       >
                         💬 Chat
                       </button>
@@ -268,7 +268,8 @@ export default function AppointmentsList({ appts, loading, onStatusUpdate, onPay
               <h3 className="font-black text-slate-800">Patient Medical History</h3>
               <button 
                 onClick={() => setSelectedPatientHistory(null)}
-                className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+                aria-label="Close history modal"
+                className="w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white border border-slate-200 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
               >
                 ✕
               </button>

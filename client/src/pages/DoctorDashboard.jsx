@@ -235,35 +235,35 @@ export default function DoctorDashboard() {
         <DashboardStats appts={appts} />
 
         {/* Tab Bar */}
-          <div className="flex gap-2 bg-white rounded-xl p-1.5 w-fit border border-slate-200 shadow-sm mx-auto sm:mx-0 mb-6 overflow-x-auto">
-            {["analytics", "appointments", "emergencies", "profile"].map((t) => (
-              <button
-                key={t}
-                onClick={() => setActiveTab(t)}
-                className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
-                  activeTab === t
-                    ? "bg-primary-600 text-white shadow-sm"
-                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                {t === "analytics" ? "📊 Analytics" : t === "appointments" ? "📅 Appointments" : t === "emergencies" ? "🚨 SOS Emergencies" : "⚙️ Clinic & Schedule"}
-              </button>
-            ))}
-          </div>
+        <div className="flex gap-2 bg-white rounded-xl p-1.5 w-full sm:w-fit border border-slate-200 shadow-sm mx-auto sm:mx-0 mb-6 overflow-x-auto custom-scrollbar">
+          {["analytics", "appointments", "emergencies", "profile"].map((t) => (
+            <button
+              key={t}
+              onClick={() => setActiveTab(t)}
+              className={`px-4 sm:px-6 py-2.5 min-h-[44px] rounded-lg text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex items-center justify-center ${
+                activeTab === t
+                  ? "bg-primary-600 text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {t === "analytics" ? "📊 Analytics" : t === "appointments" ? "📅 Appointments" : t === "emergencies" ? "🚨 SOS Emergencies" : "⚙️ Clinic & Schedule"}
+            </button>
+          ))}
+        </div>
 
         {/* Tab content */}
         {activeTab === "analytics" && (
           <div className="space-y-6">
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 flex-wrap">
               <button 
                 onClick={() => exportToCSV(analytics, "doctor-analytics.csv")}
-                className="btn-primary py-1.5 px-4 text-xs bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
+                className="btn-secondary py-2 px-4 text-xs font-bold min-h-[44px]"
               >
                 Export CSV
               </button>
               <button 
                 onClick={() => exportToPDF(analytics, `Analytics - Dr. ${profile?.userId?.name || user?.name}`, "doctor-analytics.pdf")}
-                className="btn-primary py-1.5 px-4 text-xs"
+                className="btn-primary py-2 px-4 text-xs font-bold min-h-[44px]"
               >
                 Export PDF
               </button>

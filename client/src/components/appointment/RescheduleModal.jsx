@@ -68,7 +68,8 @@ export default function RescheduleModal({ isOpen, onClose, appointment, onSucces
       <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 md:p-8 animate-in fade-in zoom-in-95 duration-200">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors"
+          aria-label="Close modal"
+          className="absolute top-3 right-3 w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -92,7 +93,7 @@ export default function RescheduleModal({ isOpen, onClose, appointment, onSucces
               min={new Date().toISOString().split("T")[0]}
               value={selectedDate}
               onChange={handleDateChange}
-              className={`w-full px-4 py-3 rounded-xl border ${
+              className={`w-full px-4 py-3 min-h-[44px] rounded-xl border ${
                 selectedDate && !isSelectedDateValid
                   ? "border-red-300 bg-red-50 text-red-900"
                   : "border-slate-200 bg-slate-50 focus:border-primary-500 focus:bg-white"
@@ -113,14 +114,14 @@ export default function RescheduleModal({ isOpen, onClose, appointment, onSucces
           {/* Time Picker */}
           <div className={`${!isSelectedDateValid || !selectedDate ? "opacity-50 pointer-events-none" : ""}`}>
             <label className="block text-sm font-bold text-slate-700 mb-2">Select Time</label>
-            <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
               {allTimeSlots.length > 0 ? (
                 allTimeSlots.map((time) => (
                   <button
                     type="button"
                     key={time}
                     onClick={() => setSelectedTime(time)}
-                    className={`py-2 px-1 text-xs font-bold rounded-lg transition-all ${
+                    className={`py-2.5 px-2 text-xs font-bold rounded-lg transition-all min-h-[44px] flex items-center justify-center ${
                       selectedTime === time
                         ? "bg-primary-600 text-white shadow-md shadow-primary-200/50"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -130,7 +131,7 @@ export default function RescheduleModal({ isOpen, onClose, appointment, onSucces
                   </button>
                 ))
               ) : (
-                <p className="col-span-3 text-sm text-slate-500">No time slots configured.</p>
+                <p className="col-span-2 sm:col-span-3 text-sm text-slate-500">No time slots configured.</p>
               )}
             </div>
           </div>
