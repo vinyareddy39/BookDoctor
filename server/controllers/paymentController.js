@@ -1,82 +1,104 @@
-import Razorpay from "razorpay";
 import mongoose from "mongoose";
 import crypto from "crypto";
 import Transaction from "../models/Transaction.js";
 import Appointment from "../models/Appointment.js";
-import { getIO, triggerDashboardUpdate } from "../socket.js";
-
-// Initialize Razorpay instance lazily to avoid crash if keys are missing initially
-const getRazorpayInstance = () => {
-  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-    throw new Error("Razorpay API keys are not configured.");
-  }
-  return new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET,
-  });
-};
+import { triggerDashboardUpdate } from "../socket.js";
+import { getRazorpayClient } from "../services/paymentService.js";
 
 // ==========================================
 // 1. CREATE ORDER
 // ==========================================
 export const createOrder = async (req, res, next) => {
   try {
-    const { amount, currency = "INR", appointmentId } = req.body;
+    const { appointmentId, currency = "INR" } = req.body;
 
-    if (!amount || !appointmentId) {
-      return req.http.badRequest("Amount and Appointment ID are required");
+    if (!appointmentId) {
+      return req.http.badRequest("Appointment ID is required");
     }
 
     // Verify appointment exists
-    const appointment = await Appointment.findById(appointmentId).populate("patientId", "name email phone");
+    const appointment = await Appointment.findById(appointmentId)
+      .populate("patientId", "name email phone")
+      .populate("doctorId");
+
     if (!appointment) {
       return req.http.notFound("Appointment not found");
     }
 
-    // Demo Mode bypass
-    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-      // Simulate successful payment instantly for demo purposes
+    // Idempotency: Prevent re-paying for an already paid appointment
+    if (appointment.paymentStatus === "paid") {
+      return req.http.badRequest("This appointment has already been paid for.");
+    }
+
+    // SECURITY: Always fetch amount server-side (never trust user-submitted fee)
+    const serverFee = appointment.amount ?? appointment.doctorId?.consultationFee;
+    if (serverFee === undefined || serverFee === null || serverFee < 0) {
+      return req.http.badRequest("Valid consultation fee could not be determined for this appointment.");
+    }
+
+    // Demo Mode bypass: MUST be explicitly permitted in non-production or DEMO_MODE flag
+    const isDemoAllowed =
+      (process.env.DEMO_MODE === "true" || process.env.NODE_ENV !== "production") &&
+      (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET);
+
+    if (isDemoAllowed) {
+      console.warn("⚠️ [Razorpay] Demo Mode active (non-production with missing keys). Simulating success.");
       await Appointment.findByIdAndUpdate(appointmentId, { paymentStatus: "paid" });
       if (appointment.doctorId) {
-        const doctor = await mongoose.model("Doctor").findById(appointment.doctorId);
-        if (doctor) {
-          triggerDashboardUpdate(doctor.userId, "A payment was captured (Demo Mode)");
-        }
+        const docUserId = appointment.doctorId.userId || appointment.doctorId;
+        triggerDashboardUpdate(docUserId, "A payment was captured (Demo Mode)");
       }
       return req.http.ok({ demoMode: true }, "Demo Mode: Payment marked as successful");
     }
 
-    const rzp = getRazorpayInstance();
+    // Get Razorpay client (throws clear error in production if keys are missing)
+    const rzp = getRazorpayClient();
+    if (!rzp) {
+      return req.http.serverError("Razorpay payment gateway is not configured.");
+    }
 
-    // Create Razorpay order (amount is in paise)
+    // Convert fee to integer paise (amount * 100)
+    const amountInPaise = Math.round(serverFee * 100);
+
     const options = {
-      amount: amount * 100, 
+      amount: amountInPaise,
       currency,
-      receipt: `receipt_${appointmentId}`,
+      receipt: `rcpt_${appointmentId.toString().slice(-8)}_${Date.now().toString().slice(-6)}`,
+      notes: {
+        appointmentId: appointmentId.toString(),
+        patientId: appointment.patientId?._id?.toString() || "",
+        doctorId: appointment.doctorId?._id?.toString() || "",
+      },
     };
 
     const order = await rzp.orders.create(options);
 
-    // Create pending transaction in DB
+    // Save pending Transaction record in MongoDB for auditing
     await Transaction.create({
-      userId: req.user._id,
+      userId: req.user?._id || appointment.patientId?._id,
       appointmentId,
       orderId: order.id,
-      amount,
+      amount: serverFee,
       currency,
       status: "created",
       customerDetails: {
         name: appointment.patientId?.name,
         email: appointment.patientId?.email,
         contact: appointment.patientId?.phone,
-      }
+      },
     });
+
+    console.log(
+      `💳 [Razorpay] Order created: orderId=${order.id}, appt=${appointmentId}, amount=₹${serverFee} (${amountInPaise} paise)`
+    );
 
     return req.http.ok(
       {
+        orderId: order.id,
         order_id: order.id,
         amount: order.amount,
         currency: order.currency,
+        keyId: process.env.RAZORPAY_KEY_ID,
         key_id: process.env.RAZORPAY_KEY_ID,
       },
       "Order created successfully"
@@ -92,23 +114,46 @@ export const createOrder = async (req, res, next) => {
 // ==========================================
 export const verifyPayment = async (req, res, next) => {
   try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, appointmentId } = req.body;
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return req.http.badRequest("Missing payment verification details");
     }
 
-    // Verify signature
-    const body = razorpay_order_id + "|" + razorpay_payment_id;
+    const secret = process.env.RAZORPAY_KEY_SECRET;
+    if (!secret) {
+      return req.http.serverError("Razorpay key secret not configured on server");
+    }
+
+    // Check existing transaction for Idempotency
+    const existingTransaction = await Transaction.findOne({ orderId: razorpay_order_id });
+    if (existingTransaction && existingTransaction.status === "captured") {
+      console.log(`ℹ️ [Razorpay Verify] Order ${razorpay_order_id} already captured. Returning success (idempotent).`);
+      return req.http.ok(
+        { paymentId: existingTransaction.paymentId, status: "captured" },
+        "Payment verified successfully (already processed)"
+      );
+    }
+
+    // Verify HMAC-SHA256 signature server-side
+    const body = `${razorpay_order_id}|${razorpay_payment_id}`;
     const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(body.toString())
+      .createHmac("sha256", secret)
+      .update(body)
       .digest("hex");
 
-    const isAuthentic = expectedSignature === razorpay_signature;
+    let isAuthentic = false;
+    try {
+      isAuthentic = crypto.timingSafeEqual(
+        Buffer.from(expectedSignature, "utf8"),
+        Buffer.from(razorpay_signature, "utf8")
+      );
+    } catch {
+      isAuthentic = false;
+    }
 
     if (!isAuthentic) {
-      // Mark transaction as failed
+      console.error(`❌ [Razorpay Verify] Signature mismatch for order: ${razorpay_order_id}`);
       await Transaction.findOneAndUpdate(
         { orderId: razorpay_order_id },
         { status: "failed", paymentId: razorpay_payment_id }
@@ -116,7 +161,7 @@ export const verifyPayment = async (req, res, next) => {
       return req.http.badRequest("Payment signature verification failed");
     }
 
-    // Mark transaction as captured
+    // Mark Transaction as captured
     const transaction = await Transaction.findOneAndUpdate(
       { orderId: razorpay_order_id },
       {
@@ -127,25 +172,29 @@ export const verifyPayment = async (req, res, next) => {
       { new: true }
     );
 
-    if (transaction) {
-      // Mark appointment as paid
+    const targetApptId = transaction?.appointmentId || appointmentId;
+    if (targetApptId) {
       const appointment = await Appointment.findByIdAndUpdate(
-        transaction.appointmentId,
+        targetApptId,
         { paymentStatus: "paid" },
         { new: true }
-      );
+      ).populate("doctorId");
 
-      // Notify doctor
+      // Notify doctor via real-time WebSocket
       if (appointment?.doctorId) {
-        // Need to get the actual userId of the doctor
-        const doctor = await mongoose.model("Doctor").findById(appointment.doctorId);
-        if (doctor) {
-          triggerDashboardUpdate(doctor.userId, "A payment was captured");
-        }
+        const docUserId = appointment.doctorId.userId || appointment.doctorId;
+        triggerDashboardUpdate(docUserId, "A consultation payment was successfully captured");
       }
     }
 
-    return req.http.ok(null, "Payment verified successfully");
+    console.log(
+      `✅ [Razorpay Verify] Payment verified: orderId=${razorpay_order_id}, paymentId=${razorpay_payment_id}, appt=${targetApptId}`
+    );
+
+    return req.http.ok(
+      { paymentId: razorpay_payment_id, status: "captured" },
+      "Payment verified successfully"
+    );
   } catch (err) {
     console.error("[Razorpay Verify Error]", err);
     next(err);
@@ -157,53 +206,85 @@ export const verifyPayment = async (req, res, next) => {
 // ==========================================
 export const razorpayWebhook = async (req, res, next) => {
   try {
-    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
-    if (!secret) return res.status(500).send("Webhook secret not configured");
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      console.error("❌ [Razorpay Webhook] RAZORPAY_WEBHOOK_SECRET is not configured.");
+      return res.status(500).send("Webhook secret not configured");
+    }
 
     const signature = req.headers["x-razorpay-signature"];
+    if (!signature) {
+      return res.status(400).send("Missing x-razorpay-signature header");
+    }
 
-    // Validate signature
+    // Use raw body buffer for cryptographically exact signature verification
+    const rawPayload = req.rawBody ? req.rawBody : Buffer.from(JSON.stringify(req.body));
     const expectedSignature = crypto
-      .createHmac("sha256", secret)
-      .update(JSON.stringify(req.body))
+      .createHmac("sha256", webhookSecret)
+      .update(rawPayload)
       .digest("hex");
 
-    if (signature !== expectedSignature) {
-      return res.status(400).send("Invalid signature");
+    let isAuthentic = false;
+    try {
+      isAuthentic = crypto.timingSafeEqual(
+        Buffer.from(expectedSignature, "utf8"),
+        Buffer.from(signature, "utf8")
+      );
+    } catch {
+      isAuthentic = false;
+    }
+
+    if (!isAuthentic) {
+      console.error("❌ [Razorpay Webhook] Invalid webhook signature detected.");
+      return res.status(400).send("Invalid webhook signature");
     }
 
     const event = req.body.event;
     const payload = req.body.payload;
+    console.log(`🔔 [Razorpay Webhook] Verified event received: ${event}`);
 
-    if (event === "payment.captured" || event === "payment.authorized") {
-      const paymentEntity = payload.payment.entity;
-      const orderId = paymentEntity.order_id;
+    if (event === "payment.captured" || event === "payment.authorized" || event === "order.paid") {
+      const paymentEntity = payload?.payment?.entity;
+      const orderId = paymentEntity?.order_id || payload?.order?.entity?.id;
+      const paymentId = paymentEntity?.id;
 
-      // Ensure transaction is updated
-      const transaction = await Transaction.findOneAndUpdate(
-        { orderId },
-        { status: "captured", paymentId: paymentEntity.id },
-        { new: true }
-      );
+      if (orderId) {
+        // Idempotency: Check if already captured
+        const existingTx = await Transaction.findOne({ orderId });
+        if (existingTx && existingTx.status === "captured") {
+          console.log(`ℹ️ [Razorpay Webhook] Order ${orderId} already captured. Skipping redundant write.`);
+          return res.status(200).send("OK (Already processed)");
+        }
 
-      if (transaction) {
-        await Appointment.findByIdAndUpdate(
-          transaction.appointmentId,
-          { paymentStatus: "paid" }
+        const transaction = await Transaction.findOneAndUpdate(
+          { orderId },
+          { status: "captured", paymentId: paymentId || existingTx?.paymentId },
+          { new: true }
         );
+
+        if (transaction?.appointmentId) {
+          await Appointment.findByIdAndUpdate(
+            transaction.appointmentId,
+            { paymentStatus: "paid" }
+          );
+          console.log(`✅ [Razorpay Webhook] Appointment ${transaction.appointmentId} marked paid via webhook.`);
+        }
       }
     } else if (event === "payment.failed") {
-      const paymentEntity = payload.payment.entity;
-      await Transaction.findOneAndUpdate(
-        { orderId: paymentEntity.order_id },
-        { status: "failed" }
-      );
+      const paymentEntity = payload?.payment?.entity;
+      if (paymentEntity?.order_id) {
+        await Transaction.findOneAndUpdate(
+          { orderId: paymentEntity.order_id },
+          { status: "failed", paymentId: paymentEntity.id }
+        );
+        console.log(`⚠️ [Razorpay Webhook] Order ${paymentEntity.order_id} marked as failed.`);
+      }
     }
 
-    res.status(200).send("OK");
+    return res.status(200).send("OK");
   } catch (err) {
     console.error("[Razorpay Webhook Error]", err);
-    res.status(500).send("Webhook processing error");
+    return res.status(500).send("Webhook processing error");
   }
 };
 
@@ -218,20 +299,26 @@ export const refundPayment = async (appointmentId) => {
       return false;
     }
 
-    const rzp = getRazorpayInstance();
+    const rzp = getRazorpayClient();
+    if (!rzp) {
+      console.error("Razorpay client unavailable for refund");
+      return false;
+    }
+
     const refund = await rzp.payments.refund(transaction.paymentId, {
-      amount: transaction.amount * 100,
+      amount: Math.round(transaction.amount * 100),
     });
 
-    if (refund.status === "processed") {
+    if (refund.status === "processed" || refund.status === "created") {
       transaction.status = "refunded";
       await transaction.save();
+      console.log(`↩️ [Razorpay] Refund processed for appointment ${appointmentId}, paymentId=${transaction.paymentId}`);
       return true;
     }
-    
+
     return false;
   } catch (err) {
     console.error("[Razorpay Refund Error]", err);
-    return false; // Safely return false if refund fails (e.g. invalid payment state)
+    return false;
   }
 };

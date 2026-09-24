@@ -13,6 +13,27 @@ const STATUS_CONFIG = {
   completed: { bg: "bg-blue-50",   text: "text-blue-700",   border: "border-blue-200",   dot: "bg-blue-500",   label: "Completed" },
 };
 
+// Load Razorpay Checkout SDK dynamically (singleton pattern to avoid duplicate tags)
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (window.Razorpay) {
+      return resolve(true);
+    }
+    const existingScript = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(true));
+      existingScript.addEventListener("error", () => resolve(false));
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
 export default function AppointmentCard({ appointment }) {
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [rating, setRating] = useState(appointment?.rating || 5);
@@ -61,61 +82,81 @@ export default function AppointmentCard({ appointment }) {
 
   const sc = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
 
-  // Load Razorpay Script
+  const [processingPayment, setProcessingPayment] = useState(false);
+
+  // Preload Razorpay Checkout SDK once
   useEffect(() => {
     if (localPaymentStatus !== "paid" && !isDoctorView) {
-      const script = document.createElement("script");
-      script.src = "https://checkout.razorpay.com/v1/checkout.js";
-      script.async = true;
-      document.body.appendChild(script);
-      return () => {
-        document.body.removeChild(script);
-      };
+      loadRazorpayScript();
     }
   }, [localPaymentStatus, isDoctorView]);
 
   const handlePayment = async () => {
+    if (processingPayment) return;
+
     try {
-      if (!window.Razorpay) {
-        toast.error("Razorpay SDK failed to load. Are you online?");
+      setProcessingPayment(true);
+      const isLoaded = await loadRazorpayScript();
+      if (!isLoaded || !window.Razorpay) {
+        toast.error("Razorpay SDK failed to load. Please check your internet connection.");
         return;
       }
 
-      // 1. Create order on backend
+      // 1. Create order on backend (server calculates fee securely from DB)
       const res = await API.post("/payments/create-order", {
-        amount: fee,
-        currency: "INR",
         appointmentId: appointment._id,
+        currency: "INR",
       });
 
-      const { order_id, amount, currency, key_id, demoMode } = res.data.data || res.data;
+      const orderData = res.data?.data || res.data;
+      const orderId = orderData.orderId || orderData.order_id;
+      const keyId = orderData.keyId || orderData.key_id;
+      const amountPaise = orderData.amount;
+      const currency = orderData.currency || "INR";
+      const isDemo = orderData.demoMode;
 
-      if (demoMode) {
+      if (isDemo) {
         toast.success("Demo Mode: Payment successful!");
         setLocalPaymentStatus("paid");
+        if (appointment) appointment.paymentStatus = "paid";
         return;
       }
 
-      // 2. Open Razorpay Checkout
+      if (!orderId || !keyId) {
+        toast.error(orderData?.message || "Failed to initialize payment order.");
+        return;
+      }
+
+      // 2. Open Razorpay Checkout with primary accent color
       const options = {
-        key: key_id,
-        amount: amount,
-        currency: currency,
+        key: keyId,
+        amount: amountPaise,
+        currency,
         name: "BookDoctor",
-        description: `Payment for appointment with Dr. ${doctorName}`,
-        order_id: order_id,
+        description: `Consultation fee for Dr. ${doctorName}`,
+        order_id: orderId,
         handler: async function (response) {
-          // 3. Verify payment on backend
+          // 3. Verify payment signature on backend with appointmentId
+          const verifyToast = toast.loading("Verifying payment with gateway...", { id: "razorpay-verify" });
           try {
-            await API.post("/payments/verify", {
+            const verifyRes = await API.post("/payments/verify", {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
+              appointmentId: appointment._id,
             });
-            toast.success("Payment successful!");
-            setLocalPaymentStatus("paid");
+
+            if (verifyRes.data?.success || verifyRes.status === 200) {
+              toast.success("Payment verified successfully!", { id: "razorpay-verify" });
+              setLocalPaymentStatus("paid");
+              if (appointment) appointment.paymentStatus = "paid";
+            } else {
+              toast.error(verifyRes.data?.message || "Payment verification failed.", { id: "razorpay-verify" });
+            }
           } catch (err) {
-            toast.error("Payment verification failed.");
+            console.error("Payment verification error:", err);
+            const msg = err.response?.data?.message || "Payment verification failed. Please contact support.";
+            toast.error(msg, { id: "razorpay-verify" });
           }
         },
         prefill: {
@@ -124,17 +165,29 @@ export default function AppointmentCard({ appointment }) {
           contact: appointment.patientId?.phone || "",
         },
         theme: {
-          color: "#3b82f6",
+          color: "#2563eb", // Tailwind primary-600 brand accent
+        },
+        modal: {
+          ondismiss: function () {
+            toast("Payment window closed.", { icon: "ℹ️" });
+            setProcessingPayment(false);
+          },
         },
       };
 
       const rzp = new window.Razorpay(options);
       rzp.on("payment.failed", function (response) {
-        toast.error(response.error.description || "Payment failed");
+        console.error("Razorpay Payment Failed:", response.error);
+        toast.error(response.error?.description || "Payment failed at gateway.");
+        setProcessingPayment(false);
       });
       rzp.open();
     } catch (error) {
-      toast.error("Could not initiate payment. Please try again.");
+      console.error("Initiate payment error:", error);
+      const errMsg = error.response?.data?.message || "Could not initiate payment. Please try again.";
+      toast.error(errMsg);
+    } finally {
+      setProcessingPayment(false);
     }
   };
 
@@ -297,13 +350,16 @@ export default function AppointmentCard({ appointment }) {
               {localPaymentStatus === "paid" ? "✓ Paid" : "Unpaid"}
             </span>
 
-            {/* Pay Now Button (Patient Only) */}
+            {/* Pay Consultation Fee Button (Patient Only) */}
             {localPaymentStatus !== "paid" && !isDoctorView && (
               <button
+                type="button"
                 onClick={handlePayment}
-                className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow transition-colors"
+                disabled={processingPayment}
+                className="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow transition-colors flex items-center gap-1.5 active:scale-95"
               >
-                Pay Now
+                <span>💳</span>
+                <span>{processingPayment ? "Opening Checkout..." : "Pay Consultation Fee"}</span>
               </button>
             )}
 
