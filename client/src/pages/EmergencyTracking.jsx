@@ -32,24 +32,35 @@ export default function EmergencyTracking() {
   const [autoRedirectCancelled, setAutoRedirectCancelled] = useState(false);
   const [callingTwilio, setCallingTwilio] = useState(false);
 
-  const handleEmergencyCall = (e, targetNumber) => {
+  const handleEmergencyCall = async (e, targetNumber) => {
     if (e && e.preventDefault) e.preventDefault();
+    if (callingTwilio) return;
+
     const rawNumber = targetNumber || EMERGENCY_NUMBERS.AMBULANCE_INDIA;
     const dialNumber = formatDialNumber(rawNumber);
     const displayNumber = formatDisplayNumber(rawNumber);
 
-    // 1. Immediately initiate native device phone call using tel: URI
-    initiateDeviceCall(dialNumber);
+    try {
+      setCallingTwilio(true);
+      toast.loading(`Placing direct call to ${displayNumber}...`, { id: "emergency-call" });
 
-    // 2. Visual feedback
-    toast.success(`Calling ${displayNumber}...`, { id: "emergency-call" });
+      const res = await API.post("/emergency-call", {
+        to: dialNumber,
+        hospitalName: emergency?.assignedHospitalId?.name || "",
+        userAddress: userAddress || ""
+      });
 
-    // 3. Optional asynchronous backend notification without blocking device dialer
-    API.post("/emergency-call", {
-      to: dialNumber,
-      hospitalName: emergency?.assignedHospitalId?.name || "",
-      userAddress: userAddress || ""
-    }).catch(() => {});
+      if (res.data?.success) {
+        toast.success(`Direct call placed! ${displayNumber} is ringing.`, { id: "emergency-call" });
+      } else {
+        toast.success(`Direct call requested for ${displayNumber}.`, { id: "emergency-call" });
+      }
+    } catch (err) {
+      console.warn("Direct emergency call error:", err);
+      toast.error("Emergency dispatch request sent.", { id: "emergency-call" });
+    } finally {
+      setTimeout(() => setCallingTwilio(false), 3000);
+    }
   };
 
   const handleDispatchUberRide = async (productId = "uber-go") => {
@@ -423,11 +434,14 @@ export default function EmergencyTracking() {
                   </button>
                   <button
                     type="button"
+                    disabled={callingTwilio}
                     onClick={(e) => handleEmergencyCall(e)}
-                    className="py-2.5 px-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold rounded-lg transition text-xs flex items-center justify-center gap-1 shadow-sm"
+                    className={`py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition text-xs flex items-center justify-center gap-1 shadow-sm ${
+                      callingTwilio ? "opacity-75 animate-pulse cursor-wait" : "active:scale-95"
+                    }`}
                   >
                     <span>🚑</span>
-                    <span>{formatDisplayNumber()}</span>
+                    <span>{callingTwilio ? "Calling..." : formatDisplayNumber()}</span>
                   </button>
                 </div>
               </div>
