@@ -4,22 +4,27 @@ import API from "../services/api";
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);   // { token, role, name, email, _id }
-  const [loading, setLoading] = useState(true);
-
-  // Restore session on page refresh
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    const userData = localStorage.getItem("userData");
-    if (token && userData) {
-      setUser({ token, ...JSON.parse(userData) });
+  // Synchronously restore session from localStorage so there's zero auth flicker or accidental redirect
+  const [user, setUser] = useState(() => {
+    try {
+      const token = localStorage.getItem("token");
+      const userData = localStorage.getItem("userData");
+      if (token && userData) {
+        return { token, ...JSON.parse(userData) };
+      }
+    } catch (err) {
+      console.warn("Failed to restore session from localStorage:", err);
     }
-    setLoading(false);
-  }, []);
+    return null;
+  });
+  const [loading, setLoading] = useState(false);
 
   // Persist user data to localStorage
-  const persist = (token, data) => {
+  const persist = (token, data, refreshToken) => {
     localStorage.setItem("token", token);
+    if (refreshToken) {
+      localStorage.setItem("refreshToken", refreshToken);
+    }
     localStorage.setItem("userData", JSON.stringify(data));
     setUser({ token, ...data });
   };
@@ -29,6 +34,7 @@ export const AuthProvider = ({ children }) => {
     const res = await API.post("/auth/login", { email, password });
     const payload = res.data?.data;
     const token = payload?.token;
+    const refreshToken = payload?.refreshToken;
     
     // Check role before persisting the token
     if (expectedRole && payload?.role !== expectedRole) {
@@ -36,12 +42,16 @@ export const AuthProvider = ({ children }) => {
     }
 
     if (token) {
-      persist(token, {
-        _id: payload._id,
-        name: payload.name,
-        email: payload.email,
-        role: payload.role,
-      });
+      persist(
+        token,
+        {
+          _id: payload._id,
+          name: payload.name,
+          email: payload.email,
+          role: payload.role,
+        },
+        refreshToken
+      );
     }
     return res.data;
   };
@@ -55,13 +65,16 @@ export const AuthProvider = ({ children }) => {
   // LOGOUT
   const logout = async () => {
     try {
-      await API.post("/auth/logout");
+      const refreshToken = localStorage.getItem("refreshToken");
+      await API.post("/auth/logout", { refreshToken });
     } catch (err) {
       console.warn("Logout request failed:", err.message);
+    } finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("userData");
+      setUser(null);
     }
-    localStorage.removeItem("token");
-    localStorage.removeItem("userData");
-    setUser(null);
   };
 
   return (

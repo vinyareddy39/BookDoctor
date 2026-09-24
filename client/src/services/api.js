@@ -27,21 +27,38 @@ API.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry && originalRequest.url !== "/auth/login" && originalRequest.url !== "/auth/refresh") {
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes("/auth/login") &&
+      !originalRequest.url?.includes("/auth/refresh")
+    ) {
       originalRequest._retry = true;
       try {
-        const res = await axios.post(`${baseURL}/auth/refresh`, {}, { withCredentials: true });
+        const storedRefreshToken = localStorage.getItem("refreshToken");
+        const res = await axios.post(
+          `${baseURL}/auth/refresh`,
+          { refreshToken: storedRefreshToken },
+          {
+            withCredentials: true,
+            headers: storedRefreshToken ? { "x-refresh-token": storedRefreshToken } : {},
+          }
+        );
         const newToken = res.data?.data?.token;
+        const newRefreshToken = res.data?.data?.refreshToken;
         if (newToken) {
           localStorage.setItem("token", newToken);
+          if (newRefreshToken) {
+            localStorage.setItem("refreshToken", newRefreshToken);
+          }
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return API(originalRequest);
         }
-      } catch {
-        // Refresh token expired or invalid, log user out
-        localStorage.removeItem("token");
-        localStorage.removeItem("userData");
-        window.location.href = "/login";
+      } catch (refreshErr) {
+        console.warn("Token refresh attempt failed:", refreshErr?.message);
+        // Do not aggressively wipe session on transient network or server errors.
+        // User remains logged in until they explicitly click Logout.
       }
     }
     return Promise.reject(error);

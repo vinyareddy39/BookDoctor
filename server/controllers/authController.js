@@ -3,21 +3,21 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { sendVerificationEmail, sendResetPasswordEmail } from "../service/emailService.js";
 
-// Generate Access Token (Short-lived: 15 min)
+// Generate Access Token (Persistent: 365 days / 1 year so user stays logged in until manual logout)
 const generateAccessToken = (id, role) => {
   return jwt.sign(
     { id, role },
     process.env.JWT_SECRET,
-    { expiresIn: "15m" }
+    { expiresIn: process.env.JWT_EXPIRES_IN || "365d" }
   );
 };
 
-// Generate Refresh Token (Long-lived: 7 days)
+// Generate Refresh Token (Persistent: 365 days)
 const generateRefreshToken = (id, role) => {
   return jwt.sign(
     { id, role },
     process.env.JWT_SECRET,
-    { expiresIn: "7d" }
+    { expiresIn: "365d" }
   );
 };
 
@@ -93,17 +93,18 @@ export const login = async (req, res, next) => {
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: 365 * 24 * 60 * 60 * 1000, // 365 days
     });
 
     return req.http.ok(
       {
-        _id:   user._id,
-        name:  user.name,
-        email: user.email,
-        role:  user.role,
-        token: accessToken,
+        _id:          user._id,
+        name:         user.name,
+        email:        user.email,
+        role:         user.role,
+        token:        accessToken,
+        refreshToken: refreshToken,
       },
       "Login successful"
     );
@@ -190,7 +191,11 @@ export const resetPassword = async (req, res, next) => {
 // REFRESH TOKEN
 export const refresh = async (req, res, next) => {
   try {
-    const refreshToken = req.cookies?.refreshToken;
+    const refreshToken =
+      req.body?.refreshToken ||
+      req.headers["x-refresh-token"] ||
+      req.cookies?.refreshToken;
+
     if (!refreshToken) return req.http.unauthorized("No refresh token provided.");
 
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
@@ -201,7 +206,7 @@ export const refresh = async (req, res, next) => {
     // Generate new access token
     const newAccessToken = generateAccessToken(user._id, user.role);
 
-    return req.http.ok({ token: newAccessToken }, "Token refreshed");
+    return req.http.ok({ token: newAccessToken, refreshToken }, "Token refreshed");
   } catch (err) {
     return req.http.unauthorized("Invalid or expired refresh token.");
   }
@@ -210,7 +215,11 @@ export const refresh = async (req, res, next) => {
 // LOGOUT
 export const logout = async (req, res, next) => {
   try {
-    const refreshToken = req.cookies?.refreshToken;
+    const refreshToken =
+      req.body?.refreshToken ||
+      req.headers["x-refresh-token"] ||
+      req.cookies?.refreshToken;
+
     if (refreshToken) {
       await User.findOneAndUpdate({ refreshToken }, { refreshToken: "" });
     }
