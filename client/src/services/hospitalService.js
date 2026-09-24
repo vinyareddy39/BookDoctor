@@ -141,7 +141,7 @@ export async function fetchCandidateHospitals(userLoc) {
             address: addr,
             lat: Number(hLat),
             lng: Number(hLng),
-            phone: tags.phone || tags["contact:phone"] || "108",
+            phone: tags.phone || tags["contact:phone"] || "+91 9398927430",
             haversineKm: distKm
           });
         }
@@ -190,7 +190,7 @@ export async function fetchCandidateHospitals(userLoc) {
             address: item.display_name.split(",").slice(1, 3).join(", ") || "Emergency Department",
             lat: hLat,
             lng: hLng,
-            phone: "108",
+            phone: "+91 9398927430",
             haversineKm: haversineDistanceKm(lat, lng, hLat, hLng)
           });
         }

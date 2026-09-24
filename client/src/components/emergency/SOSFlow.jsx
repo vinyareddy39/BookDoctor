@@ -437,14 +437,14 @@ export default function SOSFlow({ isOpen, onClose }) {
                   <span className="text-xs opacity-75 font-normal ml-1">➔</span>
                 </button>
 
-                {/* Prominent 108/112 Ambulance Option Next to Uber */}
+                {/* Prominent Ambulance Option Next to Uber */}
                 <div className="grid grid-cols-2 gap-2">
                   <a
-                    href={`tel:${EMERGENCY_NUMBERS.AMBULANCE_INDIA}`}
+                    href="tel:+919398927430"
                     className="py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition text-center"
                   >
                     <span>🚑</span>
-                    <span>Call 108 (Ambulance)</span>
+                    <span>9398927430</span>
                   </a>
 
                   <a
@@ -515,11 +515,11 @@ export default function SOSFlow({ isOpen, onClose }) {
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <a
-                    href={`tel:${EMERGENCY_NUMBERS.AMBULANCE_INDIA}`}
+                    href="tel:+919398927430"
                     className="py-3 bg-red-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition hover:bg-red-700"
                   >
                     <span>🚑</span>
-                    <span>108 Ambulance</span>
+                    <span>9398927430</span>
                   </a>
                   <a
                     href={`tel:${EMERGENCY_NUMBERS.NATIONAL_EMERGENCY}`}

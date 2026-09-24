@@ -395,11 +395,11 @@ export default function EmergencyTracking() {
                     <span>➔</span>
                   </button>
                   <a
-                    href="tel:108"
+                    href="tel:+919398927430"
                     className="py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition text-xs flex items-center justify-center gap-1 shadow-sm"
                   >
                     <span>🚑</span>
-                    <span>108 Ambulance</span>
+                    <span>9398927430</span>
                   </a>
                 </div>
               </div>
@@ -662,8 +662,22 @@ export default function EmergencyTracking() {
                   <span>⚡</span>
                   <span>Shortest road route: {emergency?.hospitalEtaMinutes || 3} min ETA via OSRM/Dijkstra</span>
                 </span>
-                {hospital?.phone && (
-                  <span className="text-xs text-slate-500 font-medium">📞 {hospital.phone}</span>
+                {hospital?.phone ? (
+                  <a
+                    href={`tel:${hospital.phone.includes("108") ? "+919398927430" : (hospital.phone.startsWith("+") ? hospital.phone.replace(/\s+/g, "") : "+91" + hospital.phone.replace(/\s+/g, ""))}`}
+                    className="text-xs text-slate-500 hover:text-red-600 font-medium flex items-center gap-1 transition"
+                  >
+                    <span>📞</span>
+                    <span>{hospital.phone.includes("108") ? "9398927430" : hospital.phone}</span>
+                  </a>
+                ) : (
+                  <a
+                    href="tel:+919398927430"
+                    className="text-xs text-slate-500 hover:text-red-600 font-medium flex items-center gap-1 transition"
+                  >
+                    <span>📞</span>
+                    <span>9398927430</span>
+                  </a>
                 )}
               </div>
             </div>
