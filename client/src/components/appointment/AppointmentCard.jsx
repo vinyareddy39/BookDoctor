@@ -338,13 +338,13 @@ export default function AppointmentCard({ appointment }) {
 
       {/* Footer & Feedback Actions */}
       <div className="flex flex-col border-t border-slate-100 bg-slate-50">
-        <div className="px-5 py-3 flex items-center justify-between">
+        <div className="px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-1.5">
-            <span className="text-slate-400 text-xs">Fee</span>
+            <span className="text-slate-400 text-xs">Fee:</span>
             <span className="text-primary-700 font-extrabold text-sm">₹{fee ?? "—"}</span>
           </div>
-          <div className="flex items-center gap-3">
-            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
               localPaymentStatus === "paid" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"
             }`}>
               {localPaymentStatus === "paid" ? "✓ Paid" : "Unpaid"}

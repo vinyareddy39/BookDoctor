@@ -37,6 +37,7 @@ export default function Doctors() {
   const [minExperience, setMinExperience] = useState(0);
   const [gender,        setGender]        = useState("All");
   const [sortBy,        setSortBy]        = useState("default");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const SYMPTOMS_MAP = {
     "Fever / Cough": "General Physician",
@@ -156,11 +157,30 @@ export default function Doctors() {
       </div>
 
       {/* ── Main Layout ── */}
-      <div className="section py-10">
+      <div className="section py-6 lg:py-10">
+        {/* Mobile Filter Toggle */}
+        <div className="lg:hidden mb-4">
+          <button
+            type="button"
+            onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
+            className="w-full flex items-center justify-between px-5 py-3.5 bg-white border border-slate-200 rounded-2xl shadow-sm text-sm font-bold text-slate-800 active:scale-[0.99] transition-all min-h-[44px]"
+          >
+            <div className="flex items-center gap-2">
+              <span>🎛️ Filters & Specializations</span>
+              {(city !== "All Cities" || spec !== "All Specialists" || onlyAvailable || gender !== "All") && (
+                <span className="w-2 h-2 rounded-full bg-primary-600 animate-pulse" />
+              )}
+            </div>
+            <span className="text-xs text-primary-600 font-extrabold">
+              {mobileFiltersOpen ? "Hide Filters ▲" : "Show Filters ▼"}
+            </span>
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
 
-          {/* ── Sidebar Filters ── */}
-          <div className="lg:col-span-1 space-y-6">
+          {/* ── Sidebar Filters (Collapsible on mobile, sticky on desktop) ── */}
+          <div className={`lg:col-span-1 space-y-6 ${mobileFiltersOpen ? "block" : "hidden lg:block"}`}>
             <div className="card p-6 space-y-6 sticky top-24">
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                 <h3 className="text-base font-black text-slate-800">Filter By</h3>

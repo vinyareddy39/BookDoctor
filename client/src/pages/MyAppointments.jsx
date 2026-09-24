@@ -89,7 +89,7 @@ export default function MyAppointments() {
         </div>
 
         {/* Tab bar */}
-        <div className="flex gap-2 bg-white border border-slate-200 p-1.5 rounded-xl w-fit mb-6 shadow-sm">
+        <div className="flex gap-2 bg-white border border-slate-200 p-1.5 rounded-xl w-full sm:w-fit mb-6 shadow-sm overflow-x-auto">
           {TABS.map((tab) => (
             <button
               key={tab}
