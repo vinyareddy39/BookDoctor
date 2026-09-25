@@ -132,6 +132,8 @@ export const handleOutboundCall = async (req, res) => {
     // Step 2b & Step 3: Informative error responses
     if (err.code === 21608 || err.code === 573002) {
       userFriendlyMessage = `This number (${visitorNumber || rawNumber}) is not verified on the Twilio trial account. On Twilio trial accounts, outbound calls can only be placed to verified caller IDs. Please verify it in Twilio Console (Phone Numbers → Manage → Verified Caller IDs) or upgrade your account.`;
+    } else if (err.code === 573003) {
+      userFriendlyMessage = `The 'From' number (${twilioPhoneNumber}) is not your assigned Twilio trial number. Twilio trial accounts require calls to originate from your Twilio-assigned virtual number (e.g. +1...), not a personal mobile number. Please check your Twilio Console (Phone Numbers → Active Numbers) and set that number as TWILIO_PHONE_NUMBER in Render.`;
     } else if (err.code === 20003 || err.code === 20404) {
       userFriendlyMessage = "Twilio authentication failed. Check API credentials (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN).";
     } else if (err.code === 21211) {
