@@ -82,27 +82,16 @@ export default function SOSFlow({ isOpen, onClose }) {
     const dialNumber = formatDialNumber(rawNumber);
     const displayNumber = formatDisplayNumber(rawNumber);
 
-    try {
-      setCallingTwilio(true);
-      toast.loading(`Placing direct call to ${displayNumber}...`, { id: "emergency-call" });
+    // 1. Immediately initiate native phone dialer on device
+    initiateDeviceCall(dialNumber);
+    toast.success(`Opening device dialer for ${displayNumber}...`, { id: "emergency-call" });
 
-      const res = await API.post("/emergency-call", {
-        to: dialNumber,
-        hospitalName: nearestHospitalData?.hospital?.name || allocatedData?.hospital?.name || "",
-        userAddress: userAddress || ""
-      });
-
-      if (res.data?.success) {
-        toast.success(`Direct call placed! ${displayNumber} is ringing.`, { id: "emergency-call" });
-      } else {
-        toast.success(`Direct call requested for ${displayNumber}.`, { id: "emergency-call" });
-      }
-    } catch (err) {
-      console.warn("Direct emergency call error:", err);
-      toast.error("Emergency dispatch request sent.", { id: "emergency-call" });
-    } finally {
-      setTimeout(() => setCallingTwilio(false), 3000);
-    }
+    // 2. Asynchronously notify backend dispatch in background
+    API.post("/emergency-call", {
+      to: dialNumber,
+      hospitalName: nearestHospitalData?.hospital?.name || allocatedData?.hospital?.name || "",
+      userAddress: userAddress || ""
+    }).catch((err) => console.warn("Background emergency call notification:", err));
   };
 
   // Initiate flow whenever modal is opened
@@ -492,17 +481,16 @@ export default function SOSFlow({ isOpen, onClose }) {
 
                 {/* Prominent Ambulance Option Next to Uber */}
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    disabled={callingTwilio}
-                    onClick={(e) => handleEmergencyCall(e)}
-                    className={`py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition text-center ${
-                      callingTwilio ? "opacity-75 animate-pulse cursor-wait" : "active:scale-95"
-                    }`}
+                  <a
+                    href={`tel:${formatDialNumber()}`}
+                    onClick={() => {
+                      toast.success(`Opening device dialer for ${formatDisplayNumber()}...`, { id: "emergency-call" });
+                    }}
+                    className="py-2.5 px-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition text-center"
                   >
                     <span>🚑</span>
-                    <span>{callingTwilio ? "Calling..." : formatDisplayNumber()}</span>
-                  </button>
+                    <span>{formatDisplayNumber()}</span>
+                  </a>
 
                   <a
                     href={`tel:${EMERGENCY_NUMBERS.NATIONAL_EMERGENCY}`}
@@ -571,17 +559,16 @@ export default function SOSFlow({ isOpen, onClose }) {
                   Immediate Emergency Assistance
                 </p>
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    disabled={callingTwilio}
-                    onClick={(e) => handleEmergencyCall(e)}
-                    className={`py-3 bg-red-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition hover:bg-red-700 ${
-                      callingTwilio ? "opacity-75 animate-pulse cursor-wait" : "active:scale-95"
-                    }`}
+                  <a
+                    href={`tel:${formatDialNumber()}`}
+                    onClick={() => {
+                      toast.success(`Opening device dialer for ${formatDisplayNumber()}...`, { id: "emergency-call" });
+                    }}
+                    className="py-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition text-center"
                   >
                     <span>🚑</span>
-                    <span>{callingTwilio ? "Calling..." : formatDisplayNumber()}</span>
-                  </button>
+                    <span>{formatDisplayNumber()}</span>
+                  </a>
                   <a
                     href={`tel:${EMERGENCY_NUMBERS.NATIONAL_EMERGENCY}`}
                     className="py-3 bg-slate-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition hover:bg-black"

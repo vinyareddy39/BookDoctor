@@ -32,35 +32,21 @@ export default function EmergencyTracking() {
   const [autoRedirectCancelled, setAutoRedirectCancelled] = useState(false);
   const [callingTwilio, setCallingTwilio] = useState(false);
 
-  const handleEmergencyCall = async (e, targetNumber) => {
-    if (e && e.preventDefault) e.preventDefault();
-    if (callingTwilio) return;
-
+  const handleEmergencyCall = (e, targetNumber) => {
     const rawNumber = targetNumber || EMERGENCY_NUMBERS.AMBULANCE_INDIA;
     const dialNumber = formatDialNumber(rawNumber);
     const displayNumber = formatDisplayNumber(rawNumber);
 
-    try {
-      setCallingTwilio(true);
-      toast.loading(`Placing direct call to ${displayNumber}...`, { id: "emergency-call" });
+    // 1. Immediately initiate native phone dialer on device
+    initiateDeviceCall(dialNumber);
+    toast.success(`Opening device dialer for ${displayNumber}...`, { id: "emergency-call" });
 
-      const res = await API.post("/emergency-call", {
-        to: dialNumber,
-        hospitalName: emergency?.assignedHospitalId?.name || "",
-        userAddress: userAddress || ""
-      });
-
-      if (res.data?.success) {
-        toast.success(`Direct call placed! ${displayNumber} is ringing.`, { id: "emergency-call" });
-      } else {
-        toast.success(`Direct call requested for ${displayNumber}.`, { id: "emergency-call" });
-      }
-    } catch (err) {
-      console.warn("Direct emergency call error:", err);
-      toast.error("Emergency dispatch request sent.", { id: "emergency-call" });
-    } finally {
-      setTimeout(() => setCallingTwilio(false), 3000);
-    }
+    // 2. Asynchronously notify backend dispatch in background
+    API.post("/emergency-call", {
+      to: dialNumber,
+      hospitalName: emergency?.assignedHospitalId?.name || "",
+      userAddress: userAddress || ""
+    }).catch((err) => console.warn("Background emergency call notification:", err));
   };
 
   const handleDispatchUberRide = async (productId = "uber-go") => {
@@ -432,17 +418,16 @@ export default function EmergencyTracking() {
                     <span>Open Uber Now</span>
                     <span>➔</span>
                   </button>
-                  <button
-                    type="button"
-                    disabled={callingTwilio}
-                    onClick={(e) => handleEmergencyCall(e)}
-                    className={`py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition text-xs flex items-center justify-center gap-1 shadow-sm ${
-                      callingTwilio ? "opacity-75 animate-pulse cursor-wait" : "active:scale-95"
-                    }`}
+                  <a
+                    href={`tel:${formatDialNumber()}`}
+                    onClick={() => {
+                      toast.success(`Opening device dialer for ${formatDisplayNumber()}...`, { id: "emergency-call" });
+                    }}
+                    className="py-2.5 px-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold rounded-lg transition text-xs flex items-center justify-center gap-1 shadow-sm text-center"
                   >
                     <span>🚑</span>
-                    <span>{callingTwilio ? "Calling..." : formatDisplayNumber()}</span>
-                  </button>
+                    <span>{formatDisplayNumber()}</span>
+                  </a>
                 </div>
               </div>
             )}
@@ -713,14 +698,13 @@ export default function EmergencyTracking() {
                     <span>{hospital.phone}</span>
                   </a>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={(e) => handleEmergencyCall(e)}
+                  <a
+                    href={`tel:${formatDialNumber()}`}
                     className="text-xs text-red-600 hover:text-red-700 font-bold flex items-center gap-1 transition active:scale-95"
                   >
                     <span>📞</span>
                     <span>{formatDisplayNumber()}</span>
-                  </button>
+                  </a>
                 )}
               </div>
             </div>
