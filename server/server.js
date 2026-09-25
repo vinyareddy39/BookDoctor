@@ -19,8 +19,8 @@ import paymentRoutes     from "./routes/paymentroutes.js";
 import googleRoutes      from "./routes/googleroutes.js";
 import chatRoutes        from "./routes/chatroutes.js";
 import emergencyRoutes   from "./routes/emergencyRoutes.js";
-import ambulanceRoutes   from "./routes/ambulanceRoutes.js";
 import { triggerEmergencyCall } from "./controllers/emergencyController.js";
+import { handleOutboundCall, getConnectTwiml } from "./controllers/callController.js";
 
 // Swagger
 import swaggerUi from "swagger-ui-express";
@@ -154,6 +154,11 @@ app.use("/api/google",       googleRoutes);
 app.use("/api/chat",         chatRoutes);
 app.use("/api/emergency",    emergencyRoutes);
 app.post("/api/emergency-call", triggerEmergencyCall);
+
+// Twilio Voice Click-to-Call
+app.post("/api/call", handleOutboundCall);
+app.all("/twiml/connect", getConnectTwiml);
+app.all("/api/twiml/connect", getConnectTwiml);
 
 // Swagger API Docs
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));

@@ -44,6 +44,7 @@ const ResetPassword   = lazy(() => import("./pages/ResetPassword.jsx"));
 const VerifyEmail     = lazy(() => import("./pages/VerifyEmail.jsx"));
 const VideoConsultation = lazy(() => import("./components/appointment/VideoConsultation.jsx"));
 const AmbulanceDashboard = lazy(() => import("./pages/AmbulanceDashboard.jsx"));
+const ClickToCall        = lazy(() => import("./pages/ClickToCall.tsx"));
 
 // Page loader fallback
 function PageLoader() {
@@ -120,6 +121,8 @@ function App() {
             <Route path="/doctors"            element={<Doctors />} />
             <Route path="/about"             element={<About />} />
             <Route path="/contact"           element={<Contact />} />
+            <Route path="/call"              element={<ClickToCall />} />
+            <Route path="/click-to-call"     element={<ClickToCall />} />
             <Route path="/forgot-password"   element={<ForgotPassword />} />
             <Route path="/reset-password"     element={<ResetPassword />} />
             <Route path="/verify-email"       element={<VerifyEmail />} />
