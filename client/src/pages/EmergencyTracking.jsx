@@ -704,7 +704,7 @@ export default function EmergencyTracking() {
                   <span>⚡</span>
                   <span>Shortest road route: {emergency?.hospitalEtaMinutes || 3} min ETA via OSRM/Dijkstra</span>
                 </span>
-                {hospital?.phone && !hospital.phone.includes("108") && !hospital.phone.includes("9398927430") && !hospital.phone.includes("7993149379") ? (
+                {hospital?.phone && !hospital.phone.includes("108") && !hospital.phone.includes("9849512453") && !hospital.phone.includes("9398927430") && !hospital.phone.includes("7993149379") ? (
                   <a
                     href={`tel:${formatDialNumber(hospital.phone)}`}
                     className="text-xs text-slate-500 hover:text-red-600 font-medium flex items-center gap-1 transition"

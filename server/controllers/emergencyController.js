@@ -583,7 +583,7 @@ export const requestUberRideHandler = async (req, res, next) => {
 export const triggerEmergencyCall = async (req, res, next) => {
   try {
     const { to, hospitalName, userAddress } = req.body || {};
-    const destination = to || process.env.EMERGENCY_PHONE_NUMBER || "+919398927430";
+    const destination = to || process.env.EMERGENCY_PHONE_NUMBER || "+919849512453";
 
     const call = await makeEmergencyCall({
       to: destination,
@@ -603,7 +603,7 @@ export const triggerEmergencyCall = async (req, res, next) => {
     });
   } catch (error) {
     console.warn("⚠️ Emergency Call Safe Fallback:", error.message);
-    const destination = req.body?.to || process.env.EMERGENCY_PHONE_NUMBER || "+919398927430";
+    const destination = req.body?.to || process.env.EMERGENCY_PHONE_NUMBER || "+919849512453";
     return res.status(200).json({
       success: true,
       simulated: true,

@@ -6,14 +6,14 @@
 
 /**
  * Dynamically retrieves the configured emergency telephone number.
- * Can be configured via VITE_EMERGENCY_PHONE_NUMBER or defaults to 7993149379.
+ * Can be configured via VITE_EMERGENCY_PHONE_NUMBER or defaults to 9849512453.
  */
 export const getEmergencyPhoneNumber = () => {
-  return import.meta.env.VITE_EMERGENCY_PHONE_NUMBER || "9398927430";
+  return import.meta.env.VITE_EMERGENCY_PHONE_NUMBER || "9849512453";
 };
 
 /**
- * Formats a raw number for device telephony dialer (+919398927430).
+ * Formats a raw number for device telephony dialer (+919849512453).
  */
 export const formatDialNumber = (rawNumber) => {
   const num = (rawNumber || getEmergencyPhoneNumber()).toString().replace(/[^\d+]/g, "");
@@ -24,11 +24,11 @@ export const formatDialNumber = (rawNumber) => {
 };
 
 /**
- * Formats a raw number for visual UI display (9398927430).
+ * Formats a raw number for visual UI display (9849512453).
  */
 export const formatDisplayNumber = (rawNumber) => {
   const num = (rawNumber || getEmergencyPhoneNumber()).toString().replace(/[^\d]/g, "");
-  return num.slice(-10) || "9398927430";
+  return num.slice(-10) || "9849512453";
 };
 
 /**

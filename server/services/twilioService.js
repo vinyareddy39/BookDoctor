@@ -2,7 +2,7 @@ import twilio from "twilio";
 
 /**
  * Twilio Emergency Call Service
- * Initiates an automatic outbound emergency call to the designated response number (+919398927430).
+ * Initiates an automatic outbound emergency call to the designated response number (+919849512453).
  * If Twilio credentials are not yet configured in environment variables,
  * gracefully runs in simulated emergency dispatch mode without throwing errors.
  */
@@ -10,7 +10,7 @@ export const makeEmergencyCall = async ({ to, hospitalName, userAddress } = {}) 
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-  const destination = to || process.env.EMERGENCY_PHONE_NUMBER || "+919398927430";
+  const destination = to || process.env.EMERGENCY_PHONE_NUMBER || "+919849512453";
 
   // Graceful fallback if credentials are not configured
   if (!accountSid || !authToken || !fromNumber) {
