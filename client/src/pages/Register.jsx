@@ -7,6 +7,7 @@ export default function Register() {
   const [name,     setName]     = useState("");
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading,  setLoading]  = useState(false);
   const [uberConnected, setUberConnected] = useState(false);
@@ -20,10 +21,11 @@ export default function Register() {
       toast.error("Password must be at least 6 characters.");
       return;
     }
-    if (!uberConnected) {
-      toast.error("Please connect your Uber account for Emergency SOS protection.");
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match. Please verify your password.");
       return;
     }
+
     setLoading(true);
     try {
       await register({ 
@@ -37,8 +39,8 @@ export default function Register() {
           connectedAt: uberConnected ? new Date() : null
         }
       });
-      toast.success("Account created! Welcome to BookDoctor 🎉");
-      navigate("/");
+      toast.success("Account created successfully! Please sign in with your email and password.");
+      navigate("/login");
     } catch (err) {
       toast.error(err.response?.data?.message || "Registration failed. Please try again.");
     } finally {
@@ -176,8 +178,23 @@ export default function Register() {
               )}
             </div>
 
-            
-            {/* Uber Emergency Auto-Dispatch Linking */}
+            {/* Confirm Password field */}
+            <div>
+              <label className="label">Confirm Password</label>
+              <div className="relative">
+                <input
+                  type={showPass ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="input pr-12"
+                  placeholder="Re-enter your password"
+                  minLength={6}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Uber Emergency Auto-Dispatch Linking (Optional) */}
             <div className={`p-4 rounded-2xl border transition-all ${
               uberConnected ? "bg-emerald-50 border-emerald-300" : "bg-slate-50 border-slate-200"
             }`}>

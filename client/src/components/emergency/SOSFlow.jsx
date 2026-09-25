@@ -176,16 +176,32 @@ export default function SOSFlow({ isOpen, onClose }) {
       const bedResult = await checkBedAllocation(loc);
 
       if (bedResult.bedAllocated && bedResult.hospital) {
-        // Bed IS allocated: Continue normal hospital flow. Do NOT open Uber!
+        // Bed IS allocated: Continue normal hospital flow
         setAllocatedData(bedResult);
         setStage("BED_ALLOCATED");
       } else {
-        // NO bed allocated: Go to STEP 3 (Dijkstra)
-        await handleFindNearestHospital(loc);
+        // NO bed allocated: Redirect to dedicated Emergency Hospital Tracking screen
+        toast.error("No beds available at your preferred hospital. Redirecting to Emergency Hospital Tracking...", {
+          duration: 3000
+        });
+        onClose();
+        navigate("/emergency-hospital-tracking", {
+          state: {
+            userLocation: loc,
+            userAddress: userAddress || ""
+          }
+        });
       }
     } catch (err) {
-      // In case of bed check failure, go to Dijkstra fallback
-      await handleFindNearestHospital(loc);
+      // In case of bed check failure, redirect to Emergency Hospital Tracking
+      toast.error("Preferred hospital ER at capacity. Redirecting to Emergency Hospital Tracking...");
+      onClose();
+      navigate("/emergency-hospital-tracking", {
+        state: {
+          userLocation: loc,
+          userAddress: userAddress || ""
+        }
+      });
     }
   };
 

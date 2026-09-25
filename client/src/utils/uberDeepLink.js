@@ -74,7 +74,7 @@ export function buildUberUniversalUrl({
     params.append("product_id", productId);
   }
 
-  return `https://m.uber.com/looking?${params.toString()}`;
+  return `https://m.uber.com/ul/?${params.toString()}`;
 }
 
 /**

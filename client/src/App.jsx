@@ -45,6 +45,7 @@ const VerifyEmail     = lazy(() => import("./pages/VerifyEmail.jsx"));
 const VideoConsultation = lazy(() => import("./components/appointment/VideoConsultation.jsx"));
 const AmbulanceDashboard = lazy(() => import("./pages/AmbulanceDashboard.jsx"));
 const ClickToCall        = lazy(() => import("./pages/ClickToCall.tsx"));
+const EmergencyHospitalTracking = lazy(() => import("./pages/EmergencyHospitalTracking.jsx"));
 
 // Page loader fallback
 function PageLoader() {
@@ -112,8 +113,8 @@ function App() {
       <main className="flex-1">
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            {/* Public */}
-            <Route path="/"                   element={<Home />} />
+            {/* Public / Auth */}
+            <Route path="/"                   element={<AuthRoute><Home /></AuthRoute>} />
             <Route path="/login"              element={<Login />} />
             <Route path="/register"           element={<Register />} />
             <Route path="/doctor/login"       element={<DoctorLogin />} />
@@ -134,6 +135,8 @@ function App() {
             <Route path="/profile"              element={<AuthRoute><Profile /></AuthRoute>} />
             <Route path="/messages"             element={<AuthRoute><MessagesPage /></AuthRoute>} />
             <Route path="/emergency/:emergencyId" element={<AuthRoute><EmergencyTracking /></AuthRoute>} />
+            <Route path="/emergency-hospital-tracking" element={<AuthRoute><EmergencyHospitalTracking /></AuthRoute>} />
+            <Route path="/emergency/hospital-tracking" element={<AuthRoute><EmergencyHospitalTracking /></AuthRoute>} />
 
             {/* Doctor protected */}
             <Route path="/doctor/dashboard"   element={<DoctorRoute><DoctorDashboard /></DoctorRoute>} />
