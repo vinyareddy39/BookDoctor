@@ -103,20 +103,35 @@ app.post("/api/call", async (req: Request<{}, {}, CallRequestBody>, res: Respons
       businessNumber: businessPhoneNumber
     });
   } catch (err: any) {
-    console.error("[Twilio Call Error]:", err);
+    console.error("❌ [Twilio Call Error]:", {
+      code: err.code,
+      status: err.status,
+      message: err.message,
+      moreInfo: err.moreInfo,
+    });
 
     let message = err.message || "Failed to initiate call via Twilio.";
 
-    if (err.code === 21608) {
-      message = "Twilio Trial Limitation: Number is unverified. Verify destination number in Twilio Console.";
+    if (err.code === 21608 || err.code === 573002) {
+      message = "This number is not verified on the Twilio trial account. Please verify it in Twilio Console (Phone Numbers → Manage → Verified Caller IDs) or upgrade your account.";
+    } else if (err.code === 20003 || err.code === 20404) {
+      message = "Twilio authentication failed. Check API credentials (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN).";
+    } else if (err.code === 21211) {
+      message = "Invalid phone number format. Use full international format with country code (e.g. +918639473778).";
     } else if (err.code === 21212 || err.code === 21606) {
-      message = `Twilio configuration error: The 'From' number (${twilioPhoneNumber}) is invalid on this account.`;
+      message = `Twilio configuration error: The 'From' number (${twilioPhoneNumber}) is invalid or not voice-capable on this account.`;
     }
 
-    res.status(err.status || 500).json({
+    const httpStatus = err.status && err.status < 500 ? err.status : 400;
+
+    res.status(httpStatus).json({
       success: false,
       error: message,
-      code: err.code || null
+      code: err.code || null,
+      status: err.status || httpStatus,
+      moreInfo: err.moreInfo || null,
+      directDialNumber: businessPhoneNumber,
+      canDirectDial: true
     });
   }
 });
