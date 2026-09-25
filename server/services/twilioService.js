@@ -10,7 +10,7 @@ export const makeEmergencyCall = async ({ to, hospitalName, userAddress } = {}) 
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-  const destination = to || process.env.EMERGENCY_PHONE_NUMBER || "+917993149379";
+  const destination = to || process.env.EMERGENCY_PHONE_NUMBER || "+919398927430";
 
   // Graceful fallback if credentials are not configured
   if (!accountSid || !authToken || !fromNumber) {

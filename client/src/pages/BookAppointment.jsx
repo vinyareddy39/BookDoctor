@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
 import API from "../services/api";
 import toast from "react-hot-toast";
@@ -9,9 +9,11 @@ import { parseAllowedDays, isDateAllowed, nearestAllowedDate, generateTimeSlots,
 export default function BookAppointment() {
   const { id }   = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [doctor,      setDoctor]      = useState(null);
-  const [loading,     setLoading]     = useState(true);
+  // Instant fallback to navigation state so the phone loads the doctor profile immediately
+  const [doctor, setDoctor] = useState(location.state?.doctor || null);
+  const [loading, setLoading] = useState(!location.state?.doctor);
   const [date,        setDate]        = useState("");
   const [time,        setTime]        = useState("");
   const [booking,     setBooking]     = useState(false);
@@ -22,23 +24,44 @@ export default function BookAppointment() {
   const [dependentId, setDependentId] = useState("");
 
   useEffect(() => {
+    let isMounted = true;
     const fetchDoc = async () => {
+      // 1. Fetch public doctor profile
       try {
-        const [docRes, profileRes] = await Promise.all([
-          API.get(`/doctors/${id}`),
-          API.get(`/users/profile`)
-        ]);
-        setDoctor(docRes.data.data);
-        setPatientProfile(profileRes.data.data || profileRes.data);
+        const docRes = await API.get(`/doctors/${id}`);
+        if (isMounted && docRes.data?.data) {
+          setDoctor(docRes.data.data);
+        }
       } catch (err) {
-        console.error(err);
-        toast.error("Failed to load doctor profile or user details.");
+        console.error("Doctor fetch error:", err);
+        // Only show error toast if we don't already have the doctor from state
+        if (!location.state?.doctor) {
+          toast.error("Could not load doctor profile. Please refresh.");
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
+      }
+
+      // 2. Fetch authenticated patient profile & dependents (non-blocking)
+      try {
+        const token = localStorage.getItem("token");
+        if (token) {
+          const profileRes = await API.get(`/users/profile`);
+          if (isMounted) {
+            setPatientProfile(profileRes.data?.data || profileRes.data);
+          }
+        }
+      } catch (err) {
+        // Non-blocking: patient can still book even if dependent lookup is unavailable
+        console.warn("Could not fetch user dependents:", err?.message);
       }
     };
-    fetchDoc();
-  }, [id]);
+
+    if (id) {
+      fetchDoc();
+    }
+    return () => { isMounted = false; };
+  }, [id, location.state?.doctor]);
 
   // Pre-fill the nearest valid date once doctor loads
   useEffect(() => {
@@ -117,7 +140,7 @@ export default function BookAppointment() {
     );
   }
 
-  const name          = doctor.userId?.name || "Unknown Doctor";
+  const name          = doctor?.userId?.name || doctor?.name || "Doctor";
   const specialization = doctor.specialization;
   const fee           = doctor.consultationFee;
   const experience    = doctor.experience;

@@ -117,7 +117,7 @@ export default function DoctorCard({ doctor }) {
 
       {/* ── Book Button ── */}
       <div className="px-5 pb-5 pt-3 mt-auto">
-        <Link to={`/book/${id}`} className="block">
+        <Link to={`/book/${id}`} state={{ doctor }} className="block">
           <button
             disabled={!isAvailable}
             className={`w-full py-3 rounded-xl font-bold text-sm transition-all duration-200 active:scale-95 ${
