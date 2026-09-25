@@ -1,5 +1,6 @@
 import { Server } from "socket.io";
 import Message from "./models/Message.js";
+import Conversation from "./models/Conversation.js";
 
 let io;
 // Map to keep track of connected users: { userId: socketId }
@@ -15,60 +16,177 @@ export const initSocket = (server, allowedOrigins) => {
   });
 
   io.on("connection", (socket) => {
-    // console.log("A user connected:", socket.id);
-
-    // Client should emit 'register' with their userId immediately after connecting
+    // ── User Registration & Online Status ────────────────────────────────────
     socket.on("register", (userId) => {
       if (userId) {
-        userSockets.set(userId, socket.id);
+        const uid = String(userId);
+        userSockets.set(uid, socket.id);
+        socket.userId = uid;
+        socket.join(`user-${uid}`);
+
+        // Broadcast to all clients that this user is now online
+        io.emit("user-status", { userId: uid, status: "online" });
+
+        // Send current list of online users to the newly connected client
+        socket.emit("online-users", Array.from(userSockets.keys()));
       }
     });
 
     // ── In-App Chat Rooms ───────────────────────────────────────────────────
-    // Join a shared chat room scoped to an appointment
-    socket.on("join-chat", (appointmentId) => {
-      socket.join(`chat-${appointmentId}`);
-    });
-
-    socket.on("leave-chat", (appointmentId) => {
-      socket.leave(`chat-${appointmentId}`);
-    });
-
-    // When user sends a message, persist it then broadcast to room
-    socket.on("send-message", async (payload) => {
-      // payload: { appointmentId, senderId, senderName, receiverId, text }
-      try {
-        const msg = await Message.create({
-          appointmentId: payload.appointmentId,
-          senderId:      payload.senderId,
-          receiverId:    payload.receiverId,
-          text:          payload.text,
-        });
-
-        const response = {
-          _id:           msg._id,
-          appointmentId: payload.appointmentId,
-          senderId:      { _id: payload.senderId, name: payload.senderName },
-          text:          payload.text,
-          createdAt:     msg.createdAt,
-        };
-
-        // Broadcast to all sockets in the appointment chat room
-        io.to(`chat-${payload.appointmentId}`).emit("receive-message", response);
-
-      } catch (err) {
-        console.error("Socket send-message error:", err.message);
-        socket.emit("chat-error", { message: "Failed to send message." });
+    socket.on("join-chat", (roomId) => {
+      if (roomId) {
+        socket.join(`chat-${roomId}`);
       }
     });
 
-    // ── Disconnect ────────────────────────────────────────────────────────
-    socket.on("disconnect", () => {
-      for (const [userId, socketId] of userSockets.entries()) {
-        if (socketId === socket.id) {
-          userSockets.delete(userId);
-          break;
+    socket.on("leave-chat", (roomId) => {
+      if (roomId) {
+        socket.leave(`chat-${roomId}`);
+      }
+    });
+
+    // ── Typing Indicators ───────────────────────────────────────────────────
+    socket.on("typing", ({ roomId, userId, userName }) => {
+      if (roomId) {
+        socket.to(`chat-${roomId}`).emit("user-typing", { roomId, userId, userName });
+      }
+    });
+
+    socket.on("stop-typing", ({ roomId, userId }) => {
+      if (roomId) {
+        socket.to(`chat-${roomId}`).emit("user-stop-typing", { roomId, userId });
+      }
+    });
+
+    // ── Send Message via Socket (Persists to MongoDB & Broadcasts) ───────────
+    socket.on("send-message", async (payload) => {
+      // payload: { conversationId, appointmentId, senderId, receiverId, text, tempId }
+      try {
+        const { conversationId, appointmentId, senderId, receiverId, text, tempId } = payload;
+        if (!senderId || !receiverId || !text?.trim()) return;
+
+        let convId = conversationId;
+
+        // If no conversationId provided, find or create one between sender and receiver
+        if (!convId) {
+          let conv = await Conversation.findOne({
+            participants: { $all: [senderId, receiverId] },
+          });
+
+          if (!conv) {
+            conv = await Conversation.create({
+              participants: [senderId, receiverId],
+              appointmentId: appointmentId || undefined,
+            });
+          }
+          convId = conv._id;
         }
+
+        // 1. Create message in DB
+        const msg = await Message.create({
+          conversationId: convId,
+          appointmentId: appointmentId || undefined,
+          senderId,
+          receiverId,
+          text: text.trim(),
+          read: false,
+          status: "sent",
+        });
+
+        // 2. Update Conversation last message and increment unread count for receiver
+        const conv = await Conversation.findById(convId);
+        if (conv) {
+          conv.lastMessage = {
+            text: text.trim(),
+            senderId,
+            timestamp: msg.createdAt,
+            status: "sent",
+          };
+          conv.lastMessageTimestamp = msg.createdAt;
+
+          const recIdStr = String(receiverId);
+          const currentUnread = conv.unreadCount.get(recIdStr) || 0;
+          conv.unreadCount.set(recIdStr, currentUnread + 1);
+          await conv.save();
+        }
+
+        const populatedMsg = await msg.populate("senderId", "name role profilePicture");
+
+        const responsePayload = {
+          message: populatedMsg,
+          tempId: tempId || null,
+          conversationId: convId,
+          appointmentId: appointmentId || null,
+        };
+
+        // Broadcast to chat room(s)
+        io.to(`chat-${convId}`).emit("receive-message", responsePayload);
+        if (appointmentId && String(appointmentId) !== String(convId)) {
+          io.to(`chat-${appointmentId}`).emit("receive-message", responsePayload);
+        }
+
+        // Also notify user personal rooms so conversation lists re-sort in real time
+        const convSummary = {
+          conversationId: convId,
+          lastMessage: conv?.lastMessage,
+          lastMessageTimestamp: conv?.lastMessageTimestamp,
+          unreadCount: conv?.unreadCount,
+        };
+        io.to(`user-${receiverId}`).emit("conversation-updated", convSummary);
+        io.to(`user-${senderId}`).emit("conversation-updated", convSummary);
+
+      } catch (err) {
+        console.error("Socket send-message error:", err.message);
+        socket.emit("chat-error", { message: "Failed to send message: " + err.message });
+      }
+    });
+
+    // ── Mark Messages as Read ───────────────────────────────────────────────
+    socket.on("mark-read", async ({ conversationId, appointmentId, readerId }) => {
+      try {
+        if (!readerId) return;
+
+        const query = { receiverId: readerId, read: false };
+        if (conversationId) query.conversationId = conversationId;
+        else if (appointmentId) query.appointmentId = appointmentId;
+
+        await Message.updateMany(query, { $set: { read: true, status: "read" } });
+
+        if (conversationId) {
+          const conv = await Conversation.findById(conversationId);
+          if (conv) {
+            conv.unreadCount.set(String(readerId), 0);
+            if (conv.lastMessage && String(conv.lastMessage.senderId) !== String(readerId)) {
+              conv.lastMessage.status = "read";
+            }
+            await conv.save();
+          }
+          io.to(`chat-${conversationId}`).emit("messages-read", {
+            conversationId,
+            readerId,
+          });
+          io.to(`user-${readerId}`).emit("conversation-updated", {
+            conversationId,
+            unreadCount: conv?.unreadCount,
+          });
+        }
+
+        if (appointmentId) {
+          io.to(`chat-${appointmentId}`).emit("messages-read", {
+            appointmentId,
+            readerId,
+          });
+        }
+      } catch (err) {
+        console.error("Socket mark-read error:", err.message);
+      }
+    });
+
+    // ── Disconnect & Offline Broadcast ──────────────────────────────────────
+    socket.on("disconnect", () => {
+      if (socket.userId) {
+        userSockets.delete(socket.userId);
+        io.emit("user-status", { userId: socket.userId, status: "offline" });
       }
     });
   });
@@ -83,11 +201,14 @@ export const getIO = () => {
   return io;
 };
 
-/**
- * Send a targeted notification to a specific user
- * @param {string} userId - The target user's ID
- * @param {object} messagePayload - The notification data
- */
+export const isUserOnline = (userId) => {
+  return userSockets.has(String(userId));
+};
+
+export const getOnlineUserIds = () => {
+  return Array.from(userSockets.keys());
+};
+
 export const sendNotificationToUser = (userId, messagePayload) => {
   if (!io) return;
   const socketId = userSockets.get(String(userId));
@@ -100,6 +221,6 @@ export const triggerDashboardUpdate = (userId, message) => {
   if (!io) return;
   const socketId = userSockets.get(String(userId));
   if (socketId) {
-    io.to(socketId).emit("DASHBOARD_UPDATE", { message });
+    io.to(socketId).emit("dashboard-update", { message });
   }
 };

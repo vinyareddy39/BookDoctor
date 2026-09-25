@@ -115,18 +115,29 @@ export default function DoctorCard({ doctor }) {
         </div>
       )}
 
-      {/* ── Book Button ── */}
-      <div className="px-5 pb-5 pt-3 mt-auto">
+      {/* ── Action Buttons ── */}
+      <div className="px-5 pb-5 pt-3 mt-auto flex flex-col gap-2">
         <Link to={`/book/${id}`} state={{ doctor }} className="block">
           <button
             disabled={!isAvailable}
-            className={`w-full py-3 rounded-xl font-bold text-sm transition-all duration-200 active:scale-95 ${
+            className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all duration-200 active:scale-95 ${
               isAvailable
                 ? "bg-primary-600 hover:bg-primary-700 text-white shadow-md hover:shadow-lg shadow-primary-200/60 hover:-translate-y-0.5"
                 : "bg-slate-100 text-slate-400 cursor-not-allowed"
             }`}
           >
             {isAvailable ? "Book Appointment →" : "Not Available"}
+          </button>
+        </Link>
+
+        {/* Direct Consultation Chat (Open Access - No booking required) */}
+        <Link to={`/messages?doctorId=${id}`} className="block">
+          <button
+            type="button"
+            className="w-full py-2 rounded-xl font-bold text-xs border border-primary-200 bg-primary-50/60 hover:bg-primary-100 text-primary-700 transition flex items-center justify-center gap-1.5 active:scale-95"
+          >
+            <span>💬</span>
+            <span>Chat Directly</span>
           </button>
         </Link>
       </div>

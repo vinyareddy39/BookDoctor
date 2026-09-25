@@ -1,19 +1,34 @@
 import express from "express";
-import { getMessages, sendMessage, markAsRead, getUnreadCounts } from "../controllers/chatController.js";
+import {
+  getConversations,
+  getOrCreateConversation,
+  getConversationMessages,
+  sendConversationMessage,
+  markConversationRead,
+  getOnlineUsers,
+  getMessages,
+  sendMessage,
+  markAsRead,
+  getUnreadCounts,
+} from "../controllers/chatController.js";
 import { auth } from "../middleware/index.js";
 
 const router = express.Router();
 
-// Get unread counts
+// ── Open-Access Conversation Endpoints ────────────────────────────────────────
+router.get("/conversations", auth, getConversations);
+router.post("/conversations", auth, getOrCreateConversation);
+router.get("/conversations/:conversationId/messages", auth, getConversationMessages);
+router.post("/conversations/:conversationId/messages", auth, sendConversationMessage);
+router.patch("/conversations/:conversationId/read", auth, markConversationRead);
+
+// ── Online Users ─────────────────────────────────────────────────────────────
+router.get("/online-users", auth, getOnlineUsers);
+
+// ── Legacy / Appointment-based Compatibility ─────────────────────────────────
 router.get("/unread", auth, getUnreadCounts);
-
-// Get all messages for an appointment
 router.get("/:appointmentId", auth, getMessages);
-
-// Send a message (REST fallback)
 router.post("/:appointmentId", auth, sendMessage);
-
-// Mark messages as read
 router.patch("/:appointmentId/read", auth, markAsRead);
 
 export default router;
