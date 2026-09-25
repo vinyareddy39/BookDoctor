@@ -63,7 +63,19 @@ export const handleOutboundCall = async (req, res) => {
       return res.status(500).json({
         success: false,
         error:
-          "Twilio is not fully configured on the server. Please ensure TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER are set in the .env file."
+          "Twilio is not fully configured on the server. Please ensure TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER are set in the .env file.",
+        directDialNumber: businessPhoneNumber
+      });
+    }
+
+    // Check if phone number is the default placeholder (+12345678901)
+    if (twilioPhoneNumber.includes("1234567890")) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "The Twilio 'From' number is currently set to a placeholder (+12345678901). Please check the Twilio Console (Phone Numbers → Active Numbers) and set your real Twilio trial number in Render. You can also use direct dialing below.",
+        directDialNumber: businessPhoneNumber,
+        canDirectDial: true
       });
     }
 
@@ -117,7 +129,7 @@ export const handleOutboundCall = async (req, res) => {
         "Twilio Trial Account Limitation: The number you are calling is unverified. On trial accounts, verify the destination number in Twilio Console → Phone Numbers → Verified Caller IDs.";
     } else if (err.code === 21212 || err.code === 21606) {
       userFriendlyMessage =
-        `Twilio configuration error: The 'From' number (${twilioPhoneNumber}) is not a valid active Twilio phone number on this account.`;
+        `Twilio configuration error: The 'From' number (${twilioPhoneNumber}) is not assigned to this account. Check Twilio Console → Phone Numbers → Active Numbers.`;
     } else if (err.code === 20003) {
       userFriendlyMessage =
         "Twilio Authentication Failed: Invalid TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN.";
@@ -127,7 +139,9 @@ export const handleOutboundCall = async (req, res) => {
       success: false,
       error: userFriendlyMessage,
       code: err.code || null,
-      details: err.message
+      details: err.message,
+      directDialNumber: businessPhoneNumber,
+      canDirectDial: true
     });
   }
 };

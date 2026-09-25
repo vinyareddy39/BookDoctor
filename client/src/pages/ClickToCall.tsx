@@ -200,13 +200,39 @@ export default function ClickToCall(): React.ReactElement {
 
         {/* Error State Card */}
         {statusState === "error" && errorMessage && (
-          <div className="mt-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-sm">
-            <div className="flex items-start gap-2.5">
+          <div className="mt-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-sm relative animate-fade-in">
+            <button
+              type="button"
+              onClick={() => {
+                setStatusState("idle");
+                setErrorMessage("");
+              }}
+              className="absolute top-3 right-3 w-6 h-6 rounded-full bg-rose-200/80 hover:bg-rose-300 text-rose-800 flex items-center justify-center font-bold text-xs transition"
+              title="Clear Error"
+            >
+              ✕
+            </button>
+
+            <div className="flex items-start gap-2.5 pr-6">
               <span className="text-xl">⚠️</span>
               <div>
-                <p className="font-bold">Call could not be placed</p>
-                <p className="text-xs text-rose-700 mt-1">{errorMessage}</p>
+                <p className="font-bold">Call could not be placed via Twilio</p>
+                <p className="text-xs text-rose-700 mt-1 leading-relaxed">{errorMessage}</p>
               </div>
+            </div>
+
+            {/* Direct Device Call Fallback */}
+            <div className="mt-3 pt-3 border-t border-rose-200/80">
+              <p className="text-[11px] font-semibold text-rose-800 mb-2">
+                You can call directly from your device right now:
+              </p>
+              <a
+                href="tel:+919849512453"
+                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition"
+              >
+                <span>📞</span>
+                <span>Tap to Call Directly (+91 98495 12453)</span>
+              </a>
             </div>
           </div>
         )}
