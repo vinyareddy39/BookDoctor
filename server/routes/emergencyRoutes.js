@@ -12,13 +12,17 @@ import {
   disableAllAmbulances,
   getUberEstimatesHandler,
   requestUberRideHandler,
-  triggerEmergencyCall
+  triggerEmergencyCall,
+  getNearbyHospitalsHandler
 } from "../controllers/emergencyController.js";
 
 const router = express.Router();
 
 // Emergency Outbound Phone Call via Twilio
 router.post("/call", triggerEmergencyCall);
+
+// Live verified nearby hospital amenities query
+router.get("/nearby-hospitals", getNearbyHospitalsHandler);
 
 // HACKATHON DEMO SEED ROUTE (Unprotected so you can trigger it easily)
 router.get("/seed-demo", seedGhatkesarData);

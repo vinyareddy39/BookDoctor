@@ -35,46 +35,49 @@ export async function getPanIndiaHospitals(lat, lng) {
 
   // Calculate distance to nearest existing hospital
   let minStraightDist = Infinity;
+  let nearCount = 0;
   for (const h of hospitals) {
     const d = calculateDistance(lat, lng, h.lat, h.lng);
     if (d < minStraightDist) minStraightDist = d;
+    if (d <= 3.5) nearCount++;
   }
 
-  // If closest database hospital is more than 10km away (patient is in any town/city/district across India),
+  // If closest database hospital is more than 2.5km away or fewer than 2 hospitals are within 3.5km,
   // dynamically query live verified hospital amenities around the patient's coordinates!
-  if (minStraightDist > 10) {
+  if (minStraightDist > 2.5 || nearCount < 2) {
     try {
-      const delta = 0.12; // ~13km radius bounding box
-      const osmUrl = `https://nominatim.openstreetmap.org/search?format=json&amenity=hospital&bounded=1&viewbox=${lng - delta},${lat + delta},${lng + delta},${lat - delta}&limit=8`;
+      const delta = 0.08; // ~8km radius bounding box
+      const osmUrl = `https://nominatim.openstreetmap.org/search?format=json&q=hospital&bounded=1&viewbox=${lng - delta},${lat + delta},${lng + delta},${lat - delta}&limit=12`;
       
       const osmRes = await axios.get(osmUrl, {
-        headers: { "User-Agent": "BookDoctor-PanIndia-Emergency/2.0" },
+        headers: { "User-Agent": "BookDoctor-Emergency/2.0 (contact: support@bookdoctor.org)" },
         timeout: 4500
       });
 
       if (osmRes.data && Array.isArray(osmRes.data) && osmRes.data.length > 0) {
-        const blacklist = /garment|cloth|tailor|shop|store|textile|boutique|canteen|bakery|salon|mart|fashion|jewel|stationery|footwear|sweet/i;
+        const blacklist = /garment|cloth|tailor|shop|store|textile|boutique|canteen|bakery|salon|mart|fashion|jewel|stationery|footwear|sweet|hotel|restaurant/i;
         const whitelist = /hospital|clinic|medical|health|care|trauma|nursing|dispensary|arogya|chc|phc|aiims/i;
 
         const newHospitals = [];
 
         for (const item of osmRes.data) {
-          // Strictly verify class is amenity and type is hospital or clinic
-          if (item.class !== "amenity" || (item.type !== "hospital" && item.type !== "clinic")) {
-            continue;
-          }
-
-          const rawName = item.name || (item.display_name ? item.display_name.split(",")[0].trim() : "");
-          const fullAddr = item.display_name ? item.display_name.split(",").slice(1, 4).join(",").trim() : "Emergency Area";
+          let rawName = item.name || (item.display_name ? item.display_name.split(",")[0].trim() : "");
+          const fullAddr = item.display_name ? item.display_name.split(",").slice(1, 4).join(", ").trim() : "Emergency Area";
 
           if (!rawName || blacklist.test(rawName) || blacklist.test(fullAddr)) {
             continue;
           }
 
-          const cleanName = whitelist.test(rawName) ? rawName : `${rawName} Emergency Hospital`;
+          if (rawName.toLowerCase() === "hospital") {
+            const parts = item.display_name.split(",").map(p => p.trim());
+            rawName = parts.find(p => p.toLowerCase() !== "hospital" && p.length > 2) || "Emergency Care Hospital";
+          }
+
+          const cleanName = whitelist.test(rawName) ? rawName : `${rawName} Hospital`;
 
           const itemLat = parseFloat(item.lat);
           const itemLng = parseFloat(item.lon);
+          if (isNaN(itemLat) || isNaN(itemLng)) continue;
 
           const existing = await Hospital.findOne({
             lat: { $gte: itemLat - 0.001, $lte: itemLat + 0.001 },
@@ -90,7 +93,7 @@ export async function getPanIndiaHospitals(lat, lng) {
               specialties: ["Emergency", "Trauma", "General"],
               erBedsAvailable: 8,
               icuBedsAvailable: 4,
-              phone: "+91 108"
+              phone: "+919849512453"
             });
             newHospitals.push(created);
           } else {
@@ -613,3 +616,33 @@ export const triggerEmergencyCall = async (req, res, next) => {
     });
   }
 };
+
+/**
+ * Returns nearby verified emergency hospitals around requested coordinates
+ * GET /api/emergency/nearby-hospitals?lat=...&lng=...
+ */
+export const getNearbyHospitalsHandler = async (req, res, next) => {
+  try {
+    const lat = parseFloat(req.query.lat);
+    const lng = parseFloat(req.query.lng);
+    if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+      return req.http.badRequest("Valid latitude and longitude query parameters are required.");
+    }
+
+    const hospitals = await getPanIndiaHospitals(lat, lng);
+    const candidates = hospitals.map(h => ({
+      id: h._id?.toString() || h.id,
+      name: h.name,
+      address: h.address || "Emergency Department",
+      lat: h.lat,
+      lng: h.lng,
+      phone: h.phone || "+919849512453",
+      haversineKm: calculateDistance(lat, lng, h.lat, h.lng)
+    })).sort((a, b) => a.haversineKm - b.haversineKm).slice(0, 8);
+
+    return req.http.ok({ hospitals: candidates });
+  } catch (err) {
+    next(err);
+  }
+};
+

@@ -83,8 +83,10 @@ export async function checkBedAllocation(userLoc, emergencyType = "general") {
  */
 export async function fetchCandidateHospitals(userLoc) {
   const { latitude: lat, longitude: lng } = userLoc;
-  const radiiKm = [2, 5, 10];
+  const radiiKm = [2.5, 6, 12];
   const endpoints = [
+    "https://lz4.overpass-api.de/api/interpreter",
+    "https://z.overpass-api.de/api/interpreter",
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter"
   ];
@@ -94,16 +96,15 @@ export async function fetchCandidateHospitals(userLoc) {
 
   for (const radiusKm of radiiKm) {
     const radiusMeters = radiusKm * 1000;
-    const query = `[out:json][timeout:15];(nwr["amenity"="hospital"](around:${radiusMeters},${lat},${lng});nwr["healthcare"="hospital"](around:${radiusMeters},${lat},${lng}););out center;`;
+    const query = `[out:json][timeout:10];(nwr["amenity"="hospital"](around:${radiusMeters},${lat},${lng});nwr["healthcare"="hospital"](around:${radiusMeters},${lat},${lng}););out center;`;
 
     for (const endpoint of endpoints) {
       try {
         const res = await fetch(`${endpoint}?data=${encodeURIComponent(query)}`, {
           headers: {
-            "User-Agent": "BookDoctorEmergency/2.0 (contact: support@bookdoctor.org)",
             "Accept": "application/json"
           },
-          signal: AbortSignal.timeout(6000)
+          signal: AbortSignal.timeout(4000)
         });
 
         if (!res.ok) continue;
@@ -112,7 +113,7 @@ export async function fetchCandidateHospitals(userLoc) {
         const elements = data?.elements || [];
         if (elements.length === 0) continue;
 
-        const blacklist = /garment|cloth|tailor|shop|store|textile|boutique|canteen|bakery|salon|mart|fashion/i;
+        const blacklist = /garment|cloth|tailor|shop|store|textile|boutique|canteen|bakery|salon|mart|fashion|jewel|stationery|footwear|sweet|hotel|restaurant/i;
         const seen = new Set();
         const currentRadiusCandidates = [];
 
@@ -164,19 +165,20 @@ export async function fetchCandidateHospitals(userLoc) {
     }
   }
 
-  // Fallback to OpenStreetMap Nominatim search if Overpass is down
+  // Fallback 1: OpenStreetMap Nominatim search with q=hospital if Overpass times out or returns 0
   if (rawCandidates.length === 0) {
     try {
-      const delta = 0.045; // ~5km bounding box
-      const osmUrl = `https://nominatim.openstreetmap.org/search?format=json&amenity=hospital&bounded=1&viewbox=${lng - delta},${lat + delta},${lng + delta},${lat - delta}&limit=10`;
+      const delta = 0.08; // ~8km bounding box
+      const osmUrl = `https://nominatim.openstreetmap.org/search?format=json&q=hospital&bounded=1&viewbox=${lng - delta},${lat + delta},${lng + delta},${lat - delta}&limit=12`;
       const nomRes = await fetch(osmUrl, {
-        headers: { "User-Agent": "BookDoctor-Emergency/2.0" },
-        signal: AbortSignal.timeout(4000)
+        signal: AbortSignal.timeout(4500)
       });
 
       if (nomRes.ok) {
         const nomData = await nomRes.json();
         const seen = new Set();
+        const blacklist = /garment|cloth|tailor|shop|store|textile|boutique|canteen|bakery|salon|mart|fashion|jewel|stationery|footwear|sweet|hotel|restaurant/i;
+
         for (const item of nomData) {
           const hLat = parseFloat(item.lat);
           const hLng = parseFloat(item.lon);
@@ -184,15 +186,48 @@ export async function fetchCandidateHospitals(userLoc) {
           if (seen.has(id)) continue;
           seen.add(id);
 
-          const name = item.name || item.display_name.split(",")[0];
+          let name = item.name || item.display_name.split(",")[0].trim();
+          if (!name || blacklist.test(name) || blacklist.test(item.display_name)) continue;
+
+          if (name.toLowerCase() === "hospital") {
+            const parts = item.display_name.split(",").map(p => p.trim());
+            name = parts.find(p => p.toLowerCase() !== "hospital" && p.length > 2) || "Emergency Care Hospital";
+          }
+          if (!name.toLowerCase().includes("hospital") && !name.toLowerCase().includes("clinic")) {
+            name = `${name} Hospital`;
+          }
+
           rawCandidates.push({
             id,
-            name: name.toLowerCase().includes("hospital") ? name : `${name} Hospital`,
-            address: item.display_name.split(",").slice(1, 3).join(", ") || "Emergency Department",
+            name,
+            address: item.display_name.split(",").slice(1, 4).join(", ").trim() || "Emergency Department",
             lat: hLat,
             lng: hLng,
             phone: formatDialNumber(),
             haversineKm: haversineDistanceKm(lat, lng, hLat, hLng)
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Fallback 2: Server-side discovery endpoint
+  if (rawCandidates.length === 0) {
+    try {
+      const backendRes = await API.get("/emergency/nearby-hospitals", {
+        params: { lat, lng }
+      });
+      const backendList = backendRes.data?.data?.hospitals || backendRes.data?.hospitals || [];
+      if (Array.isArray(backendList) && backendList.length > 0) {
+        for (const item of backendList) {
+          rawCandidates.push({
+            id: item.id || item._id,
+            name: item.name,
+            address: item.address || "Emergency Department",
+            lat: item.lat,
+            lng: item.lng,
+            phone: item.phone || formatDialNumber(),
+            haversineKm: item.haversineKm ?? haversineDistanceKm(lat, lng, item.lat, item.lng)
           });
         }
       }
@@ -217,7 +252,7 @@ export async function fetchCandidateHospitals(userLoc) {
  * 
  * @param {{ latitude: number, longitude: number, accuracy?: number }} userLoc 
  * @param {Array<{ id: string, name: string, address: string, lat: number, lng: number, haversineKm: number }>} candidates 
- * @returns {Promise<{ hospital: Object, name: string, address: string, lat: number, lng: number, distanceKm: number, etaMinutes: number, roadDurationSec: number }>}
+ * @returns {Promise<{ hospital: Object, rankedHospitals: Array<Object>, name: string, address: string, lat: number, lng: number, distanceKm: number, etaMinutes: number, roadDurationSec: number }>}
  */
 export async function selectFastestHospitalByRoad(userLoc, candidates) {
   if (!userLoc?.latitude || !userLoc?.longitude) {
@@ -234,8 +269,17 @@ export async function selectFastestHospitalByRoad(userLoc, candidates) {
     const single = candidates[0];
     const roadDist = parseFloat((single.haversineKm * 1.3).toFixed(1));
     const roadMins = Math.max(1, Math.round((roadDist / 35) * 60));
+    const singleFormatted = {
+      ...single,
+      distanceKm: roadDist,
+      roadDistanceKm: roadDist,
+      etaMinutes: roadMins,
+      roadDurationMins: roadMins,
+      roadDurationSec: roadMins * 60
+    };
     return {
-      hospital: single,
+      hospital: singleFormatted,
+      rankedHospitals: [singleFormatted],
       name: single.name,
       address: single.address || "Emergency Department",
       lat: single.lat,
@@ -266,11 +310,15 @@ export async function selectFastestHospitalByRoad(userLoc, candidates) {
         rankedList = candidates.map((cand, idx) => {
           const durationSec = typeof durations[idx] === "number" && durations[idx] !== null ? durations[idx] : Infinity;
           const distanceMeters = typeof distances[idx] === "number" && distances[idx] !== null ? distances[idx] : cand.haversineKm * 1300;
+          const roadDist = parseFloat((distanceMeters / 1000).toFixed(2));
+          const roadMins = Math.max(1, Math.round(durationSec / 60));
           return {
             ...cand,
             roadDurationSec: durationSec,
-            roadDurationMins: Math.max(1, Math.round(durationSec / 60)),
-            roadDistanceKm: parseFloat((distanceMeters / 1000).toFixed(2))
+            roadDurationMins: roadMins,
+            roadDistanceKm: roadDist,
+            distanceKm: roadDist,
+            etaMinutes: roadMins
           };
         });
       }
@@ -288,7 +336,9 @@ export async function selectFastestHospitalByRoad(userLoc, candidates) {
         ...cand,
         roadDurationSec: durationMins * 60,
         roadDurationMins: durationMins,
-        roadDistanceKm: distanceKm
+        roadDistanceKm: distanceKm,
+        distanceKm: distanceKm,
+        etaMinutes: durationMins
       };
     });
   }
@@ -318,6 +368,7 @@ export async function selectFastestHospitalByRoad(userLoc, candidates) {
 
   return {
     hospital: selected,
+    rankedHospitals: rankedList,
     name: selected.name,
     address: selected.address || "Emergency Department",
     lat: selected.lat,
