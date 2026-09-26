@@ -50,22 +50,6 @@ export default function EmergencyTracking() {
     }).catch((err) => console.warn("Background emergency call notification:", err));
   };
 
-  // Automatically trigger the emergency call prompt on page load
-  useEffect(() => {
-    if (emergency?.status === "resolved") return;
-    const autoCallTimer = setTimeout(() => {
-      try {
-        const dialNumber = formatDialNumber();
-        initiateDeviceCall(dialNumber);
-        toast.success(`Initiating automatic call to ${formatDisplayNumber()}...`, { id: "emergency-call" });
-      } catch (err) {
-        console.warn("Auto-call gesture notice:", err);
-      }
-    }, 1200);
-
-    return () => clearTimeout(autoCallTimer);
-  }, [emergency?.status]);
-
   const handleDispatchUberRide = async (productId = "uber-go") => {
     try {
       setDispatchingUber(true);
