@@ -33,11 +33,9 @@ export const isValidE164 = (phone) => {
 export const handleOutboundCall = async (req, res) => {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
+  const twilioPhoneNumber = normalizePhoneNumber(process.env.TWILIO_PHONE_NUMBER);
   const businessPhoneNumber =
-    process.env.BUSINESS_PHONE_NUMBER ||
-    process.env.EMERGENCY_PHONE_NUMBER ||
-    "+919849512453";
+    normalizePhoneNumber(process.env.BUSINESS_PHONE_NUMBER || process.env.EMERGENCY_PHONE_NUMBER || "+919849512453");
 
   const rawNumber = req.body?.phoneNumber || req.body?.to || req.body?.visitorNumber;
   let visitorNumber = "";
