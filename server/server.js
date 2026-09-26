@@ -122,6 +122,7 @@ app.use(response);
 // ===============================
 const connectDB = async () => {
   try {
+    mongoose.set("returnDocument", "after");
     const conn = await mongoose.connect(process.env.MONGO_URI);
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {

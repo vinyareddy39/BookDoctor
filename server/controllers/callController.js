@@ -118,13 +118,11 @@ export const handleOutboundCall = async (req, res) => {
       businessNumber: businessPhoneNumber
     });
   } catch (err) {
-    // Step 1: Detailed server-side logging around client.calls.create()
-    console.error("❌ [Click-to-Call] Twilio calls.create() failed:", {
+    console.warn("⚠️ [Click-to-Call] Twilio Notice:", {
       code: err.code,
       status: err.status,
       message: err.message,
-      moreInfo: err.moreInfo,
-      details: err.details
+      moreInfo: err.moreInfo
     });
 
     let userFriendlyMessage = err.message || "Failed to initiate call via Twilio.";

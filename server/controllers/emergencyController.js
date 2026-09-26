@@ -521,7 +521,7 @@ export const updateLocation = async (req, res, next) => {
         location: { lat: parseFloat(lat), lng: parseFloat(lng) },
         $push: { locationHistory: { lat: parseFloat(lat), lng: parseFloat(lng), timestamp: new Date() } }
       },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!emergency) {

@@ -5,6 +5,7 @@ const UBER_API_BASE = "https://api.uber.com/v1.2";
 
 let cachedToken = null;
 let tokenExpiry = 0;
+let oauthBackoffUntil = 0;
 
 async function getUberAccessToken() {
   const clientId = process.env.UBER_CLIENT_ID;
@@ -14,6 +15,11 @@ async function getUberAccessToken() {
 
   if (cachedToken && Date.now() < tokenExpiry) {
     return cachedToken;
+  }
+
+  // Throttle retries if recently rate-limited or failed
+  if (Date.now() < oauthBackoffUntil) {
+    return null;
   }
 
   try {
@@ -33,7 +39,11 @@ async function getUberAccessToken() {
       return cachedToken;
     }
   } catch (err) {
-    console.warn("Uber OAuth handshake notice:", err.response?.data?.error || err.message);
+    // Back off for 5 minutes if Uber rate limits or errors
+    oauthBackoffUntil = Date.now() + 5 * 60 * 1000;
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("Uber OAuth handshake notice:", err.response?.data?.error || err.message);
+    }
   }
   return null;
 }
