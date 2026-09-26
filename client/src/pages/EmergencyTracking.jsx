@@ -33,6 +33,7 @@ export default function EmergencyTracking() {
   const [callingTwilio, setCallingTwilio] = useState(false);
 
   const handleEmergencyCall = (e, targetNumber) => {
+    setAutoRedirectCancelled(true);
     const rawNumber = targetNumber || EMERGENCY_NUMBERS.AMBULANCE_INDIA;
     const dialNumber = formatDialNumber(rawNumber);
     const displayNumber = formatDisplayNumber(rawNumber);
@@ -48,6 +49,22 @@ export default function EmergencyTracking() {
       userAddress: userAddress || ""
     }).catch((err) => console.warn("Background emergency call notification:", err));
   };
+
+  // Automatically trigger the emergency call prompt on page load
+  useEffect(() => {
+    if (emergency?.status === "resolved") return;
+    const autoCallTimer = setTimeout(() => {
+      try {
+        const dialNumber = formatDialNumber();
+        initiateDeviceCall(dialNumber);
+        toast.success(`Initiating automatic call to ${formatDisplayNumber()}...`, { id: "emergency-call" });
+      } catch (err) {
+        console.warn("Auto-call gesture notice:", err);
+      }
+    }, 1200);
+
+    return () => clearTimeout(autoCallTimer);
+  }, [emergency?.status]);
 
   const handleDispatchUberRide = async (productId = "uber-go") => {
     try {
@@ -421,6 +438,7 @@ export default function EmergencyTracking() {
                   <a
                     href={`tel:${formatDialNumber()}`}
                     onClick={() => {
+                      setAutoRedirectCancelled(true);
                       toast.success(`Opening device dialer for ${formatDisplayNumber()}...`, { id: "emergency-call" });
                     }}
                     className="py-2.5 px-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold rounded-lg transition text-xs flex items-center justify-center gap-1 shadow-sm text-center"
