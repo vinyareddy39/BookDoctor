@@ -143,8 +143,8 @@ function App() {
             <Route path="/doctor/login"       element={<DoctorLogin />} />
             <Route path="/doctor/register"    element={<DoctorRegister />} />
             <Route path="/doctors"            element={<Doctors />} />
-            <Route path="/about"             element={<About />} />
-            <Route path="/contact"           element={<Contact />} />
+            <Route path="/about"             element={<Navigate to="/#about" replace />} />
+            <Route path="/contact"           element={<Navigate to="/#contact" replace />} />
             <Route path="/call"              element={<ClickToCall />} />
             <Route path="/click-to-call"     element={<ClickToCall />} />
             <Route path="/forgot-password"   element={<ForgotPassword />} />

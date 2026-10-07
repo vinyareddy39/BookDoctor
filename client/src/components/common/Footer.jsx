@@ -8,8 +8,8 @@ const LINKS = {
     { label: "Doctor Login", to: "/doctor/login" },
   ],
   Company: [
-    { label: "About Us", to: "#about" },
-    { label: "Contact", to: "#contact" },
+    { label: "About Us", to: "/#about" },
+    { label: "Contact", to: "/#contact" },
     { label: "Privacy Policy", to: "#" },
     { label: "Terms of Service", to: "#" },
   ],

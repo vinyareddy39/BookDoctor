@@ -58,12 +58,12 @@ export default function Navbar() {
           </Link>
 
           {/* ── Desktop Nav Links ── */}
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden md:flex items-center gap-0.5 lg:gap-1 flex-shrink min-w-0">
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.to}
                 to={link.to}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                className={`px-3 py-1.5 rounded-lg text-xs lg:text-sm font-semibold transition-all duration-150 whitespace-nowrap ${
                   isActive(link.to)
                     ? "text-primary-600 bg-primary-50"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
@@ -76,7 +76,7 @@ export default function Navbar() {
               <>
                 <Link
                   to="/appointments"
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs lg:text-sm font-semibold transition-all duration-150 whitespace-nowrap ${
                     isActive("/appointments") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
@@ -84,7 +84,7 @@ export default function Navbar() {
                 </Link>
                 <Link
                   to="/my-records"
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs lg:text-sm font-semibold transition-all duration-150 whitespace-nowrap ${
                     isActive("/my-records") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
@@ -92,7 +92,7 @@ export default function Navbar() {
                 </Link>
                 <Link
                   to="/billing"
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs lg:text-sm font-semibold transition-all duration-150 whitespace-nowrap ${
                     isActive("/billing") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
@@ -100,7 +100,7 @@ export default function Navbar() {
                 </Link>
                 <Link
                   to="/profile"
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs lg:text-sm font-semibold transition-all duration-150 whitespace-nowrap ${
                     isActive("/profile") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
@@ -108,7 +108,7 @@ export default function Navbar() {
                 </Link>
                 <Link
                   to="/messages"
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs lg:text-sm font-semibold transition-all duration-150 whitespace-nowrap ${
                     isActive("/messages") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
@@ -303,7 +303,7 @@ export default function Navbar() {
           </div>
 
           {/* ── Auth Buttons & Utilities ── */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-2.5 flex-shrink-0">
             {isLoggedIn ? (
               <>
                 <GlobalSearch />
