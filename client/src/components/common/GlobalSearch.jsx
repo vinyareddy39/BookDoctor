@@ -27,7 +27,7 @@ export default function GlobalSearch() {
   // Focus input when opened
   useEffect(() => {
     if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 50);
+      setTimeout(() => inputRef.current?.focus(), 60);
     } else {
       setQuery("");
       setResults(null);
@@ -46,13 +46,14 @@ export default function GlobalSearch() {
       setLoading(true);
       try {
         const res = await API.get(`/search?q=${encodeURIComponent(query.trim())}`);
-        setResults(res.data?.data);
+        setResults(res.data?.data || null);
       } catch (err) {
         console.warn("Global search error:", err);
+        setResults({ doctors: [], patients: [], appointments: [], invoices: [], labOrders: [] });
       } finally {
         setLoading(false);
       }
-    }, 250);
+    }, 220);
 
     return () => clearTimeout(timer);
   }, [query]);
@@ -62,50 +63,70 @@ export default function GlobalSearch() {
     navigate(url);
   };
 
+  const handleQuickSearch = (term) => {
+    setQuery(term);
+    inputRef.current?.focus();
+  };
+
   return (
     <>
       {/* Trigger Button in Header */}
       <button
+        type="button"
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 p-2 xl:px-3 xl:py-1.5 rounded-xl bg-slate-100/80 hover:bg-slate-200/80 text-slate-500 text-xs font-medium transition flex-shrink-0"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 active:bg-slate-200 text-slate-600 hover:text-slate-900 text-xs font-semibold transition shrink-0 border border-slate-200/60 shadow-sm cursor-pointer select-none"
         title="Search Portal (Ctrl+K)"
         aria-label="Search Portal"
       >
-        <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
-        <span className="hidden 2xl:inline">Search portal…</span>
-        <kbd className="hidden 2xl:inline-block px-1.5 py-0.5 text-[10px] font-bold text-slate-400 bg-white border border-slate-200 rounded">
+        <span className="hidden xl:inline whitespace-nowrap">Search...</span>
+        <kbd className="hidden xl:inline-block px-1.5 py-0.5 text-[10px] font-bold text-slate-400 bg-white border border-slate-200 rounded">
           ⌘K
         </kbd>
       </button>
 
       {/* Search Modal Backdrop */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-start justify-center p-4 pt-16 sm:pt-24 animate-in fade-in duration-150">
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-start justify-center p-3 sm:p-4 pt-12 sm:pt-20 animate-fade-in"
+          onClick={() => setIsOpen(false)}
+        >
           <div
-            className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200/80 overflow-hidden flex flex-col"
+            className="bg-white rounded-2xl sm:rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Input Header */}
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
-              <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5 sm:py-4 border-b border-slate-100 bg-white">
+              <svg className="w-5 h-5 text-primary-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input
                 ref={inputRef}
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search patients by name/phone/MRN, appointments, invoices, or lab orders..."
-                className="w-full text-sm font-medium text-slate-800 placeholder:text-slate-400 bg-transparent focus:outline-none"
+                placeholder="Search doctors, specializations, appointments, records, or clinics..."
+                className="w-full text-sm font-semibold text-slate-800 placeholder:text-slate-400 bg-transparent focus:outline-none"
               />
               {loading ? (
-                <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin shrink-0"></div>
+              ) : query ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="text-slate-400 hover:text-slate-600 p-1 text-xs font-bold rounded-md hover:bg-slate-100 shrink-0"
+                  title="Clear search"
+                >
+                  ✕
+                </button>
               ) : (
                 <button
+                  type="button"
                   onClick={() => setIsOpen(false)}
-                  className="text-slate-400 hover:text-slate-600 p-1 text-xs font-bold"
+                  className="text-slate-400 hover:text-slate-700 p-1 text-xs font-bold rounded-md hover:bg-slate-100 shrink-0"
+                  title="Close modal"
                 >
                   ESC
                 </button>
@@ -113,15 +134,79 @@ export default function GlobalSearch() {
             </div>
 
             {/* Results Body */}
-            <div className="max-h-[60vh] overflow-y-auto p-4 space-y-4">
+            <div className="max-h-[60vh] overflow-y-auto p-4 space-y-4 custom-scrollbar">
               {!results && !loading && (
-                <div className="py-8 text-center text-slate-400 text-xs">
-                  <p className="font-semibold">Type a patient name, MRN, invoice number, or lab test to search</p>
+                <div className="py-6 space-y-4">
+                  <div className="text-center text-slate-500 text-xs">
+                    <p className="font-semibold text-slate-700 text-sm mb-1">Instant Search</p>
+                    <p>Find doctors, appointments, invoices, or medical records</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 px-1">
+                      Quick Suggestions
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {["Cardiologist", "Dermatologist", "Pediatrician", "Dentist", "Neurologist", "Orthopedic"].map((term) => (
+                        <button
+                          key={term}
+                          type="button"
+                          onClick={() => handleQuickSearch(term)}
+                          className="px-3 py-1.5 bg-slate-50 hover:bg-primary-50 text-slate-600 hover:text-primary-700 border border-slate-200/80 rounded-xl text-xs font-semibold transition"
+                        >
+                          🔍 {term}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
 
               {results && (
                 <>
+                  {/* DOCTORS */}
+                  {results.doctors?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-primary-600 mb-2 px-1 flex items-center gap-1">
+                        <span>👨‍⚕️</span> Verified Doctors ({results.doctors.length})
+                      </p>
+                      <div className="space-y-1.5">
+                        {results.doctors.map((d) => (
+                          <div
+                            key={d._id}
+                            onClick={() => handleSelect(`/book/${d._id}`)}
+                            className="p-3 rounded-2xl hover:bg-primary-50/60 border border-slate-100 hover:border-primary-200 transition cursor-pointer flex items-center justify-between gap-3 group"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white font-bold flex items-center justify-center text-sm shadow-sm shrink-0">
+                                {d.userId?.name?.charAt(0) || "D"}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-900 group-hover:text-primary-700 truncate">
+                                  Dr. {d.userId?.name}
+                                </p>
+                                <p className="text-[11px] text-slate-500 truncate">
+                                  <span className="font-semibold text-primary-600">{d.specialization}</span>
+                                  {d.clinicName ? ` · ${d.clinicName}` : ""}
+                                  {d.city ? ` (${d.city})` : ""}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {d.consultationFee && (
+                                <span className="text-xs font-extrabold text-slate-800">
+                                  ₹{d.consultationFee}
+                                </span>
+                              )}
+                              <span className="text-[11px] font-bold px-2.5 py-1 bg-primary-600 text-white rounded-lg shadow-sm group-hover:bg-primary-700 transition">
+                                Book Now →
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* PATIENTS */}
                   {results.patients?.length > 0 && (
                     <div>
@@ -163,14 +248,14 @@ export default function GlobalSearch() {
                         {results.appointments.map((a) => (
                           <div
                             key={a._id}
-                            onClick={() => handleSelect("/calendar")}
+                            onClick={() => handleSelect("/appointments")}
                             className="p-2.5 rounded-xl hover:bg-slate-50 transition cursor-pointer flex items-center justify-between"
                           >
                             <div className="flex items-center gap-2.5">
                               <span className="text-lg">🗓️</span>
                               <div>
                                 <p className="text-xs font-bold text-slate-800">
-                                  {a.patientId?.name || "Patient"} • Token #{a.tokenNumber || "N/A"}
+                                  {a.patientId?.name || "Patient"} {a.tokenNumber ? `• Token #${a.tokenNumber}` : ""}
                                 </p>
                                 <p className="text-[11px] text-slate-400">
                                   {new Date(a.appointmentDate).toLocaleDateString()} • Dr. {a.doctorId?.userId?.name || "Doctor"}
@@ -251,12 +336,14 @@ export default function GlobalSearch() {
                   )}
 
                   {/* Empty search */}
-                  {results.patients?.length === 0 &&
-                    results.appointments?.length === 0 &&
-                    results.invoices?.length === 0 &&
-                    results.labOrders?.length === 0 && (
+                  {(!results.doctors || results.doctors.length === 0) &&
+                    (!results.patients || results.patients.length === 0) &&
+                    (!results.appointments || results.appointments.length === 0) &&
+                    (!results.invoices || results.invoices.length === 0) &&
+                    (!results.labOrders || results.labOrders.length === 0) && (
                       <div className="py-8 text-center text-slate-400 text-xs">
-                        <p className="font-semibold">No records found matching "{query}"</p>
+                        <p className="font-semibold text-slate-600">No records found matching "{query}"</p>
+                        <p className="text-[11px] mt-1 text-slate-400">Try searching for doctor names (e.g., Sharma), specializations (e.g., Cardiologist), or phone numbers</p>
                       </div>
                     )}
                 </>

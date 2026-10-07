@@ -42,11 +42,11 @@ export default function Navbar() {
           : "bg-white/90 backdrop-blur-sm border-b border-slate-100"
       }`}
     >
-      <div className="section">
-        <div className="flex items-center justify-between h-16 lg:h-18">
+      <div className="w-full px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16 lg:h-18 gap-2 sm:gap-4">
 
           {/* ── Logo ── */}
-          <Link to="/" className="flex items-center gap-2.5 group flex-shrink-0">
+          <Link to="/" className="flex items-center gap-2.5 group shrink-0">
             <div className="w-9 h-9 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center shadow-md shadow-primary-500/30 group-hover:shadow-lg group-hover:shadow-primary-500/40 transition-all duration-200">
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -59,7 +59,7 @@ export default function Navbar() {
           </Link>
 
           {/* ── Desktop Nav Links (Visible on lg: 1024px and up) ── */}
-          <div className="hidden lg:flex items-center gap-0.5 xl:gap-1 flex-shrink min-w-0">
+          <div className="hidden lg:flex items-center gap-0.5 xl:gap-1 shrink-0">
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.to}
