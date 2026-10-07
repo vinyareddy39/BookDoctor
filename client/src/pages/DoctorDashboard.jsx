@@ -198,17 +198,17 @@ export default function DoctorDashboard() {
 
       {/* ── Sticky Dashboard Header ── */}
       <div className="bg-white border-b border-slate-100 shadow-sm sticky top-0 z-10 backdrop-blur-md bg-white/90">
-        <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 sm:py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           {/* Doctor info */}
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-primary-50 border border-primary-100 rounded-2xl flex items-center justify-center text-2xl font-bold text-primary-600 shadow-sm">
+          <div className="flex items-center gap-3.5 sm:gap-4">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-primary-50 border border-primary-100 rounded-2xl flex items-center justify-center text-xl sm:text-2xl font-bold text-primary-600 shadow-sm shrink-0">
               {profile?.userId?.name?.charAt(0) || "D"}
             </div>
-            <div>
-              <h1 className="text-2xl font-black text-slate-800 tracking-tight">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight truncate">
                 Dr. {profile?.userId?.name || user?.name}
               </h1>
-              <p className="text-slate-500 text-sm font-semibold mt-0.5">
+              <p className="text-slate-500 text-xs sm:text-sm font-semibold mt-0.5 truncate">
                 {profile?.specialization} · {profile?.city}
               </p>
             </div>
@@ -216,8 +216,8 @@ export default function DoctorDashboard() {
 
           {/* Availability Toggle */}
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-3 bg-slate-50 px-4 py-2.5 rounded-2xl border border-slate-100 shadow-inner">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Accepting Appointments:</span>
+            <div className="flex items-center gap-3 bg-slate-50 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-2xl border border-slate-100 shadow-inner">
+              <span className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Accepting Appointments:</span>
               <button
                 onClick={handleToggle}
                 disabled={toggling}
@@ -234,18 +234,18 @@ export default function DoctorDashboard() {
       </div>
 
       {/* ── Main Content ── */}
-      <div className="max-w-6xl mx-auto px-6 pt-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 sm:pt-8">
 
         {/* Stats cards */}
         <DashboardStats appts={appts} />
 
         {/* Tab Bar */}
-        <div className="flex gap-2 bg-white rounded-xl p-1.5 w-full sm:w-fit border border-slate-200 shadow-sm mx-auto sm:mx-0 mb-6 overflow-x-auto custom-scrollbar">
+        <div className="flex gap-1.5 sm:gap-2 bg-white rounded-xl p-1.5 w-full sm:w-fit border border-slate-200 shadow-sm mx-auto sm:mx-0 mb-6 overflow-x-auto scroll-smooth custom-scrollbar">
           {["analytics", "appointments", "emergencies", "profile", "payouts"].map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
-              className={`px-4 sm:px-6 py-2.5 min-h-[44px] rounded-lg text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex items-center justify-center ${
+              className={`px-3.5 sm:px-6 py-2 sm:py-2.5 min-h-[40px] sm:min-h-[44px] rounded-lg text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex items-center justify-center shrink-0 ${
                 activeTab === t
                   ? "bg-primary-600 text-white shadow-sm"
                   : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
