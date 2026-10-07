@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import NotificationBell from "./NotificationBell.jsx";
+import GlobalSearch from "./GlobalSearch.jsx";
 
 const NAV_LINKS = [
   { label: "Home",     to: "/" },
@@ -302,10 +304,13 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* ── Auth Buttons ── */}
+          {/* ── Auth Buttons & Utilities ── */}
           <div className="hidden md:flex items-center gap-3">
             {isLoggedIn ? (
               <>
+                <GlobalSearch />
+                <NotificationBell />
+
                 {/* User chip */}
                 <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 rounded-full px-3.5 py-1.5">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${
@@ -348,19 +353,27 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* ── Mobile Hamburger ── */}
-          <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="md:hidden w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 transition-colors"
-            aria-label="Toggle menu"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {menuOpen
-                ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              }
-            </svg>
-          </button>
+          {/* ── Mobile Utilities & Hamburger ── */}
+          <div className="md:hidden flex items-center gap-2">
+            {isLoggedIn && (
+              <>
+                <GlobalSearch />
+                <NotificationBell />
+              </>
+            )}
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 transition-colors"
+              aria-label="Toggle menu"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {menuOpen
+                  ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                }
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 

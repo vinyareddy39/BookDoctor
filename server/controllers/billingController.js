@@ -6,6 +6,7 @@ import Appointment from "../models/Appointment.js";
 import User from "../models/User.js";
 import { recordAudit } from "../middleware/auditLogger.js";
 import { getRazorpayClient } from "../services/paymentService.js";
+import { createNotification } from "../services/notificationService.js";
 
 // Helper: Fetch Clinic Billing Settings
 const getClinicBillingConfig = async () => {
@@ -115,6 +116,18 @@ export const createInvoice = async (req, res, next) => {
       resourceId: invoice._id,
       after: invoice.toObject(),
       req,
+    });
+
+    // Notify patient
+    createNotification({
+      recipient: patientId,
+      sender: req.user._id,
+      title: "New Medical Invoice Issued",
+      message: `Invoice ${invoiceNumber} for ₹${invoice.totalAmount} has been issued. Balance due: ₹${invoice.balanceAmount}.`,
+      type: "invoice_issued",
+      referenceId: invoice._id,
+      referenceModel: "Invoice",
+      link: "/billing",
     });
 
     const populated = await Invoice.findById(invoice._id)

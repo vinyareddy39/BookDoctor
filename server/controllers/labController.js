@@ -4,6 +4,7 @@ import Doctor from "../models/Doctor.js";
 import User from "../models/User.js";
 import { recordAudit } from "../middleware/auditLogger.js";
 import { sendNotificationToUser } from "../socket.js";
+import { createNotification } from "../services/notificationService.js";
 
 // Helper: resolve doctor id for current user
 const resolveDoctorId = async (user) => {
@@ -357,10 +358,15 @@ export const releaseResults = async (req, res, next) => {
     });
 
     // Notify the patient
-    sendNotificationToUser(order.patientId, {
-      type: "LAB_RESULT_RELEASED",
+    createNotification({
+      recipient: order.patientId,
+      sender: req.user._id,
       title: "Lab Report Released",
       message: `Your laboratory report for Order ${order.orderNumber} is now available in your portal.`,
+      type: "lab_result_released",
+      referenceId: order._id,
+      referenceModel: "LabOrder",
+      link: "/my-records",
     });
 
     return req.http.ok({ order, result }, `Lab Order ${order.orderNumber} released to patient`);

@@ -177,6 +177,12 @@ export default function PatientList() {
                       )}
                     </td>
                     <td className="py-3 px-4 text-right space-x-2 whitespace-nowrap">
+                      <Link
+                        to={`/timeline/${pat._id}`}
+                        className="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs transition"
+                      >
+                        Timeline
+                      </Link>
                       <button
                         onClick={() => handleViewPatient(pat._id)}
                         className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition"

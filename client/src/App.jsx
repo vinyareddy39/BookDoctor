@@ -58,6 +58,8 @@ const EmrPortal           = lazy(() => import("./pages/EmrPortal.jsx"));
 const PatientFollowUps    = lazy(() => import("./pages/PatientFollowUps.jsx"));
 const LabDashboard        = lazy(() => import("./pages/LabDashboard.jsx"));
 const BillingManagement   = lazy(() => import("./pages/BillingManagement.jsx"));
+const PatientTimeline     = lazy(() => import("./pages/PatientTimeline.jsx"));
+const ReceptionDashboard  = lazy(() => import("./pages/ReceptionDashboard.jsx"));
 
 // Page loader fallback
 function PageLoader() {
@@ -169,8 +171,11 @@ function App() {
             <Route path="/ambulance/dashboard" element={<AmbulanceDashboard />} />
 
             {/* Clinic Operations (Receptionist / Doctor / Admin) */}
+            <Route path="/reception/dashboard"  element={<RoleRoute roles={["receptionist", "clinic_admin", "admin"]}><ReceptionDashboard /></RoleRoute>} />
             <Route path="/reception/walk-in"    element={<RoleRoute roles={["receptionist", "clinic_admin", "admin"]}><WalkInRegistration /></RoleRoute>} />
             <Route path="/patients"             element={<RoleRoute roles={["receptionist", "doctor", "clinic_admin", "admin"]}><PatientList /></RoleRoute>} />
+            <Route path="/timeline/:patientId"  element={<AuthRoute><PatientTimeline /></AuthRoute>} />
+            <Route path="/timeline"             element={<AuthRoute><PatientTimeline /></AuthRoute>} />
             <Route path="/calendar"             element={<RoleRoute roles={["receptionist", "doctor", "clinic_admin", "admin"]}><AppointmentCalendar /></RoleRoute>} />
             <Route path="/queue"                element={<AuthRoute><QueueDisplay /></AuthRoute>} />
             <Route path="/emr"                  element={<RoleRoute roles={["doctor", "clinic_admin", "admin"]}><EmrPortal /></RoleRoute>} />
