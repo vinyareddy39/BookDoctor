@@ -171,6 +171,15 @@ export default function AdminDashboard() {
             </Link>
 
             <Link
+              to="/billing"
+              className="flex flex-col items-center text-center p-3.5 rounded-xl border border-teal-100 hover:border-teal-300 hover:bg-teal-50/40 transition group"
+            >
+              <span className="text-2xl mb-1.5 group-hover:scale-110 transition">💳</span>
+              <span className="text-xs font-bold text-slate-700 group-hover:text-teal-700">Billing & Invoices</span>
+              <span className="text-[10px] text-slate-400">Payments & Receipts</span>
+            </Link>
+
+            <Link
               to="/admin/clinic-settings"
               className="flex flex-col items-center text-center p-3.5 rounded-xl border border-slate-100 hover:border-primary-300 hover:bg-primary-50/40 transition group"
             >

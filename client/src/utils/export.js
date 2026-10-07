@@ -265,3 +265,206 @@ export const exportLabReportToPDF = (order) => {
   const cleanOrderNum = (order.orderNumber || "LAB").replace(/[^a-zA-Z0-9-]/g, "_");
   doc.save(`LabReport_${cleanOrderNum}.pdf`);
 };
+
+export const exportInvoiceToPDF = (invoice, clinicInfo = {}) => {
+  if (!invoice) return;
+
+  const doc = new jsPDF();
+  const patient = invoice.patientId || {};
+  const doctor = invoice.doctorId || {};
+  const docName = doctor.userId?.name || doctor.name || null;
+  const patName = patient.name || "Patient";
+  const clinicName = clinicInfo.name || "MedAssist Healthcare Clinic";
+  const clinicPhone = clinicInfo.contactPhone || "+91 98765 43210";
+  const clinicAddress = clinicInfo.address?.city || "Healthcare Complex, Bengaluru, India";
+
+  // ── Header Banner ──
+  doc.setFillColor(15, 23, 42); // slate-900
+  doc.rect(0, 0, 210, 26, "F");
+
+  doc.setFontSize(16);
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.text(clinicName, 14, 14);
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(148, 163, 184); // slate-400
+  doc.text("Official Medical Services Tax Invoice & Receipt", 14, 21);
+
+  // Status Badge in Header
+  const statusUpper = (invoice.status || "ISSUED").toUpperCase();
+  const badgeColor = statusUpper === "PAID" ? [34, 197, 94] : statusUpper === "PARTIAL" ? [245, 158, 11] : [239, 68, 68];
+  doc.setFillColor(...badgeColor);
+  doc.roundedRect(165, 8, 32, 10, 2, 2, "F");
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(255, 255, 255);
+  doc.text(statusUpper, 181, 14.5, { align: "center" });
+
+  // ── Invoice Metadata & Clinic Info ──
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(71, 85, 105);
+
+  // Left: Patient Info
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 41, 59);
+  doc.text("Billed To (Patient):", 14, 36);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(71, 85, 105);
+  doc.text(`${patName}`, 14, 42);
+  doc.text(`MRN: ${patient.mrn || "N/A"}`, 14, 47);
+  doc.text(`Phone: ${patient.phone || "N/A"}`, 14, 52);
+  if (patient.email) doc.text(`Email: ${patient.email}`, 14, 57);
+
+  // Right: Invoice Meta
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 41, 59);
+  doc.text("Invoice Details:", 125, 36);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(71, 85, 105);
+  doc.text(`Invoice No: ${invoice.invoiceNumber}`, 125, 42);
+  doc.text(`Issue Date: ${new Date(invoice.issuedAt || invoice.createdAt).toLocaleDateString()}`, 125, 47);
+  if (docName) doc.text(`Consultant: Dr. ${docName}`, 125, 52);
+  if (invoice.dueDate) doc.text(`Due Date: ${new Date(invoice.dueDate).toLocaleDateString()}`, 125, 57);
+
+  // Divider
+  doc.setLineWidth(0.4);
+  doc.setDrawColor(226, 232, 240);
+  doc.line(14, 62, 196, 62);
+
+  // ── Line Items Table ──
+  const lineItemsData = (invoice.lineItems || []).map((item, idx) => [
+    idx + 1,
+    item.description,
+    item.category?.toUpperCase() || "SERVICE",
+    item.quantity,
+    `INR ${Number(item.unitPrice).toFixed(2)}`,
+    `INR ${Number(item.total).toFixed(2)}`,
+  ]);
+
+  doc.autoTable({
+    startY: 66,
+    head: [["#", "Service Description", "Category", "Qty", "Unit Price", "Total"]],
+    body: lineItemsData,
+    theme: "striped",
+    headStyles: { fillColor: [15, 23, 42], fontSize: 9, fontStyle: "bold" },
+    bodyStyles: { fontSize: 8.5 },
+    styles: { cellPadding: 2.5 },
+    columnStyles: {
+      0: { cellWidth: 10 },
+      1: { cellWidth: 70 },
+      2: { cellWidth: 28 },
+      3: { cellWidth: 14, halign: "center" },
+      4: { cellWidth: 32, halign: "right" },
+      5: { cellWidth: 32, halign: "right" },
+    },
+  });
+
+  let endY = doc.lastAutoTable.finalY + 8;
+
+  // ── Financial Breakdown Box (Right Aligned) ──
+  const summaryX = 115;
+  const valueX = 196;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(71, 85, 105);
+
+  doc.text("Subtotal:", summaryX, endY);
+  doc.text(`INR ${Number(invoice.subtotal || 0).toFixed(2)}`, valueX, endY, { align: "right" });
+  endY += 5;
+
+  if (invoice.discountAmount > 0) {
+    doc.text(`Discount (${invoice.discountType === "percentage" ? `${invoice.discountValue}%` : "Fixed"}):`, summaryX, endY);
+    doc.setTextColor(220, 38, 38);
+    doc.text(`- INR ${Number(invoice.discountAmount).toFixed(2)}`, valueX, endY, { align: "right" });
+    doc.setTextColor(71, 85, 105);
+    endY += 5;
+  }
+
+  if (invoice.taxAmount > 0 || invoice.taxRate > 0) {
+    doc.text(`Healthcare Tax / GST (${invoice.taxRate || 0}%):`, summaryX, endY);
+    doc.text(`INR ${Number(invoice.taxAmount || 0).toFixed(2)}`, valueX, endY, { align: "right" });
+    endY += 5;
+  }
+
+  doc.setLineWidth(0.3);
+  doc.setDrawColor(203, 213, 225);
+  doc.line(summaryX, endY, valueX, endY);
+  endY += 5;
+
+  // Total Invoiced
+  doc.setFontSize(10.5);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(15, 23, 42);
+  doc.text("Total Invoiced:", summaryX, endY);
+  doc.text(`INR ${Number(invoice.totalAmount || 0).toFixed(2)}`, valueX, endY, { align: "right" });
+  endY += 6;
+
+  // Total Paid
+  doc.setFontSize(9.5);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(22, 101, 52); // green-700
+  doc.text("Paid Amount:", summaryX, endY);
+  doc.text(`INR ${Number(invoice.paidAmount || 0).toFixed(2)}`, valueX, endY, { align: "right" });
+  endY += 5;
+
+  // Balance Due
+  const balance = Number(invoice.balanceAmount || 0);
+  doc.setFont("helvetica", "bold");
+  if (balance > 0) {
+    doc.setTextColor(185, 28, 28); // red-700
+    doc.text("Balance Due:", summaryX, endY);
+    doc.text(`INR ${balance.toFixed(2)}`, valueX, endY, { align: "right" });
+  } else {
+    doc.setTextColor(22, 101, 52);
+    doc.text("Balance Due:", summaryX, endY);
+    doc.text("PAID IN FULL", valueX, endY, { align: "right" });
+  }
+  endY += 12;
+
+  // ── Payment History Table (if any) ──
+  if (invoice.payments && invoice.payments.length > 0) {
+    doc.setFontSize(9.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 41, 59);
+    doc.text("Receipts & Payment History:", 14, endY);
+
+    const paymentRows = invoice.payments.map((p) => [
+      p.receiptNumber || "-",
+      new Date(p.recordedAt).toLocaleDateString(),
+      p.paymentMethod?.toUpperCase(),
+      p.referenceNumber || "-",
+      `INR ${Number(p.amount).toFixed(2)}`,
+    ]);
+
+    doc.autoTable({
+      startY: endY + 3,
+      head: [["Receipt #", "Payment Date", "Method", "Reference ID", "Amount Paid"]],
+      body: paymentRows,
+      theme: "plain",
+      headStyles: { fillColor: [241, 245, 249], textColor: [71, 85, 105], fontSize: 8, fontStyle: "bold" },
+      bodyStyles: { fontSize: 8 },
+      styles: { cellPadding: 2 },
+    });
+
+    endY = doc.lastAutoTable.finalY + 8;
+  }
+
+  // ── Footer & Sign-off ──
+  doc.setFontSize(8.5);
+  doc.setTextColor(148, 163, 184);
+  doc.text("This is an electronically generated tax invoice valid without physical signature.", 14, 275);
+  doc.text(`${clinicName} • ${clinicAddress} • Tel: ${clinicPhone}`, 14, 280);
+
+  doc.setTextColor(30, 41, 59);
+  doc.setLineWidth(0.3);
+  doc.line(140, 274, 196, 274);
+  doc.text("Authorized Accounts Signatory", 142, 279);
+
+  const cleanNum = (invoice.invoiceNumber || "INV").replace(/[^a-zA-Z0-9-]/g, "_");
+  doc.save(`${cleanNum}_${patName.replace(/\s+/g, "_")}.pdf`);
+};
+

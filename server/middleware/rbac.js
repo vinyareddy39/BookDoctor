@@ -55,7 +55,7 @@ export const PERMISSIONS = {
   },
   billing: {
     create: ["clinic_admin", "receptionist"],
-    read:   ["clinic_admin", "receptionist", "patient"],
+    read:   ["clinic_admin", "receptionist", "doctor", "patient"],
     update: ["clinic_admin", "receptionist"],
     delete: ["clinic_admin"],
   },

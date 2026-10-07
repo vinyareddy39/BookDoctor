@@ -91,6 +91,14 @@ export default function Navbar() {
                   Rx & Care
                 </Link>
                 <Link
+                  to="/billing"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/billing") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Billing
+                </Link>
+                <Link
                   to="/profile"
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
                     isActive("/profile") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
@@ -222,6 +230,14 @@ export default function Navbar() {
                 >
                   Patients
                 </Link>
+                <Link
+                  to="/billing"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/billing") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Billing
+                </Link>
               </>
             )}
             {(isAdmin || isClinicAdmin) && (
@@ -233,6 +249,14 @@ export default function Navbar() {
                   }`}
                 >
                   Admin Portal
+                </Link>
+                <Link
+                  to="/billing"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/billing") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Billing
                 </Link>
                 <Link
                   to="/emr"
@@ -358,6 +382,7 @@ export default function Navbar() {
             <>
               <Link to="/appointments" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">My Appointments</Link>
               <Link to="/my-records"   className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Rx & Care</Link>
+              <Link to="/billing"      className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Billing</Link>
               <Link to="/profile"      className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Profile</Link>
               <Link to="/messages"     className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Chats</Link>
             </>
@@ -382,6 +407,7 @@ export default function Navbar() {
           {isReceptionist && (
             <>
               <Link to="/reception/walk-in" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Walk-In Desk</Link>
+              <Link to="/billing" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Billing</Link>
               <Link to="/queue" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Live Queue</Link>
               <Link to="/calendar" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Calendar</Link>
               <Link to="/patients" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Patients</Link>
@@ -390,6 +416,7 @@ export default function Navbar() {
           {(isAdmin || isClinicAdmin) && (
             <>
               <Link to="/admin"    className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Admin Portal</Link>
+              <Link to="/billing"  className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Billing</Link>
               <Link to="/emr"      className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">EMR</Link>
               <Link to="/lab"      className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Lab</Link>
               <Link to="/calendar" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Calendar</Link>

@@ -57,6 +57,7 @@ const QueueDisplay        = lazy(() => import("./pages/QueueDisplay.jsx"));
 const EmrPortal           = lazy(() => import("./pages/EmrPortal.jsx"));
 const PatientFollowUps    = lazy(() => import("./pages/PatientFollowUps.jsx"));
 const LabDashboard        = lazy(() => import("./pages/LabDashboard.jsx"));
+const BillingManagement   = lazy(() => import("./pages/BillingManagement.jsx"));
 
 // Page loader fallback
 function PageLoader() {
@@ -174,6 +175,7 @@ function App() {
             <Route path="/queue"                element={<AuthRoute><QueueDisplay /></AuthRoute>} />
             <Route path="/emr"                  element={<RoleRoute roles={["doctor", "clinic_admin", "admin"]}><EmrPortal /></RoleRoute>} />
             <Route path="/lab"                  element={<RoleRoute roles={["lab_technician", "doctor", "clinic_admin", "admin"]}><LabDashboard /></RoleRoute>} />
+            <Route path="/billing"              element={<AuthRoute><BillingManagement /></AuthRoute>} />
             <Route path="/my-records"           element={<AuthRoute><PatientFollowUps /></AuthRoute>} />
             <Route path="/prescriptions"        element={<AuthRoute><PatientFollowUps /></AuthRoute>} />
             <Route path="/follow-ups"           element={<AuthRoute><PatientFollowUps /></AuthRoute>} />
