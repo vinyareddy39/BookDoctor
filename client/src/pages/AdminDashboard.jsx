@@ -133,7 +133,16 @@ export default function AdminDashboard() {
             </h2>
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700">MedAssist Hub</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3">
+            <Link
+              to="/emr"
+              className="flex flex-col items-center text-center p-3.5 rounded-xl border border-teal-100 hover:border-teal-300 hover:bg-teal-50/40 transition group"
+            >
+              <span className="text-2xl mb-1.5 group-hover:scale-110 transition">🩺</span>
+              <span className="text-xs font-bold text-slate-700 group-hover:text-teal-700">EMR Portal</span>
+              <span className="text-[10px] text-slate-400">Notes & Rx</span>
+            </Link>
+
             <Link
               to="/calendar"
               className="flex flex-col items-center text-center p-3.5 rounded-xl border border-sky-100 hover:border-sky-300 hover:bg-sky-50/40 transition group"

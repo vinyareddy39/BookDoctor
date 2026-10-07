@@ -83,6 +83,14 @@ export default function Navbar() {
                   My Appointments
                 </Link>
                 <Link
+                  to="/my-records"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/my-records") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Rx & Care
+                </Link>
+                <Link
                   to="/profile"
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
                     isActive("/profile") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
@@ -109,6 +117,14 @@ export default function Navbar() {
                   }`}
                 >
                   Dashboard
+                </Link>
+                <Link
+                  to="/emr"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/emr") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  EMR
                 </Link>
                 <Link
                   to="/calendar"
@@ -189,6 +205,14 @@ export default function Navbar() {
                   }`}
                 >
                   Admin Portal
+                </Link>
+                <Link
+                  to="/emr"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/emr") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  EMR
                 </Link>
                 <Link
                   to="/calendar"
@@ -297,6 +321,7 @@ export default function Navbar() {
           {isPatient && (
             <>
               <Link to="/appointments" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">My Appointments</Link>
+              <Link to="/my-records"   className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Rx & Care</Link>
               <Link to="/profile"      className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Profile</Link>
               <Link to="/messages"     className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Chats</Link>
             </>
@@ -304,8 +329,9 @@ export default function Navbar() {
           {isDoctor && (
             <>
               <Link to="/doctor/dashboard" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Dashboard</Link>
+              <Link to="/emr"      className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">EMR</Link>
               <Link to="/calendar" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Calendar</Link>
-              <Link to="/queue" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Live Queue</Link>
+              <Link to="/queue"    className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Live Queue</Link>
               <Link to="/patients" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Patients</Link>
               <Link to="/messages" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Chats</Link>
             </>
@@ -320,9 +346,10 @@ export default function Navbar() {
           )}
           {(isAdmin || isClinicAdmin) && (
             <>
-              <Link to="/admin" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Admin Portal</Link>
+              <Link to="/admin"    className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Admin Portal</Link>
+              <Link to="/emr"      className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">EMR</Link>
               <Link to="/calendar" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Calendar</Link>
-              <Link to="/queue" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Live Queue</Link>
+              <Link to="/queue"    className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Live Queue</Link>
               <Link to="/patients" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Patients</Link>
             </>
           )}

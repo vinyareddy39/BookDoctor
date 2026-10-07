@@ -50,35 +50,110 @@ export const exportToPDF = (data, title = "Report", filename = "report.pdf") => 
   doc.save(filename);
 };
 
-export const exportPrescriptionToPDF = (appointment, doctorName) => {
-  if (!appointment || !appointment.prescription) return;
+export const exportPrescriptionToPDF = (record, doctorName) => {
+  if (!record) return;
 
   const doc = new jsPDF();
-  
-  doc.setFontSize(22);
-  doc.setTextColor(30, 58, 138); // blue-900
-  doc.text("Clinical Prescription", 14, 20);
+  const patient = record.patientId || {};
+  const doctor = record.doctorId || {};
+  const docName = doctorName || doctor.userId?.name || doctor.name || "Attending Physician";
+  const patName = patient.name || "Patient";
+  const dateStr = record.signedAt || record.createdAt || record.appointmentDate || new Date();
+  const formattedDate = new Date(dateStr).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 
-  doc.setFontSize(12);
-  doc.setTextColor(71, 85, 105); // slate-600
-  doc.text(`Doctor: Dr. ${doctorName}`, 14, 30);
-  doc.text(`Patient: ${appointment.patientId?.name || "Unknown"}`, 14, 36);
-  doc.text(`Date: ${new Date(appointment.appointmentDate).toLocaleDateString()}`, 14, 42);
+  // ── Header / Clinic Branding ──
+  doc.setFillColor(30, 58, 138); // primary blue-900
+  doc.rect(0, 0, 210, 24, "F");
 
-  doc.setLineWidth(0.5);
-  doc.setDrawColor(226, 232, 240); // slate-200
-  doc.line(14, 48, 196, 48);
+  doc.setFontSize(16);
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.text("MedAssist Clinic • Medical Prescription", 14, 16);
 
-  doc.setFontSize(14);
-  doc.setTextColor(30, 41, 59); // slate-800
-  doc.text("Notes & Medication:", 14, 58);
-
-  doc.setFontSize(11);
+  // ── Doctor & Patient Info ──
+  doc.setFontSize(10);
   doc.setTextColor(71, 85, 105);
-  
-  // Split text for word wrapping
-  const splitNotes = doc.splitTextToSize(appointment.prescription, 180);
-  doc.text(splitNotes, 14, 66);
+  doc.setFont("helvetica", "normal");
 
-  doc.save(`Prescription_${appointment.patientId?.name || "Patient"}_${appointment.appointmentDate.split("T")[0]}.pdf`);
+  // Left column: Doctor
+  doc.text(`Doctor: Dr. ${docName}`, 14, 34);
+  if (doctor.qualification) doc.text(`Qualification: ${doctor.qualification}`, 14, 40);
+  if (doctor.clinicName) doc.text(`Clinic: ${doctor.clinicName}`, 14, 46);
+
+  // Right column: Patient
+  doc.text(`Patient: ${patName}`, 120, 34);
+  doc.text(`MRN: ${patient.mrn || "N/A"}`, 120, 40);
+  doc.text(`Date: ${formattedDate}`, 120, 46);
+  if (patient.bloodGroup) doc.text(`Blood Group: ${patient.bloodGroup}`, 120, 52);
+
+  // Divider
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(226, 232, 240);
+  doc.line(14, 56, 196, 56);
+
+  // ── Prescription Table or Text ──
+  let finalY = 62;
+  if (Array.isArray(record.medicines) && record.medicines.length > 0) {
+    const tableData = record.medicines.map((m, idx) => [
+      idx + 1,
+      m.name,
+      m.dosage || "-",
+      m.frequency || "-",
+      m.duration || "-",
+      `${m.timing?.replace("_", " ") || ""} ${m.instructions ? `• ${m.instructions}` : ""}`,
+    ]);
+
+    doc.autoTable({
+      startY: 60,
+      head: [["#", "Medicine", "Dosage", "Frequency", "Duration", "Instructions"]],
+      body: tableData,
+      theme: "striped",
+      headStyles: { fillColor: [30, 58, 138], fontSize: 9, fontStyle: "bold" },
+      bodyStyles: { fontSize: 8.5 },
+      styles: { cellPadding: 2.5 },
+    });
+
+    finalY = doc.lastAutoTable.finalY + 10;
+  } else if (record.prescription) {
+    doc.setFontSize(12);
+    doc.setTextColor(30, 41, 59);
+    doc.setFont("helvetica", "bold");
+    doc.text("Prescribed Medication & Notes:", 14, 66);
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(51, 65, 85);
+    const splitNotes = doc.splitTextToSize(record.prescription, 180);
+    doc.text(splitNotes, 14, 74);
+    finalY = 74 + splitNotes.length * 6;
+  }
+
+  // General Instructions
+  if (record.generalInstructions) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 41, 59);
+    doc.text("Special Instructions:", 14, finalY);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    const splitInstructions = doc.splitTextToSize(record.generalInstructions, 180);
+    doc.text(splitInstructions, 14, finalY + 6);
+    finalY += 12 + splitInstructions.length * 5;
+  }
+
+  // Footer / Doctor Sign-off
+  doc.setFontSize(9);
+  doc.setTextColor(148, 163, 184);
+  doc.text("Electronically signed via MedAssist Portal. Valid for 30 days.", 14, 280);
+  doc.text(`Dr. ${docName}`, 160, 275);
+  doc.setLineWidth(0.3);
+  doc.line(150, 278, 196, 278);
+  doc.text("Authorized Signature", 155, 283);
+
+  const cleanDate = new Date(dateStr).toISOString().split("T")[0];
+  doc.save(`Prescription_${patName.replace(/\s+/g, "_")}_${cleanDate}.pdf`);
 };

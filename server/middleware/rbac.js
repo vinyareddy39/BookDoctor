@@ -59,6 +59,18 @@ export const PERMISSIONS = {
     update: ["clinic_admin", "receptionist"],
     delete: ["clinic_admin"],
   },
+  diagnosis: {
+    create: ["doctor", "clinic_admin"],
+    read:   ["doctor", "clinic_admin", "patient"],
+    update: ["doctor", "clinic_admin"],
+    delete: ["clinic_admin"],
+  },
+  follow_up: {
+    create: ["doctor", "clinic_admin", "patient"],
+    read:   ["doctor", "clinic_admin", "receptionist", "patient"],
+    update: ["doctor", "clinic_admin", "receptionist", "patient"],
+    delete: ["clinic_admin"],
+  },
   audit_log: {
     read:   ["clinic_admin"],
     create: ["system"],
