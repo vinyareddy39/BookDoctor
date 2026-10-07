@@ -194,14 +194,14 @@ export default function EmergencyHospitalTracking() {
    * 3. Open Uber with Universal Deep Link (Pre-fills pickup + dropoff)
    */
   const handleOpenUber = () => {
-    if (!userLocation || !selectedHospital) {
-      toast.error("Please wait until your location and nearest hospital are identified.");
+    if (!selectedHospital?.lat || !selectedHospital?.lng) {
+      toast.error("Please wait until the nearest hospital is identified.");
       return;
     }
 
     openUberRide({
-      userLat: userLocation.latitude,
-      userLng: userLocation.longitude,
+      userLat: userLocation?.latitude,
+      userLng: userLocation?.longitude,
       userAddress: userAddress || "Live Location",
       hospLat: selectedHospital.lat,
       hospLng: selectedHospital.lng,

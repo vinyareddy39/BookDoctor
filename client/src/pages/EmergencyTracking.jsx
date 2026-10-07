@@ -114,7 +114,7 @@ export default function EmergencyTracking() {
     const dAddr = hosp?.address || "Emergency Department";
     const pAddr = userAddress || "Live GPS Location";
 
-    if (!pLat || !dLat) return "#";
+    if (!dLat) return "#";
 
     return buildUberUniversalUrl({
       userLat: pLat,
