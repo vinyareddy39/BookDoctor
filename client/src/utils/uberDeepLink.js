@@ -88,10 +88,32 @@ export function buildUberLinks(pickup, hospital) {
   params.append("dropoff[formatted_address]", hospitalAddress);
 
   const queryString = params.toString();
+  const appUrl = `uber://?${queryString}`;
+  const webUrl = `https://m.uber.com/ul/?${queryString}`;
+
+  // Desktop Web Product-Selection Parameters with pre-filled drop[0] JSON
+  const dropObj = {
+    latitude: dropoffCoords.lat,
+    longitude: dropoffCoords.lng,
+    addressLine1: hospitalName,
+    addressLine2: hospitalAddress
+  };
+  const desktopParams = new URLSearchParams();
+  desktopParams.append("pickup", "my_location");
+  desktopParams.append("pickup[latitude]", String(pickupCoords.lat));
+  desktopParams.append("pickup[longitude]", String(pickupCoords.lng));
+  desktopParams.append("drop[0]", JSON.stringify(dropObj));
+  desktopParams.append("dropoff[latitude]", String(dropoffCoords.lat));
+  desktopParams.append("dropoff[longitude]", String(dropoffCoords.lng));
+  desktopParams.append("dropoff[nickname]", hospitalName);
+  desktopParams.append("dropoff[formatted_address]", hospitalAddress);
+
+  const desktopWebUrl = `https://m.uber.com/go/product-selection?${desktopParams.toString()}`;
 
   return {
-    appUrl: `uber://?${queryString}`,
-    webUrl: `https://m.uber.com/ul/?${queryString}`
+    appUrl,
+    webUrl,
+    desktopWebUrl
   };
 }
 

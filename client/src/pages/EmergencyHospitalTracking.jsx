@@ -296,15 +296,23 @@ export default function EmergencyHospitalTracking() {
 
     // Prepare desktop fallback data & Google Maps driving link
     const gMapsUrl = buildGoogleMapsLink(effectiveLoc, selectedHospital);
+    const targetDesktopUrl = links.desktopWebUrl || webUrl;
     setDesktopUberData({
       appUrl,
       webUrl,
+      desktopWebUrl: targetDesktopUrl,
       googleMapsUrl: gMapsUrl,
       hospitalName: dropoffVal.name,
       hospitalAddress: dropoffVal.address,
       pickup: pickupVal,
       dropoff: dropoffVal
     });
+
+    // Automatically copy hospital destination address to clipboard for instant pasting
+    try {
+      const copyText = dropoffVal.address ? `${dropoffVal.name}, ${dropoffVal.address}` : dropoffVal.name;
+      navigator.clipboard?.writeText?.(copyText);
+    } catch (_) {}
 
     // 4. Platform handling
     if (isAndroidOrIOS()) {
@@ -333,12 +341,13 @@ export default function EmergencyHospitalTracking() {
       window.location.href = appUrl;
     } else {
       // DESKTOP (Windows/Mac/Linux):
-      // Uber's website drops prefilled locations on desktop, so show desktop panel
-      setShowDesktopPanel(true);
-      toast("Desktop mode: Use the ride panel below to copy address or open directions.", {
-        icon: "💻",
-        duration: 4000
+      // Open Uber with prefilled pickup and dropoff coordinates immediately in a new tab!
+      window.open(targetDesktopUrl, "_blank", "noopener,noreferrer");
+      toast.success("Opening Uber with pre-filled locations! Destination address also copied.", {
+        icon: "🚗",
+        duration: 4500
       });
+      setShowDesktopPanel(true);
     }
   };
 
@@ -727,9 +736,14 @@ export default function EmergencyHospitalTracking() {
                         </button>
                       </div>
 
-                      {/* Required message: Uber's website can't prefill locations on desktop. Open this on your phone for automatic fill. */}
-                      <div className="p-3 bg-white/95 rounded-xl border border-amber-200 text-xs text-amber-900 font-semibold leading-relaxed shadow-sm">
-                        ⚠️ <strong>Notice:</strong> Uber's website can't prefill locations on desktop. Open this on your phone for automatic fill.
+                      {/* Status & prefill information */}
+                      <div className="p-3 bg-white/95 rounded-xl border border-amber-200 text-xs text-amber-900 font-semibold leading-relaxed shadow-sm space-y-1">
+                        <p>
+                          🚀 <strong>Uber Opened:</strong> We launched Uber in a new tab with your live pickup and hospital dropoff coordinates.
+                        </p>
+                        <p className="text-[11px] text-slate-600 font-normal">
+                          If your desktop browser prompts for destination, the hospital address is already copied to your clipboard — simply press <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 border border-slate-300 rounded text-slate-700">Ctrl+V</kbd>.
+                        </p>
                       </div>
 
                       {/* Hospital name and full address */}
@@ -770,12 +784,12 @@ export default function EmergencyHospitalTracking() {
 
                         <button
                           type="button"
-                          onClick={() => window.open(desktopUberData.webUrl, "_blank", "noopener,noreferrer")}
+                          onClick={() => window.open(desktopUberData.desktopWebUrl || desktopUberData.webUrl, "_blank", "noopener,noreferrer")}
                           className="py-2.5 px-3 bg-black hover:bg-slate-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 text-center"
                           title="Open Uber in new browser tab"
                         >
                           <span>🚗</span>
-                          <span>Open Uber</span>
+                          <span>Open Uber Again</span>
                         </button>
                       </div>
                     </div>
