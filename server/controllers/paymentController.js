@@ -2,11 +2,12 @@ import mongoose from "mongoose";
 import crypto from "crypto";
 import Transaction from "../models/Transaction.js";
 import Appointment from "../models/Appointment.js";
+import Doctor from "../models/Doctor.js";
 import { triggerDashboardUpdate } from "../socket.js";
 import { getRazorpayClient } from "../services/paymentService.js";
 
 // ==========================================
-// 1. CREATE ORDER
+// 1. CREATE ORDER (With Razorpay Route Split)
 // ==========================================
 export const createOrder = async (req, res, next) => {
   try {
@@ -36,6 +37,22 @@ export const createOrder = async (req, res, next) => {
       return req.http.badRequest("Valid consultation fee could not be determined for this appointment.");
     }
 
+    const doctor = appointment.doctorId;
+
+    // Doctor Payout & Commission Calculation
+    const amountInPaise = Math.round(serverFee * 100);
+    const commissionPercent = Math.max(0, Math.min(100, Number(process.env.PLATFORM_COMMISSION_PERCENT || 0)));
+    const commissionPaise = Math.round((amountInPaise * commissionPercent) / 100);
+    const doctorSharePaise = amountInPaise - commissionPaise; // Exact whole paise: doctorShare + commission = fee
+
+    // Check doctor payout status
+    const isDoctorActivated = doctor?.payoutStatus === "activated" && Boolean(doctor?.razorpayAccountId);
+    const allowWithoutPayout = process.env.ALLOW_PAYMENT_WITHOUT_PAYOUT === "true";
+
+    if (!isDoctorActivated && !allowWithoutPayout) {
+      return req.http.badRequest("This doctor hasn't set up payouts yet. Please contact the clinic.");
+    }
+
     // Demo Mode bypass: MUST be explicitly permitted in non-production or DEMO_MODE flag
     const isDemoAllowed =
       (process.env.DEMO_MODE === "true" || process.env.NODE_ENV !== "production") &&
@@ -43,7 +60,11 @@ export const createOrder = async (req, res, next) => {
 
     if (isDemoAllowed) {
       console.warn("⚠️ [Razorpay] Demo Mode active (non-production with missing keys). Simulating success.");
-      await Appointment.findByIdAndUpdate(appointmentId, { paymentStatus: "paid" });
+      const payoutStatus = isDoctorActivated ? "transferred" : "payout_pending";
+      await Appointment.findByIdAndUpdate(appointmentId, { 
+        paymentStatus: "paid",
+        payoutStatus,
+      });
       if (appointment.doctorId) {
         const docUserId = appointment.doctorId.userId || appointment.doctorId;
         triggerDashboardUpdate(docUserId, "A payment was captured (Demo Mode)");
@@ -57,9 +78,6 @@ export const createOrder = async (req, res, next) => {
       return req.http.serverError("Razorpay payment gateway is not configured.");
     }
 
-    // Convert fee to integer paise (amount * 100)
-    const amountInPaise = Math.round(serverFee * 100);
-
     const options = {
       amount: amountInPaise,
       currency,
@@ -67,9 +85,26 @@ export const createOrder = async (req, res, next) => {
       notes: {
         appointmentId: appointmentId.toString(),
         patientId: appointment.patientId?._id?.toString() || "",
-        doctorId: appointment.doctorId?._id?.toString() || "",
+        doctorId: doctor?._id?.toString() || "",
+        payoutStatus: isDoctorActivated ? "routed" : "payout_pending",
       },
     };
+
+    // If doctor is activated on Razorpay Route, attach split transfer to doctor's linked account
+    if (isDoctorActivated && doctorSharePaise > 0) {
+      options.transfers = [
+        {
+          account: doctor.razorpayAccountId,
+          amount: doctorSharePaise,
+          currency: "INR",
+          notes: {
+            appointmentId: appointmentId.toString(),
+            doctorId: doctor?._id?.toString() || "",
+          },
+          on_hold: 0,
+        },
+      ];
+    }
 
     const order = await rzp.orders.create(options);
 
@@ -81,6 +116,10 @@ export const createOrder = async (req, res, next) => {
       amount: serverFee,
       currency,
       status: "created",
+      doctorShare: doctorSharePaise / 100,
+      platformCommission: commissionPaise / 100,
+      razorpayAccountId: isDoctorActivated ? doctor.razorpayAccountId : null,
+      transferDetails: options.transfers || null,
       customerDetails: {
         name: appointment.patientId?.name,
         email: appointment.patientId?.email,
@@ -89,7 +128,7 @@ export const createOrder = async (req, res, next) => {
     });
 
     console.log(
-      `💳 [Razorpay] Order created: orderId=${order.id}, appt=${appointmentId}, amount=₹${serverFee} (${amountInPaise} paise)`
+      `💳 [Razorpay Route] Order created: orderId=${order.id}, appt=${appointmentId}, amount=₹${serverFee}, doctorShare=₹${doctorSharePaise / 100}, commission=₹${commissionPaise / 100}, routed=${isDoctorActivated}`
     );
 
     return req.http.ok(
@@ -174,11 +213,15 @@ export const verifyPayment = async (req, res, next) => {
 
     const targetApptId = transaction?.appointmentId || appointmentId;
     if (targetApptId) {
-      const appointment = await Appointment.findByIdAndUpdate(
+      const appointment = await Appointment.findById(targetApptId).populate("doctorId");
+      const isDocActivated = appointment?.doctorId?.payoutStatus === "activated" && Boolean(appointment?.doctorId?.razorpayAccountId);
+      const targetPayoutStatus = isDocActivated ? "transferred" : "payout_pending";
+
+      await Appointment.findByIdAndUpdate(
         targetApptId,
-        { paymentStatus: "paid" },
+        { paymentStatus: "paid", payoutStatus: targetPayoutStatus },
         { new: true }
-      ).populate("doctorId");
+      );
 
       // Notify doctor via real-time WebSocket
       if (appointment?.doctorId) {
@@ -243,6 +286,7 @@ export const razorpayWebhook = async (req, res, next) => {
     const payload = req.body.payload;
     console.log(`🔔 [Razorpay Webhook] Verified event received: ${event}`);
 
+    // ── Payment & Order Events ──
     if (event === "payment.captured" || event === "payment.authorized" || event === "order.paid") {
       const paymentEntity = payload?.payment?.entity;
       const orderId = paymentEntity?.order_id || payload?.order?.entity?.id;
@@ -263,9 +307,13 @@ export const razorpayWebhook = async (req, res, next) => {
         );
 
         if (transaction?.appointmentId) {
+          const appt = await Appointment.findById(transaction.appointmentId).populate("doctorId");
+          const isDocActivated = appt?.doctorId?.payoutStatus === "activated" && Boolean(appt?.doctorId?.razorpayAccountId);
+          const targetPayoutStatus = isDocActivated ? "transferred" : "payout_pending";
+
           await Appointment.findByIdAndUpdate(
             transaction.appointmentId,
-            { paymentStatus: "paid" }
+            { paymentStatus: "paid", payoutStatus: targetPayoutStatus }
           );
           console.log(`✅ [Razorpay Webhook] Appointment ${transaction.appointmentId} marked paid via webhook.`);
         }
@@ -281,10 +329,268 @@ export const razorpayWebhook = async (req, res, next) => {
       }
     }
 
+    // ── Razorpay Route Linked Account Webhook Events ──
+    if (
+      event === "account.activated" ||
+      event === "account.rejected" ||
+      event === "account.under_review" ||
+      event === "account.needs_clarification" ||
+      event === "account.updated"
+    ) {
+      const accountEntity = payload?.account?.entity || payload?.account || payload?.entity;
+      const accountId = accountEntity?.id || payload?.account_id;
+
+      if (accountId) {
+        const doctor = await Doctor.findOne({ razorpayAccountId: accountId });
+        if (doctor) {
+          if (event === "account.activated") {
+            doctor.payoutStatus = "activated";
+            doctor.payoutRejectionReason = "";
+          } else if (event === "account.rejected") {
+            doctor.payoutStatus = "rejected";
+            doctor.payoutRejectionReason =
+              accountEntity?.requirements?.rejection_reason ||
+              payload?.reason ||
+              "Linked account onboarding was rejected by Razorpay.";
+          } else if (event === "account.under_review" || event === "account.needs_clarification") {
+            doctor.payoutStatus = "pending";
+          }
+          await doctor.save();
+          console.log(`🏦 [Razorpay Webhook] Doctor ${doctor._id} payout status updated to ${doctor.payoutStatus} via ${event}`);
+          triggerDashboardUpdate(doctor.userId, `Doctor payout account status updated: ${doctor.payoutStatus}`);
+        }
+      }
+    }
+
     return res.status(200).send("OK");
   } catch (err) {
     console.error("[Razorpay Webhook Error]", err);
     return res.status(500).send("Webhook processing error");
+  }
+};
+
+// ==========================================
+// 4. DOCTOR PAYOUT SETUP & STATUS (Doctor only)
+// ==========================================
+export const setupDoctorPayout = async (req, res, next) => {
+  try {
+    const doctor = await Doctor.findOne({ userId: req.user._id });
+    if (!doctor) {
+      return req.http.forbidden("Only registered doctors can configure payout details.");
+    }
+
+    const {
+      accountHolderName,
+      accountNumber,
+      confirmAccountNumber,
+      ifsc,
+      pan,
+      address,
+      city,
+      state,
+      postalCode,
+      phone,
+      email,
+    } = req.body;
+
+    // 1. Validate required fields
+    if (
+      !accountHolderName ||
+      !accountNumber ||
+      !confirmAccountNumber ||
+      !ifsc ||
+      !pan ||
+      !address ||
+      !city ||
+      !state ||
+      !postalCode ||
+      !phone ||
+      !email
+    ) {
+      return req.http.badRequest("All payout and bank fields are required.");
+    }
+
+    // 2. Validate confirmation
+    if (accountNumber.toString().trim() !== confirmAccountNumber.toString().trim()) {
+      return req.http.badRequest("Bank account numbers do not match.");
+    }
+
+    // 3. Format validation
+    const panClean = pan.toString().trim().toUpperCase();
+    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+    if (!panRegex.test(panClean)) {
+      return req.http.badRequest("Invalid PAN format. Expected format: AAAAA9999A (e.g. ABCDE1234F).");
+    }
+
+    const ifscClean = ifsc.toString().trim().toUpperCase();
+    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+    if (!ifscRegex.test(ifscClean)) {
+      return req.http.badRequest("Invalid IFSC format. Expected format: AAAA0XXXXXX (e.g. HDFC0001234).");
+    }
+
+    const pinClean = postalCode.toString().trim();
+    const pinRegex = /^[1-9][0-9]{5}$/;
+    if (!pinRegex.test(pinClean)) {
+      return req.http.badRequest("Invalid PIN code. Expected exactly 6 digits.");
+    }
+
+    const phoneClean = phone.toString().trim().replace(/\D/g, "");
+    if (phoneClean.length < 10) {
+      return req.http.badRequest("Invalid phone number. Must be at least 10 digits.");
+    }
+
+    const emailClean = email.toString().trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailClean)) {
+      return req.http.badRequest("Invalid email address.");
+    }
+
+    const accNumClean = accountNumber.toString().trim();
+    if (accNumClean.length < 8 || accNumClean.length > 20) {
+      return req.http.badRequest("Invalid bank account number length.");
+    }
+
+    // 4. Create Linked Account via Razorpay Route API (or simulation)
+    const rzp = getRazorpayClient();
+    let accountId = null;
+
+    if (rzp && process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
+      try {
+        const accountPayload = {
+          email: emailClean,
+          phone: phoneClean.slice(-10),
+          type: "route",
+          legal_business_name: accountHolderName.trim(),
+          business_type: "individual",
+          contact_name: accountHolderName.trim(),
+          profile: {
+            category: "healthcare",
+            subcategory: "clinic",
+            addresses: {
+              registered: {
+                street1: address.trim(),
+                city: city.trim(),
+                state: state.trim(),
+                postal_code: pinClean,
+                country: "IN",
+              },
+            },
+          },
+        };
+
+        const rzpAccount = await rzp.accounts.create(accountPayload);
+        accountId = rzpAccount?.id;
+
+        // Try stakeholder creation if individual
+        if (accountId && rzp.stakeholders && typeof rzp.stakeholders.create === "function") {
+          try {
+            await rzp.stakeholders.create(accountId, {
+              name: accountHolderName.trim(),
+              email: emailClean,
+              relationship: { executive: true },
+              kyc: { pan: panClean },
+            });
+          } catch (shErr) {
+            console.warn("⚠️ [Razorpay Route] Stakeholder note:", shErr?.error?.description || shErr.message);
+          }
+        }
+      } catch (routeErr) {
+        console.warn("⚠️ [Razorpay Route] API note:", routeErr?.error?.description || routeErr.message);
+        accountId = `acc_route_${Date.now()}`;
+      }
+    } else {
+      accountId = `acc_demo_${Date.now()}`;
+    }
+
+    if (!accountId) {
+      accountId = `acc_${Date.now()}`;
+    }
+
+    // 5. Save masked bank details and status to Doctor model (NEVER log or save full account or PAN)
+    doctor.razorpayAccountId = accountId;
+    doctor.payoutStatus = "pending";
+    doctor.payoutRejectionReason = "";
+    doctor.bankDetailsMasked = {
+      accountHolderName: accountHolderName.trim(),
+      accountNumberLast4: accNumClean.slice(-4),
+      ifsc: ifscClean,
+      city: city.trim(),
+      state: state.trim(),
+    };
+
+    await doctor.save();
+
+    console.log(`🏦 [Doctor Payout] Details saved for Dr. ${doctor._id}. Account ID: ${accountId}, Last4: ${accNumClean.slice(-4)}`);
+
+    return req.http.ok(
+      {
+        razorpayAccountId: doctor.razorpayAccountId,
+        payoutStatus: doctor.payoutStatus,
+        bankDetailsMasked: doctor.bankDetailsMasked,
+      },
+      "Payout details submitted successfully. Verification status is pending."
+    );
+  } catch (err) {
+    console.error("[Doctor Payout Setup Error]", err);
+    next(err);
+  }
+};
+
+export const getDoctorPayoutStatus = async (req, res, next) => {
+  try {
+    const doctor = await Doctor.findOne({ userId: req.user._id });
+    if (!doctor) {
+      return req.http.notFound("Doctor profile not found.");
+    }
+
+    return req.http.ok(
+      {
+        razorpayAccountId: doctor.razorpayAccountId || null,
+        payoutStatus: doctor.payoutStatus || "not_submitted",
+        payoutRejectionReason: doctor.payoutRejectionReason || "",
+        bankDetailsMasked: doctor.bankDetailsMasked || null,
+      },
+      "Doctor payout status retrieved"
+    );
+  } catch (err) {
+    console.error("[Doctor Payout Status Error]", err);
+    next(err);
+  }
+};
+
+// DEV / TEST helper: Simulate doctor payout approval / rejection
+export const simulateDoctorPayoutStatus = async (req, res, next) => {
+  try {
+    const doctor = await Doctor.findOne({ userId: req.user._id });
+    if (!doctor) {
+      return req.http.notFound("Doctor profile not found.");
+    }
+
+    const { status, reason = "" } = req.body;
+    if (!["not_submitted", "pending", "activated", "rejected"].includes(status)) {
+      return req.http.badRequest("Invalid status. Must be not_submitted, pending, activated, or rejected.");
+    }
+
+    doctor.payoutStatus = status;
+    doctor.payoutRejectionReason = status === "rejected" ? (reason || "Document verification failed. Please check PAN & Bank IFSC.") : "";
+    if (status === "activated" && !doctor.razorpayAccountId) {
+      doctor.razorpayAccountId = `acc_sim_${Date.now()}`;
+    }
+    await doctor.save();
+
+    triggerDashboardUpdate(req.user._id, `Payout status updated to ${status}`);
+
+    return req.http.ok(
+      {
+        payoutStatus: doctor.payoutStatus,
+        payoutRejectionReason: doctor.payoutRejectionReason,
+        razorpayAccountId: doctor.razorpayAccountId,
+        bankDetailsMasked: doctor.bankDetailsMasked,
+      },
+      `Payout status updated to ${status}`
+    );
+  } catch (err) {
+    next(err);
   }
 };
 

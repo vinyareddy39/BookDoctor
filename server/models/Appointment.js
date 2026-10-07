@@ -41,6 +41,12 @@ const appointmentSchema = new mongoose.Schema(
       default: "pending",
     },
 
+    payoutStatus: {
+      type: String,
+      enum: ["none", "transferred", "payout_pending", "failed"],
+      default: "none",
+    },
+
     amount: {
       type: Number,
       required: true,

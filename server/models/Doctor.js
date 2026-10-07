@@ -119,6 +119,29 @@ const doctorSchema = new mongoose.Schema(
     },
     // ─── Google Calendar Sync ────────────────────────────────────────────────
     googleCalendarSynced: { type: Boolean, default: false },
+
+    // ─── Razorpay Route Doctor Payouts ────────────────────────────────────────
+    razorpayAccountId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    payoutStatus: {
+      type: String,
+      enum: ["not_submitted", "pending", "activated", "rejected"],
+      default: "not_submitted",
+    },
+    payoutRejectionReason: {
+      type: String,
+      default: "",
+    },
+    bankDetailsMasked: {
+      accountHolderName: { type: String, default: "" },
+      accountNumberLast4: { type: String, default: "" },
+      ifsc: { type: String, default: "" },
+      city: { type: String, default: "" },
+      state: { type: String, default: "" },
+    },
   },
   { timestamps: true }
 );

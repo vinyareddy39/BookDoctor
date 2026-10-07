@@ -83,6 +83,8 @@ export default function AppointmentCard({ appointment }) {
   const sc = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
 
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [verifyingPayment, setVerifyingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState(null);
 
   // Preload Razorpay Checkout SDK once
   useEffect(() => {
@@ -92,10 +94,11 @@ export default function AppointmentCard({ appointment }) {
   }, [localPaymentStatus, isDoctorView]);
 
   const handlePayment = async () => {
-    if (processingPayment) return;
+    if (processingPayment || verifyingPayment) return;
 
     try {
       setProcessingPayment(true);
+      setPaymentError(null);
       const isLoaded = await loadRazorpayScript();
       if (!isLoaded || !window.Razorpay) {
         toast.error("Razorpay SDK failed to load. Please check your internet connection.");
@@ -118,12 +121,15 @@ export default function AppointmentCard({ appointment }) {
       if (isDemo) {
         toast.success("Demo Mode: Payment successful!");
         setLocalPaymentStatus("paid");
+        setPaymentError(null);
         if (appointment) appointment.paymentStatus = "paid";
         return;
       }
 
       if (!orderId || !keyId) {
-        toast.error(orderData?.message || "Failed to initialize payment order.");
+        const msg = orderData?.message || "Failed to initialize payment order.";
+        setPaymentError(msg);
+        toast.error(msg);
         return;
       }
 
@@ -137,6 +143,7 @@ export default function AppointmentCard({ appointment }) {
         order_id: orderId,
         handler: async function (response) {
           // 3. Verify payment signature on backend with appointmentId
+          setVerifyingPayment(true);
           const verifyToast = toast.loading("Verifying payment with gateway...", { id: "razorpay-verify" });
           try {
             const verifyRes = await API.post("/payments/verify", {
@@ -149,14 +156,21 @@ export default function AppointmentCard({ appointment }) {
             if (verifyRes.data?.success || verifyRes.status === 200) {
               toast.success("Payment verified successfully!", { id: "razorpay-verify" });
               setLocalPaymentStatus("paid");
+              setPaymentError(null);
               if (appointment) appointment.paymentStatus = "paid";
             } else {
-              toast.error(verifyRes.data?.message || "Payment verification failed.", { id: "razorpay-verify" });
+              const msg = verifyRes.data?.message || "Payment verification failed.";
+              setPaymentError(msg);
+              toast.error(msg, { id: "razorpay-verify" });
             }
           } catch (err) {
             console.error("Payment verification error:", err);
             const msg = err.response?.data?.message || "Payment verification failed. Please contact support.";
+            setPaymentError(msg);
             toast.error(msg, { id: "razorpay-verify" });
+          } finally {
+            setVerifyingPayment(false);
+            setProcessingPayment(false);
           }
         },
         prefill: {
@@ -178,13 +192,16 @@ export default function AppointmentCard({ appointment }) {
       const rzp = new window.Razorpay(options);
       rzp.on("payment.failed", function (response) {
         console.error("Razorpay Payment Failed:", response.error);
-        toast.error(response.error?.description || "Payment failed at gateway.");
+        const failReason = response.error?.description || "Payment failed at gateway.";
+        setPaymentError(`Payment failed: ${failReason}`);
+        toast.error(failReason);
         setProcessingPayment(false);
       });
       rzp.open();
     } catch (error) {
       console.error("Initiate payment error:", error);
       const errMsg = error.response?.data?.message || "Could not initiate payment. Please try again.";
+      setPaymentError(errMsg);
       toast.error(errMsg);
     } finally {
       setProcessingPayment(false);
@@ -354,12 +371,21 @@ export default function AppointmentCard({ appointment }) {
             {localPaymentStatus !== "paid" && !isDoctorView && (
               <button
                 type="button"
-                onClick={handlePayment}
-                disabled={processingPayment}
+                onClick={() => {
+                  setPaymentError(null);
+                  handlePayment();
+                }}
+                disabled={processingPayment || verifyingPayment}
                 className="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow transition-colors flex items-center gap-1.5 active:scale-95"
               >
                 <span>💳</span>
-                <span>{processingPayment ? "Opening Checkout..." : "Pay Consultation Fee"}</span>
+                <span>
+                  {verifyingPayment
+                    ? "Verifying Payment..."
+                    : processingPayment
+                    ? "Opening Checkout..."
+                    : "Pay Consultation Fee"}
+                </span>
               </button>
             )}
 
@@ -404,6 +430,26 @@ export default function AppointmentCard({ appointment }) {
             )}
           </div>
         </div>
+
+        {/* Payment Error / Doctor Payout Notice Banner */}
+        {paymentError && (
+          <div className="px-4 py-2.5 bg-rose-50 border-t border-rose-100 flex items-center justify-between gap-3 text-xs text-rose-700 font-semibold">
+            <span className="flex items-center gap-1.5 min-w-0">
+              <span className="shrink-0 text-sm">⚠️</span>
+              <span className="truncate">{paymentError}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentError(null);
+                handlePayment();
+              }}
+              className="text-xs font-bold text-rose-800 underline hover:no-underline shrink-0"
+            >
+              Retry Payment
+            </button>
+          </div>
+        )}
 
         {/* Feedback Form */}
         {showFeedbackForm && (

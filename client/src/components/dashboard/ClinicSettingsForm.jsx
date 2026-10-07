@@ -64,6 +64,7 @@ export default function ClinicSettingsForm({
         <div>
           <label className="input-label">Consultation Fee (₹)</label>
           <input type="number" min="0" value={form.consultationFee} onChange={(e) => setForm((f) => ({ ...f, consultationFee: e.target.value }))} className="input" />
+          <p className="text-[11px] text-slate-400 mt-1">Online fees are split & deposited to your account under the <strong>💳 Bank Payouts</strong> tab.</p>
         </div>
 
         <div>

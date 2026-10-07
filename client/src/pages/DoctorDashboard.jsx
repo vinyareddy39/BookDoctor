@@ -9,6 +9,7 @@ import DashboardStats     from "../components/dashboard/DashboardStats.jsx";
 import IncomingEmergencies from "../components/dashboard/IncomingEmergencies.jsx";
 import AppointmentsList   from "../components/dashboard/AppointmentsList.jsx";
 import ClinicSettingsForm from "../components/dashboard/ClinicSettingsForm.jsx";
+import DoctorPayoutSetup  from "../components/dashboard/DoctorPayoutSetup.jsx";
 import { RevenueChart, AppointmentVolumeChart } from "../components/common/Charts.jsx";
 import { exportToCSV, exportToPDF } from "../utils/export.js";
 
@@ -254,7 +255,7 @@ export default function DoctorDashboard() {
 
         {/* Tab Bar */}
         <div className="flex gap-2 bg-white rounded-xl p-1.5 w-full sm:w-fit border border-slate-200 shadow-sm mx-auto sm:mx-0 mb-6 overflow-x-auto custom-scrollbar">
-          {["analytics", "appointments", "emergencies", "profile"].map((t) => (
+          {["analytics", "appointments", "emergencies", "profile", "payouts"].map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
@@ -264,7 +265,15 @@ export default function DoctorDashboard() {
                   : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
               }`}
             >
-              {t === "analytics" ? "📊 Analytics" : t === "appointments" ? "📅 Appointments" : t === "emergencies" ? "🚨 SOS Emergencies" : "⚙️ Clinic & Schedule"}
+              {t === "analytics"
+                ? "📊 Analytics"
+                : t === "appointments"
+                ? "📅 Appointments"
+                : t === "emergencies"
+                ? "🚨 SOS Emergencies"
+                : t === "profile"
+                ? "⚙️ Clinic & Schedule"
+                : "💳 Bank Payouts"}
             </button>
           ))}
         </div>
@@ -326,6 +335,10 @@ export default function DoctorDashboard() {
             onSave={handleSave}
             saving={saving}
           />
+        )}
+
+        {activeTab === "payouts" && (
+          <DoctorPayoutSetup profile={profile} />
         )}
       </div>
     </div>

@@ -41,6 +41,11 @@ const transactionSchema = new mongoose.Schema(
       email: String,
       contact: String,
     },
+    // Razorpay Route split auditing
+    doctorShare: Number,
+    platformCommission: Number,
+    razorpayAccountId: String,
+    transferDetails: mongoose.Schema.Types.Mixed,
   },
   { timestamps: true }
 );
