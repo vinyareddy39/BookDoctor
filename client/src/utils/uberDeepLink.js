@@ -1,25 +1,29 @@
 /**
- * Uber Universal Deep Link Utility
+ * Uber Deep Link Utility
  * 
- * Implements the official Uber Ride Request Universal Deep Link specification:
- * https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[latitude]=...&dropoff[longitude]=...&dropoff[nickname]=...
- * 
- * Works across all platforms:
- * 1. Windows / Desktop: Opens in the browser at m.uber.com with pickup auto-set to the
- *    browser's current location and dropoff pre-filled to the hospital ER.
- * 2. Mobile (Android & iOS): Opens the native Uber app directly if installed,
- *    or smoothly falls back to the mobile web page.
- * 
- * Auto-fills:
- * - Pickup: `pickup=my_location` (automatically locks to device GPS / browser geolocation)
- * - Dropoff: Hospital latitude, longitude, URL-encoded name and address
+ * Implements the official Uber Ride Request Universal Deep Link & Native App Link specification.
+ * - STEP 2: buildUberLinks(pickup, hospital) returns:
+ *     appUrl: uber://?action=setPickup&...
+ *     webUrl: https://m.uber.com/ul/?action=setPickup&...
+ *   with explicit pickup coordinates:
+ *     pickup[latitude], pickup[longitude], pickup[nickname]=My Location,
+ *     dropoff[latitude], dropoff[longitude], dropoff[nickname]=<hospital name>,
+ *     dropoff[formatted_address]=<hospital address>
  */
 
 export const UBER_CLIENT_ID = "DfjKZC3xXnBEObgCRl1ChUSdRJDnjwBP";
 
 /**
- * Detects if the current browser session is running on a mobile device (Android / iOS).
- * Uses a comprehensive user-agent check.
+ * Detects if the current user agent is an Android or iOS device.
+ */
+export function isAndroidOrIOS() {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || navigator.vendor || window.opera || "";
+  return /Android|iPhone|iPad|iPod/i.test(ua);
+}
+
+/**
+ * Detects if the current browser session is running on any mobile device.
  */
 export function isMobileDevice() {
   if (typeof navigator === "undefined") return false;
@@ -28,41 +32,108 @@ export function isMobileDevice() {
 }
 
 /**
- * 1. Mobile Uber Universal Deep Link (Android / iOS)
- * Official mobile universal link format:
- *   https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[latitude]=...&dropoff[longitude]=...&dropoff[nickname]=...&dropoff[formatted_address]=...
- * Launches native Uber app directly or mobile web page.
+ * Helper to safely extract numeric latitude and longitude from varied coordinate objects.
+ * Handles both { lat, lng } and { latitude, longitude } formats, and strings or numbers.
  */
-export function buildUberMobileLink(hospital) {
-  if (!hospital || !hospital.lat || !hospital.lng) {
-    return null;
-  }
-
-  const params = new URLSearchParams();
-  params.append("action", "setPickup");
-  params.append("pickup", "my_location");
-  params.append("dropoff[latitude]", String(hospital.lat));
-  params.append("dropoff[longitude]", String(hospital.lng));
-  params.append("dropoff[nickname]", hospital.name || "Hospital Emergency Department");
-  params.append("dropoff[formatted_address]", hospital.address || hospital.name || "Hospital");
-
-  return `https://m.uber.com/ul/?${params.toString()}`;
+export function extractCoords(coordObj) {
+  if (!coordObj) return null;
+  const lat = Number(coordObj.lat ?? coordObj.latitude);
+  const lng = Number(coordObj.lng ?? coordObj.longitude);
+  if (isNaN(lat) || isNaN(lng)) return null;
+  return { lat, lng };
 }
 
 /**
- * 2. Desktop Uber Web Booking Link (Windows / macOS / Desktop Browser)
- * Official desktop web booking URL with JSON-encoded drop[0] parameter:
- *   https://m.uber.com/go/product-selection?pickup=my_location&drop[0]={"latitude":lat,"longitude":lng,"addressLine1":"...","addressLine2":"..."}
- * URL-encoded via URLSearchParams.
+ * STEP 2: BUILD THE LINK
+ * buildUberLinks(pickup, hospital)
+ * 
+ * Returns two URLs using URLSearchParams (URL-encoded):
+ *   appUrl: uber://?action=setPickup&...
+ *   webUrl: https://m.uber.com/ul/?action=setPickup&...
+ * 
+ * Both with these parameters:
+ *   pickup[latitude], pickup[longitude], pickup[nickname]=My Location,
+ *   dropoff[latitude], dropoff[longitude], dropoff[nickname]=<hospital name>,
+ *   dropoff[formatted_address]=<hospital address>
+ * 
+ * Uses explicit pickup coordinates, NOT pickup=my_location.
+ * 
+ * @param {{ latitude: number, longitude: number } | { lat: number, lng: number }} pickup 
+ * @param {{ name: string, address: string, lat: number, lng: number }} hospital 
+ * @returns {{ appUrl: string, webUrl: string } | null}
  */
-export function buildUberDesktopLink(hospital) {
-  if (!hospital || !hospital.lat || !hospital.lng) {
+export function buildUberLinks(pickup, hospital) {
+  if (!pickup || !hospital) return null;
+
+  const pickupCoords = extractCoords(pickup);
+  const dropoffCoords = extractCoords(hospital);
+
+  if (!pickupCoords || !dropoffCoords) {
+    console.error("Invalid coordinates passed to buildUberLinks:", { pickup, hospital });
     return null;
   }
 
+  const hospitalName = (hospital.name || "Hospital Emergency Department").trim();
+  const hospitalAddress = (hospital.address || hospital.name || "Emergency Hospital").trim();
+
+  // Build query string using URLSearchParams for strict URL encoding
+  const params = new URLSearchParams();
+  params.append("action", "setPickup");
+  params.append("pickup[latitude]", String(pickupCoords.lat));
+  params.append("pickup[longitude]", String(pickupCoords.lng));
+  params.append("pickup[nickname]", "My Location");
+  params.append("dropoff[latitude]", String(dropoffCoords.lat));
+  params.append("dropoff[longitude]", String(dropoffCoords.lng));
+  params.append("dropoff[nickname]", hospitalName);
+  params.append("dropoff[formatted_address]", hospitalAddress);
+
+  const queryString = params.toString();
+
+  return {
+    appUrl: `uber://?${queryString}`,
+    webUrl: `https://m.uber.com/ul/?${queryString}`
+  };
+}
+
+/**
+ * Google Maps Directions Link (turn-by-turn driving)
+ * Formats: https://www.google.com/maps/dir/?api=1&origin=LIVE_LAT,LIVE_LNG&destination=HOSPITAL_LAT,HOSPITAL_LNG&travelmode=driving
+ */
+export function buildGoogleMapsLink(pickup, hospital) {
+  if (!hospital) return "https://www.google.com/maps";
+
+  const pickupCoords = extractCoords(pickup);
+  const dropoffCoords = extractCoords(hospital);
+
+  if (pickupCoords && dropoffCoords) {
+    return `https://www.google.com/maps/dir/?api=1&origin=${pickupCoords.lat},${pickupCoords.lng}&destination=${dropoffCoords.lat},${dropoffCoords.lng}&travelmode=driving`;
+  }
+
+  const destination = dropoffCoords
+    ? `${dropoffCoords.lat},${dropoffCoords.lng}`
+    : encodeURIComponent(`${hospital.name || "Hospital"}, ${hospital.address || ""}`.trim());
+
+  return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`;
+}
+
+/**
+ * Backwards compatibility helper for previous mobile link callers
+ */
+export function buildUberMobileLink(hospital, pickup = null) {
+  const links = buildUberLinks(pickup || { lat: 0, lng: 0 }, hospital);
+  return links ? links.webUrl : null;
+}
+
+/**
+ * Backwards compatibility helper for previous desktop link callers
+ */
+export function buildUberDesktopLink(hospital) {
+  const dropCoords = extractCoords(hospital);
+  if (!dropCoords) return null;
+
   const dropObj = {
-    latitude: Number(hospital.lat),
-    longitude: Number(hospital.lng),
+    latitude: dropCoords.lat,
+    longitude: dropCoords.lng,
     addressLine1: hospital.name || "Hospital Emergency Department",
     addressLine2: hospital.address || ""
   };
@@ -75,55 +146,58 @@ export function buildUberDesktopLink(hospital) {
 }
 
 /**
- * 3. Helper function buildUberLink(hospital)
- * Platform-aware Uber link builder:
- * - On Mobile (Android/iOS): returns mobile universal deep link (m.uber.com/ul/...)
- * - On Desktop (Windows): returns desktop web booking link (m.uber.com/go/product-selection...)
+ * Backwards compatibility helper
  */
 export function buildUberLink(hospital, forceMobile = null) {
-  const isMobile = forceMobile !== null ? forceMobile : isMobileDevice();
-  return isMobile ? buildUberMobileLink(hospital) : buildUberDesktopLink(hospital);
+  if (!hospital) return null;
+  const isMob = forceMobile !== null ? forceMobile : isMobileDevice();
+  if (isMob) {
+    const coords = extractCoords(hospital);
+    if (!coords) return null;
+    const params = new URLSearchParams();
+    params.append("action", "setPickup");
+    params.append("pickup", "my_location");
+    params.append("dropoff[latitude]", String(coords.lat));
+    params.append("dropoff[longitude]", String(coords.lng));
+    params.append("dropoff[nickname]", hospital.name || "Hospital");
+    params.append("dropoff[formatted_address]", hospital.address || hospital.name || "Hospital");
+    return `https://m.uber.com/ul/?${params.toString()}`;
+  }
+  return buildUberDesktopLink(hospital);
 }
 
 /**
- * 4. Google Maps Directions Link (Reliable Desktop & Mobile Fallback)
- * Opens turn-by-turn driving directions from user's live location to the hospital.
+ * Backwards compatibility helper
  */
-export function buildGoogleMapsLink(hospital) {
-  if (!hospital) return "https://www.google.com/maps";
-  const destination = hospital.lat && hospital.lng
-    ? `${hospital.lat},${hospital.lng}`
-    : encodeURIComponent(`${hospital.name || "Hospital"}, ${hospital.address || ""}`.trim());
-  return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`;
-}
-
-/**
- * Opens the pre-filled Uber ride link across Windows and Phone:
- * - Phone (Android / iOS): window.location.href triggers native OS Universal Links / App Links,
- *   launching the installed Uber app directly (or falling back to the mobile web page).
- * - Windows / Desktop: window.open(url, "_blank") opens m.uber.com/go/product-selection in a new browser tab.
- * Also copies the hospital destination address to clipboard as an instant fallback.
- */
-export function openUberRideToHospital(hospital) {
+export function openUberRideToHospital(hospital, pickup = null) {
   if (!hospital) return false;
-  const isMobile = isMobileDevice();
-  const url = buildUberLink(hospital, isMobile);
-  if (!url) return false;
+  const links = pickup ? buildUberLinks(pickup, hospital) : null;
+  const webUrl = links ? links.webUrl : buildUberLink(hospital);
+  if (!webUrl) return false;
 
-  // Copy hospital destination address to clipboard as an instant fallback
   try {
     const copyText = hospital.address ? `${hospital.name}, ${hospital.address}` : hospital.name;
     navigator.clipboard?.writeText?.(copyText);
   } catch (_) {}
 
-  if (isMobile) {
-    window.location.href = url;
+  if (isAndroidOrIOS()) {
+    if (links?.appUrl) {
+      window.location.href = links.appUrl;
+      setTimeout(() => {
+        if (!document.hidden) window.location.href = webUrl;
+      }, 1500);
+      return true;
+    }
+    window.location.href = webUrl;
   } else {
-    window.open(url, "_blank", "noopener,noreferrer");
+    window.open(webUrl, "_blank", "noopener,noreferrer");
   }
   return true;
 }
 
+/**
+ * Backwards compatibility helper for EmergencyTracking.jsx and other legacy callers
+ */
 export function buildUberUniversalUrl({
   userLat = null,
   userLng = null,
@@ -135,82 +209,26 @@ export function buildUberUniversalUrl({
   productId = null,
   exactPickupCoords = false
 }) {
-  const params = new URLSearchParams();
+  const pickup = (userLat && userLng) ? { lat: userLat, lng: userLng } : null;
+  const hospital = { lat: hospLat, lng: hospLng, name: hospitalName, address: hospitalAddress };
+  const links = pickup ? buildUberLinks(pickup, hospital) : null;
+  if (links) return links.webUrl;
 
-  if (UBER_CLIENT_ID) {
-    params.append("client_id", UBER_CLIENT_ID);
-  }
-  params.append("action", "setPickup");
-
-  // 1. Pickup: 'pickup=my_location' tells Uber to auto-fill with the rider's current location
-  // If exact coordinates are explicitly requested and available, pass coordinates
-  if (exactPickupCoords && userLat && userLng) {
-    params.append("pickup[latitude]", String(Number(userLat)));
-    params.append("pickup[longitude]", String(Number(userLng)));
-    params.append("pickup[nickname]", userAddress || "My Location");
-    if (userAddress) {
-      params.append("pickup[formatted_address]", userAddress);
-    }
-  } else {
-    params.append("pickup", "my_location");
-  }
-
-  // 2. Dropoff: Hospital coordinates and URL-encoded name/address
-  if (hospLat && hospLng) {
-    params.append("dropoff[latitude]", String(Number(hospLat)));
-    params.append("dropoff[longitude]", String(Number(hospLng)));
-    params.append("dropoff[nickname]", hospitalName || "Hospital ER");
-    const formattedAddr = hospitalAddress
-      ? `${hospitalName}, ${hospitalAddress}`
-      : (hospitalName || "Emergency Hospital");
-    params.append("dropoff[formatted_address]", formattedAddr);
-  }
-
-  if (productId) {
-    params.append("product_id", productId);
-  }
-
-  return `https://m.uber.com/ul/?${params.toString()}`;
-}
-
-/**
- * Legacy mobile app scheme builder (uber://riderequest) maintained for compatibility
- */
-export function buildUberAppSchemeUrl({
-  userLat,
-  userLng,
-  userAddress = "Live GPS Location",
-  hospLat,
-  hospLng,
-  hospitalName = "Hospital ER",
-  hospitalAddress = "Emergency Department",
-  productId = null
-}) {
   const params = new URLSearchParams();
   if (UBER_CLIENT_ID) params.append("client_id", UBER_CLIENT_ID);
   params.append("action", "setPickup");
   params.append("pickup", "my_location");
-
   if (hospLat && hospLng) {
     params.append("dropoff[latitude]", String(Number(hospLat)));
     params.append("dropoff[longitude]", String(Number(hospLng)));
     params.append("dropoff[nickname]", hospitalName || "Hospital ER");
-    params.append("dropoff[formatted_address]", `${hospitalName}, ${hospitalAddress || ""}`.trim());
+    params.append("dropoff[formatted_address]", hospitalAddress || hospitalName || "Hospital");
   }
-
-  if (productId) {
-    params.append("product_id", productId);
-  }
-
-  return `uber://riderequest?${params.toString()}`;
+  return `https://m.uber.com/ul/?${params.toString()}`;
 }
 
-
 /**
- * Launches the pre-filled Uber ride flow:
- * - Automatically auto-fills Pickup (current location) and Dropoff (hospital ER)
- * - Directly triggers navigation so the OS intercepts to open native app on phone,
- *   or opens m.uber.com in browser on Windows.
+ * Backwards compatibility helper for SOSFlow.jsx and EmergencyTracking.jsx
  */
 export function openUberRide({
   userLat,
@@ -223,34 +241,8 @@ export function openUberRide({
   productId = null,
   newTab = false
 }) {
-  if (!hospLat || !hospLng) {
-    console.error("Missing hospital coordinates for Uber ride dispatch.");
-    return;
-  }
-
-  const universalUrl = buildUberUniversalUrl({
-    userLat,
-    userLng,
-    userAddress,
-    hospLat,
-    hospLng,
-    hospitalName,
-    hospitalAddress,
-    productId
-  });
-
-  // Copy hospital destination address to clipboard as a helpful fallback
-  try {
-    const fullText = hospitalAddress ? `${hospitalName}, ${hospitalAddress}` : hospitalName;
-    navigator.clipboard?.writeText?.(fullText);
-  } catch (_) {}
-
-  // Open the pre-filled ride link:
-  // On mobile, window.location.href triggers the OS app link handler to open native Uber app.
-  // On Windows desktop, opens m.uber.com with auto-filled locations.
-  if (newTab) {
-    window.open(universalUrl, "_blank", "noopener,noreferrer");
-  } else {
-    window.location.href = universalUrl;
-  }
+  const pickup = (userLat && userLng) ? { lat: userLat, lng: userLng } : null;
+  const hospital = { lat: hospLat, lng: hospLng, name: hospitalName, address: hospitalAddress };
+  return openUberRideToHospital(hospital, pickup);
 }
+

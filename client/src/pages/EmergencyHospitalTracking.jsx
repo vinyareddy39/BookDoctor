@@ -10,11 +10,11 @@ import {
   selectFastestHospitalByRoad
 } from "../services/hospitalService";
 import {
-  openUberRide,
-  openUberRideToHospital,
-  buildUberLink,
+  buildUberLinks,
   buildGoogleMapsLink,
-  isMobileDevice
+  isAndroidOrIOS,
+  isMobileDevice,
+  extractCoords
 } from "../utils/uberDeepLink";
 import {
   formatDialNumber,
@@ -76,10 +76,13 @@ export default function EmergencyHospitalTracking() {
   const [errorMessage, setErrorMessage] = useState(null);
   const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
 
-  // Twilio Calling & Address Copy
+  // Twilio Calling & Address Copy & Desktop Uber Panel
   const [callingTwilio, setCallingTwilio] = useState(false);
   const [copiedNumber, setCopiedNumber] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
+  const [gettingLocationForUber, setGettingLocationForUber] = useState(false);
+  const [showDesktopPanel, setShowDesktopPanel] = useState(false);
+  const [desktopUberData, setDesktopUberData] = useState(null);
 
   const emergencyPhone = getEmergencyPhoneNumber();
   const isMobile = isMobileDevice();
@@ -204,33 +207,138 @@ export default function EmergencyHospitalTracking() {
   };
 
   /**
-   * 3. "Book Uber to Hospital" Handler
+   * STEP 3: "Book Uber to Hospital" Handler
    * 
-   * Reuses the nearest hospital object (selectedHospital) that was already
-   * computed and stored in component state.
-   * Does NOT trigger any new hospital searches or additional API calls.
+   * On tap:
+   * 1. Get fresh live location with navigator.geolocation.getCurrentPosition
+   *    (enableHighAccuracy: true, timeout 10000). If it fails, fall back to the
+   *    last known location already stored in the project. If there is none,
+   *    show "Please allow location access."
+   * 2. Use the already computed nearest hospital. If it's missing, disable the
+   *    button and show "Hospital not found yet."
+   * 3. console.log the final appUrl, webUrl, pickup and dropoff values so user can verify.
    * 
-   * Calls openUberRideToHospital(selectedHospital) which:
-   * - Mobile: opens m.uber.com/ul/?action=setPickup&pickup=my_location... (triggers Uber app)
-   * - Desktop: opens m.uber.com/go/product-selection?pickup=my_location&drop[0]={json}
-   * - Automatically copies hospital destination address to clipboard as fallback.
+   * Platform handling:
+   * - ANDROID or IOS: set window.location.href = appUrl. Listen for
+   *   document visibilitychange. If the page is still visible after 1500 ms
+   *   (the Uber app didn't open), set window.location.href = webUrl.
+   * - DESKTOP (Windows/Mac/Linux): Show desktop panel with hospital address,
+   *   copy button, Google Maps button, and Open Uber button.
    */
-  const handleBookUber = () => {
-    if (!selectedHospital || !selectedHospital.lat || !selectedHospital.lng) {
-      toast.error("Hospital not found yet. Please wait until nearest hospital is loaded.");
+  const handleBookUber = async () => {
+    const hospCoords = extractCoords(selectedHospital);
+    if (!selectedHospital || !hospCoords) {
+      toast.error("Hospital not found yet.");
       return;
     }
 
-    const opened = openUberRideToHospital(selectedHospital);
-    if (opened) {
-      if (!isMobile) {
-        toast.success("Opening Uber... Hospital address copied to clipboard for quick paste!", {
-          id: "uber-open-toast",
-          duration: 4500
-        });
-      }
+    setGettingLocationForUber(true);
+
+    // 1. Get fresh live location with timeout: 10000, enableHighAccuracy: true
+    const getFreshLocation = () =>
+      new Promise((resolve) => {
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const fresh = {
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+              accuracy: pos.coords.accuracy
+            };
+            setUserLocation(fresh);
+            resolve(fresh);
+          },
+          (err) => {
+            console.warn("Fresh location acquisition timed out or failed:", err);
+            resolve(null);
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      });
+
+    const fresh = await getFreshLocation();
+    const effectiveLoc = fresh || (userLocation?.latitude && userLocation?.longitude ? userLocation : null);
+
+    setGettingLocationForUber(false);
+
+    if (!effectiveLoc) {
+      toast.error("Please allow location access.");
+      setLocationPermissionDenied(true);
+      return;
+    }
+
+    // 2. Build the Uber links with explicit pickup and dropoff coordinates
+    const links = buildUberLinks(effectiveLoc, selectedHospital);
+    if (!links) {
+      toast.error("Unable to generate Uber link.");
+      return;
+    }
+
+    const { appUrl, webUrl } = links;
+    const pickupVal = {
+      latitude: Number(effectiveLoc.latitude ?? effectiveLoc.lat),
+      longitude: Number(effectiveLoc.longitude ?? effectiveLoc.lng)
+    };
+    const dropoffVal = {
+      name: (selectedHospital.name || "Hospital").trim(),
+      address: (selectedHospital.address || selectedHospital.name || "").trim(),
+      latitude: hospCoords.lat,
+      longitude: hospCoords.lng
+    };
+
+    // 3. console.log the final appUrl, webUrl, pickup and dropoff values so user can verify
+    console.group("🚖 [Uber Ride Dispatch Verification]");
+    console.log("📍 Pickup:", pickupVal);
+    console.log("🏥 Dropoff:", dropoffVal);
+    console.log("📲 appUrl:", appUrl);
+    console.log("🌐 webUrl:", webUrl);
+    console.groupEnd();
+
+    // Prepare desktop fallback data & Google Maps driving link
+    const gMapsUrl = buildGoogleMapsLink(effectiveLoc, selectedHospital);
+    setDesktopUberData({
+      appUrl,
+      webUrl,
+      googleMapsUrl: gMapsUrl,
+      hospitalName: dropoffVal.name,
+      hospitalAddress: dropoffVal.address,
+      pickup: pickupVal,
+      dropoff: dropoffVal
+    });
+
+    // 4. Platform handling
+    if (isAndroidOrIOS()) {
+      // ANDROID or IOS:
+      // Set window.location.href = appUrl.
+      // Listen for document visibilitychange.
+      // If the page is still visible after 1500 ms (Uber app didn't open), set window.location.href = webUrl.
+      let appOpened = false;
+
+      const handleVisibilityChange = () => {
+        if (document.hidden) {
+          appOpened = true;
+        }
+      };
+
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+
+      setTimeout(() => {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+        if (!appOpened && !document.hidden) {
+          console.log("Uber app not launched after 1500ms; redirecting to webUrl:", webUrl);
+          window.location.href = webUrl;
+        }
+      }, 1500);
+
+      window.location.href = appUrl;
     } else {
-      toast.error("Unable to generate Uber link for hospital.");
+      // DESKTOP (Windows/Mac/Linux):
+      // Uber's website drops prefilled locations on desktop, so show desktop panel
+      setShowDesktopPanel(true);
+      toast("Desktop mode: Use the ride panel below to copy address or open directions.", {
+        icon: "💻",
+        duration: 4000
+      });
     }
   };
 
@@ -559,32 +667,121 @@ export default function EmergencyHospitalTracking() {
                   <button
                     type="button"
                     onClick={handleBookUber}
-                    disabled={!selectedHospital || !selectedHospital.lat || !selectedHospital.lng}
+                    disabled={gettingLocationForUber || !selectedHospital || (!selectedHospital.lat && !selectedHospital.latitude)}
                     className={`w-full py-4 px-6 font-black rounded-2xl shadow-xl transition-all duration-200 flex items-center justify-center gap-3 text-base group ${
-                      selectedHospital && selectedHospital.lat && selectedHospital.lng
+                      selectedHospital && (selectedHospital.lat || selectedHospital.latitude)
                         ? "bg-black hover:bg-slate-900 active:scale-[0.98] text-white cursor-pointer"
                         : "bg-slate-300 text-slate-500 cursor-not-allowed shadow-none"
                     }`}
                   >
-                    <span className="text-2xl group-hover:scale-110 transition-transform">🚗</span>
+                    {gettingLocationForUber ? (
+                      <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
+                    ) : (
+                      <span className="text-2xl group-hover:scale-110 transition-transform">🚗</span>
+                    )}
                     <div className="text-left flex-1 min-w-0">
                       <p className="leading-tight">
-                        {selectedHospital && selectedHospital.lat && selectedHospital.lng
+                        {gettingLocationForUber
+                          ? "Acquiring live location..."
+                          : selectedHospital && (selectedHospital.lat || selectedHospital.latitude)
                           ? "Book Uber to Hospital"
                           : "Hospital not found yet"}
                       </p>
-                      {selectedHospital && (
+                      {selectedHospital && !gettingLocationForUber && (
                         <p className="text-[11px] font-normal text-slate-300 truncate">
                           To: {selectedHospital.name} ({selectedHospital.roadDurationMins || selectedHospital.etaMinutes || 5} min road ETA)
                         </p>
                       )}
                     </div>
-                    {selectedHospital && selectedHospital.lat && (
+                    {selectedHospital && (selectedHospital.lat || selectedHospital.latitude) && !gettingLocationForUber && (
                       <span className="ml-auto text-lg text-slate-400 group-hover:text-white transition-colors">➔</span>
                     )}
                   </button>
 
-                  {/* Fallback Action Buttons: Copy Address & Open in Google Maps */}
+                  {/* Informational note required by specification */}
+                  <p className="text-[11px] text-slate-500 text-center leading-normal px-2 pt-1 font-medium">
+                    Uber will open with locations pre-filled. Tap Request there to confirm the ride.
+                  </p>
+
+                  {/* ── STEP 3: Desktop Panel (Windows/Mac/Linux) ── */}
+                  {showDesktopPanel && desktopUberData && (
+                    <div className="mt-4 p-4 bg-amber-50/90 border-2 border-amber-300 rounded-2xl space-y-3.5 animate-fade-in shadow-md">
+                      <div className="flex items-start justify-between gap-2 border-b border-amber-200/80 pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">💻</span>
+                          <div>
+                            <span className="text-xs font-black text-amber-950 uppercase tracking-wider block">
+                              Desktop Ride Panel
+                            </span>
+                            <span className="text-[10px] text-amber-700 font-semibold">
+                              Uber Ride Dispatch Support
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowDesktopPanel(false)}
+                          className="text-amber-800 hover:text-amber-950 text-xs font-bold px-2 py-1 rounded-md hover:bg-amber-100 transition"
+                        >
+                          ✕ Close
+                        </button>
+                      </div>
+
+                      {/* Required message: Uber's website can't prefill locations on desktop. Open this on your phone for automatic fill. */}
+                      <div className="p-3 bg-white/95 rounded-xl border border-amber-200 text-xs text-amber-900 font-semibold leading-relaxed shadow-sm">
+                        ⚠️ <strong>Notice:</strong> Uber's website can't prefill locations on desktop. Open this on your phone for automatic fill.
+                      </div>
+
+                      {/* Hospital name and full address */}
+                      <div className="p-3.5 bg-white rounded-xl border border-amber-200 text-xs space-y-1 shadow-sm">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Destination Hospital & Emergency Address
+                        </span>
+                        <p className="font-extrabold text-slate-900 text-sm">
+                          {desktopUberData.hospitalName}
+                        </p>
+                        <p className="text-slate-600 text-xs leading-relaxed">
+                          {desktopUberData.hospitalAddress || desktopUberData.hospitalName}
+                        </p>
+                      </div>
+
+                      {/* Action buttons: Copy address, Open in Google Maps, Open Uber */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={handleCopyHospitalAddress}
+                          className="py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-slate-300 shadow-sm transition active:scale-95"
+                          title="Copy hospital address to clipboard"
+                        >
+                          <span>📋</span>
+                          <span>{copiedAddress ? "Copied! ✅" : "Copy address"}</span>
+                        </button>
+
+                        <a
+                          href={desktopUberData.googleMapsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 text-center"
+                          title="Open driving directions in Google Maps"
+                        >
+                          <span>🗺️</span>
+                          <span>Open in Google Maps</span>
+                        </a>
+
+                        <button
+                          type="button"
+                          onClick={() => window.open(desktopUberData.webUrl, "_blank", "noopener,noreferrer")}
+                          className="py-2.5 px-3 bg-black hover:bg-slate-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 text-center"
+                          title="Open Uber in new browser tab"
+                        >
+                          <span>🚗</span>
+                          <span>Open Uber</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fallback Action Buttons: Copy Address & Open in Google Maps (visible outside panel on all devices) */}
                   <div className="grid grid-cols-2 gap-2 pt-0.5">
                     <button
                       type="button"
@@ -598,7 +795,7 @@ export default function EmergencyHospitalTracking() {
                     </button>
 
                     <a
-                      href={selectedHospital ? buildGoogleMapsLink(selectedHospital) : "#"}
+                      href={selectedHospital ? buildGoogleMapsLink(userLocation, selectedHospital) : "#"}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="py-2.5 px-3 bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-blue-200 transition text-center"
@@ -607,16 +804,6 @@ export default function EmergencyHospitalTracking() {
                       <span>🗺️</span>
                       <span>Open in Google Maps</span>
                     </a>
-                  </div>
-
-                  {/* Informational note required by specification */}
-                  <div className="text-[11px] text-slate-500 text-center leading-normal px-1 space-y-0.5 pt-1">
-                    <p>Uber will open with locations pre-filled. Tap Request there to confirm the ride.</p>
-                    {!isMobile && (
-                      <p className="text-[10px] text-slate-400">
-                        💡 On Windows desktop: If Uber's site drops the dropoff location, paste the copied address or use Open in Google Maps.
-                      </p>
-                    )}
                   </div>
                 </div>
               </div>
