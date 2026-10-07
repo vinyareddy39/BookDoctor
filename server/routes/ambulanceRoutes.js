@@ -1,6 +1,6 @@
 
 import express from "express";
-import { auth } from "../middleware/index.js";
+import { optionalAuth } from "../middleware/index.js";
 import {
   getAmbulanceStatus,
   updateAmbulanceLocation,
@@ -9,12 +9,12 @@ import {
 
 const router = express.Router();
 
-// Get status (Patient uses this)
-router.get("/:id", auth, getAmbulanceStatus);
+// Get status (Patient tracking or Ambulance driver login)
+router.get("/:id", optionalAuth, getAmbulanceStatus);
 
-// Driver actions
-router.post("/:id/location", updateAmbulanceLocation); // Unprotected for demo simulation, in real app needs driver auth
-router.post("/:id/complete", completeAmbulanceTrip);
+// Driver actions (Demo driver app / tracking)
+router.post("/:id/location", optionalAuth, updateAmbulanceLocation);
+router.post("/:id/complete", optionalAuth, completeAmbulanceTrip);
 
 export default router;
 

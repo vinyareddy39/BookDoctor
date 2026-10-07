@@ -10,11 +10,12 @@ import {
 } from "../controllers/paymentController.js";
 
 import { auth } from "../middleware/index.js";
+import { paymentLimiter } from "../middleware/rateLimiter.js";
 
 const router = express.Router();
 
-router.post("/create-order", auth, createOrder);
-router.post("/verify", auth, verifyPayment);
+router.post("/create-order", paymentLimiter, auth, createOrder);
+router.post("/verify", paymentLimiter, auth, verifyPayment);
 router.post("/test-pay", auth, testPayAppointment);
 router.post("/webhook", razorpayWebhook);
 

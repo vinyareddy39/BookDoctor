@@ -59,7 +59,7 @@ async function seed() {
         taxRatePercent: 18,
         invoicePrefix: "INV-2026-",
         paymentGateways: {
-          razorpay: { enabled: true, keyId: process.env.RAZORPAY_KEY_ID || "rzp_test_demo" },
+          razorpay: { enabled: Boolean(process.env.RAZORPAY_KEY_ID), keyId: process.env.RAZORPAY_KEY_ID || "" },
           cashAtCounter: { enabled: true },
           upiAtCounter: { enabled: true },
         },

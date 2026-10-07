@@ -21,6 +21,7 @@ import paymentRoutes     from "./routes/paymentroutes.js";
 import googleRoutes      from "./routes/googleroutes.js";
 import chatRoutes        from "./routes/chatroutes.js";
 import emergencyRoutes   from "./routes/emergencyRoutes.js";
+import ambulanceRoutes   from "./routes/ambulanceRoutes.js";
 import auditRoutes       from "./routes/auditRoutes.js";
 import clinicRoutes      from "./routes/clinicRoutes.js";
 import departmentRoutes  from "./routes/departmentRoutes.js";
@@ -49,8 +50,19 @@ import { initSocket } from "./socket.js";
 import http from "http";
 import cookieParser from "cookie-parser";
 import { startReminderCron } from "./service/cronService.js";
+import { validateRazorpayConfig } from "./services/paymentService.js";
 
 dotenv.config();
+
+// Enforce production gateway security checks on startup
+validateRazorpayConfig();
+
+if (process.env.NODE_ENV === "production") {
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
+    console.error("FATAL CONFIG ERROR: JWT_SECRET must be set and at least 16 characters in production.");
+    process.exit(1);
+  }
+}
 
 const app = express();
 app.set("trust proxy", 1);
@@ -76,19 +88,28 @@ if (process.env.NODE_ENV !== "test") {
 // ===============================
 // CORS — locked to allowed origins
 // ===============================
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-  : [
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "https://book-doctor-six.vercel.app", // production frontend
-    ];
+const defaultOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://book-doctor-six.vercel.app", // production frontend
+];
+
+const envOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
+  : [];
+
+const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (curl, Postman, server-to-server)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (
+      allowedOrigins.includes(origin) ||
+      /^https:\/\/book-doctor[a-z0-9-]*\.vercel\.app$/.test(origin)
+    ) {
+      return callback(null, true);
+    }
     // Return false — do NOT throw an Error here.
     // Throwing causes Express to send a response with no CORS headers,
     // making the browser show a confusing opaque CORS failure instead of a 403.
@@ -186,6 +207,7 @@ app.use("/api/payments",     paymentRoutes);
 app.use("/api/google",       googleRoutes);
 app.use("/api/chat",         chatRoutes);
 app.use("/api/emergency",    emergencyRoutes);
+app.use("/api/ambulance",    ambulanceRoutes);
 app.use("/api/audit-logs",   auditRoutes);
 app.use("/api/clinic",       clinicRoutes);
 app.use("/api/departments",  departmentRoutes);

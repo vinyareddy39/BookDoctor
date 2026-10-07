@@ -402,7 +402,7 @@ export default function AppointmentCard({ appointment }) {
                   }}
                   disabled={processingPayment || verifyingPayment || runningTestPay}
                   className="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-xs font-bold px-3 py-2 sm:py-1.5 rounded-lg shadow transition-colors flex items-center justify-center gap-1.5 active:scale-95 flex-1 sm:flex-initial"
-                  title="Open official Razorpay Sandbox Checkout modal"
+                  title="Pay consultation fee securely via Razorpay"
                 >
                   <span>💳</span>
                   <span className="truncate">
@@ -410,20 +410,24 @@ export default function AppointmentCard({ appointment }) {
                       ? "Verifying Payment..."
                       : processingPayment
                       ? "Opening Checkout..."
-                      : "Pay Consultation Fee (Test Mode)"}
+                      : import.meta.env.DEV
+                      ? "Pay Consultation Fee (Dev Mode)"
+                      : "Pay Consultation Fee"}
                   </span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleTestPay}
-                  disabled={processingPayment || verifyingPayment || runningTestPay}
-                  className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold px-2.5 py-2 sm:py-1.5 rounded-lg shadow transition-colors flex items-center justify-center gap-1 active:scale-95 flex-1 sm:flex-initial"
-                  title="Simulate 1-click test payment without opening checkout modal"
-                >
-                  <span>⚡</span>
-                  <span className="truncate">{runningTestPay ? "Processing..." : "Instant Test Pay"}</span>
-                </button>
+                {import.meta.env.DEV && (
+                  <button
+                    type="button"
+                    onClick={handleTestPay}
+                    disabled={processingPayment || verifyingPayment || runningTestPay}
+                    className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold px-2.5 py-2 sm:py-1.5 rounded-lg shadow transition-colors flex items-center justify-center gap-1 active:scale-95 flex-1 sm:flex-initial"
+                    title="Simulate 1-click test payment without opening checkout modal (Dev only)"
+                  >
+                    <span>⚡</span>
+                    <span className="truncate">{runningTestPay ? "Processing..." : "Instant Test Pay"}</span>
+                  </button>
+                )}
               </div>
             )}
 

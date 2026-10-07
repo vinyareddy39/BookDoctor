@@ -331,9 +331,10 @@ export const createRazorpayCheckout = async (req, res, next) => {
 
     const amountInPaise = Math.round(invoice.balanceAmount * 100);
 
-    // Non-production or Demo Mode fallback if Razorpay keys are not configured
+    // Non-production or Demo Mode fallback if Razorpay keys are not configured (STRICTLY disabled in production)
     const isDemoMode =
-      (process.env.DEMO_MODE === "true" || process.env.NODE_ENV !== "production") &&
+      process.env.NODE_ENV !== "production" &&
+      process.env.DEMO_MODE === "true" &&
       (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET);
 
     if (isDemoMode) {
@@ -342,7 +343,7 @@ export const createRazorpayCheckout = async (req, res, next) => {
         orderId: `order_demo_${Date.now()}`,
         amount: amountInPaise,
         currency: "INR",
-        keyId: "rzp_test_demokey",
+        keyId: process.env.RAZORPAY_KEY_ID || "",
         invoiceNumber: invoice.invoiceNumber,
         patientName: invoice.patientId?.name,
         balanceAmount: invoice.balanceAmount,
@@ -397,9 +398,11 @@ export const verifyRazorpayPayment = async (req, res, next) => {
       return req.http.badRequest("Invoice is already fully settled");
     }
 
-    // Demo Mode Verification Bypass
+    // Demo Mode Verification Bypass: STRICTLY disabled in production
     const isDemoAllowed =
-      (process.env.DEMO_MODE === "true" || process.env.NODE_ENV !== "production") && demoMode;
+      process.env.NODE_ENV !== "production" &&
+      process.env.DEMO_MODE === "true" &&
+      Boolean(demoMode);
 
     if (!isDemoAllowed) {
       if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {

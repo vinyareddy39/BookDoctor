@@ -99,7 +99,12 @@ export const getClinicalNotes = async (req, res, next) => {
     const { patientId, appointmentId } = req.query;
     let query = {};
 
-    if (patientId) query.patientId = patientId;
+    if (req.user.role === "patient") {
+      query.patientId = req.user._id;
+    } else if (patientId) {
+      query.patientId = patientId;
+    }
+
     if (appointmentId) query.appointmentId = appointmentId;
 
     if (req.user.role === "doctor") {
@@ -129,6 +134,10 @@ export const getClinicalNoteById = async (req, res, next) => {
       .populate("parentNoteId");
 
     if (!note) return req.http.notFound("Clinical note not found");
+
+    if (req.user.role === "patient" && String(note.patientId?._id || note.patientId) !== String(req.user._id)) {
+      return req.http.forbidden("Access denied: You may only view your own clinical records");
+    }
 
     return req.http.ok(note);
   } catch (err) {
@@ -649,6 +658,10 @@ export const getPrescriptionById = async (req, res, next) => {
       .populate({ path: "doctorId", populate: { path: "userId", select: "name qualification clinicName address" } });
 
     if (!prescription) return req.http.notFound("Prescription not found");
+
+    if (req.user.role === "patient" && String(prescription.patientId?._id || prescription.patientId) !== String(req.user._id)) {
+      return req.http.forbidden("Access denied: You may only view your own prescriptions");
+    }
 
     return req.http.ok(prescription);
   } catch (err) {

@@ -14,6 +14,10 @@
 import API from "./api.js";
 import { formatDialNumber } from "./locationService.js";
 
+// In-memory cache to ensure hospital data remains available during transient network errors
+let cachedLastHospitalCandidates = null;
+let cachedFastestHospital = null;
+
 /**
  * Calculates straight-line Haversine distance between two coordinates in kilometers.
  */
@@ -167,51 +171,59 @@ export async function fetchCandidateHospitals(userLoc) {
 
   // Fallback 1: OpenStreetMap Nominatim search with q=hospital if Overpass times out or returns 0
   if (rawCandidates.length === 0) {
-    try {
-      const delta = 0.08; // ~8km bounding box
-      const osmUrl = `https://nominatim.openstreetmap.org/search?format=json&q=hospital&bounded=1&viewbox=${lng - delta},${lat + delta},${lng + delta},${lat - delta}&limit=12`;
-      const nomRes = await fetch(osmUrl, {
-        signal: AbortSignal.timeout(4500)
-      });
+    const delta = 0.08; // ~8km bounding box
+    const osmUrl = `https://nominatim.openstreetmap.org/search?format=json&q=hospital&bounded=1&viewbox=${lng - delta},${lat + delta},${lng + delta},${lat - delta}&limit=12`;
 
-      if (nomRes.ok) {
-        const nomData = await nomRes.json();
-        const seen = new Set();
-        const blacklist = /garment|cloth|tailor|shop|store|textile|boutique|canteen|bakery|salon|mart|fashion|jewel|stationery|footwear|sweet|hotel|restaurant/i;
+    // Attempt with 1 retry on failure
+    for (let attempt = 1; attempt <= 2 && rawCandidates.length === 0; attempt++) {
+      try {
+        const nomRes = await fetch(osmUrl, {
+          signal: AbortSignal.timeout(5000)
+        });
 
-        for (const item of nomData) {
-          const hLat = parseFloat(item.lat);
-          const hLng = parseFloat(item.lon);
-          const id = `nom-${item.osm_id}`;
-          if (seen.has(id)) continue;
-          seen.add(id);
+        if (nomRes.ok) {
+          const nomData = await nomRes.json();
+          const seen = new Set();
+          const blacklist = /garment|cloth|tailor|shop|store|textile|boutique|canteen|bakery|salon|mart|fashion|jewel|stationery|footwear|sweet|hotel|restaurant/i;
 
-          let name = item.name || item.display_name.split(",")[0].trim();
-          if (!name || blacklist.test(name) || blacklist.test(item.display_name)) continue;
+          for (const item of nomData) {
+            const hLat = parseFloat(item.lat);
+            const hLng = parseFloat(item.lon);
+            const id = `nom-${item.osm_id}`;
+            if (seen.has(id)) continue;
+            seen.add(id);
 
-          if (name.toLowerCase() === "hospital") {
-            const parts = item.display_name.split(",").map(p => p.trim());
-            name = parts.find(p => p.toLowerCase() !== "hospital" && p.length > 2) || "Emergency Care Hospital";
+            let name = item.name || item.display_name.split(",")[0].trim();
+            if (!name || blacklist.test(name) || blacklist.test(item.display_name)) continue;
+
+            if (name.toLowerCase() === "hospital") {
+              const parts = item.display_name.split(",").map(p => p.trim());
+              name = parts.find(p => p.toLowerCase() !== "hospital" && p.length > 2) || "Emergency Care Hospital";
+            }
+            if (!name.toLowerCase().includes("hospital") && !name.toLowerCase().includes("clinic")) {
+              name = `${name} Hospital`;
+            }
+
+            rawCandidates.push({
+              id,
+              name,
+              address: item.display_name.split(",").slice(1, 4).join(", ").trim() || "Emergency Department",
+              lat: hLat,
+              lng: hLng,
+              phone: formatDialNumber(),
+              haversineKm: haversineDistanceKm(lat, lng, hLat, hLng)
+            });
           }
-          if (!name.toLowerCase().includes("hospital") && !name.toLowerCase().includes("clinic")) {
-            name = `${name} Hospital`;
-          }
-
-          rawCandidates.push({
-            id,
-            name,
-            address: item.display_name.split(",").slice(1, 4).join(", ").trim() || "Emergency Department",
-            lat: hLat,
-            lng: hLng,
-            phone: formatDialNumber(),
-            haversineKm: haversineDistanceKm(lat, lng, hLat, hLng)
-          });
+        }
+      } catch (err) {
+        if (import.meta.env?.DEV) {
+          console.error(`[hospitalService] Nominatim query failed (attempt ${attempt}/2):`, err);
         }
       }
-    } catch (_) {}
+    }
   }
 
-  // Fallback 2: Server-side discovery endpoint
+  // Fallback 2: Server-side discovery endpoint (queries Hospital collection)
   if (rawCandidates.length === 0) {
     try {
       const backendRes = await API.get("/emergency/nearby-hospitals", {
@@ -224,23 +236,38 @@ export async function fetchCandidateHospitals(userLoc) {
             id: item.id || item._id,
             name: item.name,
             address: item.address || "Emergency Department",
-            lat: item.lat,
-            lng: item.lng,
+            lat: Number(item.lat),
+            lng: Number(item.lng),
             phone: item.phone || formatDialNumber(),
-            haversineKm: item.haversineKm ?? haversineDistanceKm(lat, lng, item.lat, item.lng)
+            haversineKm: item.haversineKm ?? haversineDistanceKm(lat, lng, Number(item.lat), Number(item.lng))
           });
         }
       }
-    } catch (_) {}
+    } catch (err) {
+      if (import.meta.env?.DEV) {
+        console.error("[hospitalService] Server fallback to Hospital collection failed:", err);
+      }
+    }
+  }
+
+  // Fallback 3: In-memory cache fallback if all live sources failed
+  if (rawCandidates.length === 0 && cachedLastHospitalCandidates?.length) {
+    if (import.meta.env?.DEV) {
+      console.warn("[hospitalService] Using in-memory cached hospital candidates as fallback.");
+    }
+    rawCandidates = [...cachedLastHospitalCandidates];
   }
 
   if (rawCandidates.length === 0) {
-    throw new Error("No emergency hospitals could be located near your live coordinates.");
+    throw new Error("No emergency hospitals could be located near your live coordinates. Please call emergency services directly.");
   }
 
   // Sort candidates by Haversine distance ascending and keep the closest 8
   rawCandidates.sort((a, b) => a.haversineKm - b.haversineKm);
   const closest8 = rawCandidates.slice(0, 8);
+
+  // Update in-memory cache
+  cachedLastHospitalCandidates = closest8;
 
   return closest8;
 }
@@ -259,6 +286,12 @@ export async function selectFastestHospitalByRoad(userLoc, candidates) {
     throw new Error("Invalid user live coordinates.");
   }
   if (!Array.isArray(candidates) || candidates.length === 0) {
+    if (cachedFastestHospital) {
+      if (import.meta.env?.DEV) {
+        console.warn("[hospitalService] Empty candidates, falling back to cached fastest hospital.");
+      }
+      return cachedFastestHospital;
+    }
     throw new Error("Candidate hospital list is empty.");
   }
 
@@ -366,7 +399,7 @@ export async function selectFastestHospitalByRoad(userLoc, candidates) {
   console.log("⏱️ Estimated Road Travel Time:", `${selected.roadDurationMins} minutes (${Math.round(selected.roadDurationSec)} seconds)`);
   console.groupEnd();
 
-  return {
+  const result = {
     hospital: selected,
     rankedHospitals: rankedList,
     name: selected.name,
@@ -377,6 +410,9 @@ export async function selectFastestHospitalByRoad(userLoc, candidates) {
     etaMinutes: selected.roadDurationMins,
     roadDurationSec: selected.roadDurationSec
   };
+
+  cachedFastestHospital = result;
+  return result;
 }
 
 /**

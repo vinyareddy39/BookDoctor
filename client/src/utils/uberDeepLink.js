@@ -39,7 +39,7 @@ export function extractCoords(coordObj) {
   if (!coordObj) return null;
   const lat = Number(coordObj.lat ?? coordObj.latitude);
   const lng = Number(coordObj.lng ?? coordObj.longitude);
-  if (isNaN(lat) || isNaN(lng)) return null;
+  if (isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng)) return null;
   return { lat, lng };
 }
 
@@ -200,7 +200,11 @@ export function openUberRideToHospital(hospital, pickup = null) {
   try {
     const copyText = hospital.address ? `${hospital.name}, ${hospital.address}` : hospital.name;
     navigator.clipboard?.writeText?.(copyText);
-  } catch (_) {}
+  } catch (err) {
+    if (import.meta.env?.DEV) {
+      console.error("[UberDeepLink] Clipboard write failed:", err);
+    }
+  }
 
   if (isAndroidOrIOS()) {
     if (links?.appUrl) {

@@ -312,7 +312,11 @@ export default function EmergencyHospitalTracking() {
     try {
       const copyText = dropoffVal.address ? `${dropoffVal.name}, ${dropoffVal.address}` : dropoffVal.name;
       navigator.clipboard?.writeText?.(copyText);
-    } catch (_) {}
+    } catch (err) {
+      if (import.meta.env?.DEV) {
+        console.error("[EmergencyHospitalTracking] Failed to auto-copy destination address:", err);
+      }
+    }
 
     // 4. Platform handling
     if (isAndroidOrIOS()) {

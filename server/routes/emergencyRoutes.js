@@ -1,5 +1,6 @@
 import express from "express";
 import { auth } from "../middleware/index.js";
+import { emergencyLimiter } from "../middleware/rateLimiter.js";
 import {
   triggerEmergency,
   updateLocation,
@@ -19,7 +20,7 @@ import {
 const router = express.Router();
 
 // Emergency Outbound Phone Call via Twilio
-router.post("/call", triggerEmergencyCall);
+router.post("/call", emergencyLimiter, triggerEmergencyCall);
 
 // Live verified nearby hospital amenities query
 router.get("/nearby-hospitals", getNearbyHospitalsHandler);
@@ -31,7 +32,7 @@ router.get("/demo/disable-all-ambulances", disableAllAmbulances);
 router.get("/uber/estimates", getUberEstimatesHandler);
 
 // Patient routes
-router.post("/trigger", auth, triggerEmergency);
+router.post("/trigger", emergencyLimiter, auth, triggerEmergency);
 router.post("/:id/location", auth, updateLocation);
 router.post("/:id/uber-ride", auth, requestUberRideHandler);
 

@@ -53,9 +53,10 @@ export const createOrder = async (req, res, next) => {
       return req.http.badRequest("This doctor hasn't set up payouts yet. Please contact the clinic.");
     }
 
-    // Demo Mode bypass: MUST be explicitly permitted in non-production or DEMO_MODE flag
+    // Demo Mode bypass: STRICTLY disallowed in production
     const isDemoAllowed =
-      (process.env.DEMO_MODE === "true" || process.env.NODE_ENV !== "production") &&
+      process.env.NODE_ENV !== "production" &&
+      process.env.DEMO_MODE === "true" &&
       (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET);
 
     if (isDemoAllowed) {
@@ -271,6 +272,10 @@ export const testPayAppointment = async (req, res, next) => {
     const { appointmentId } = req.body;
     if (!appointmentId) {
       return req.http.badRequest("Appointment ID is required");
+    }
+
+    if (process.env.NODE_ENV === "production") {
+      return req.http.forbidden("Test/demo payment routes are disabled in production.");
     }
 
     const isTestMode = Boolean(
@@ -673,6 +678,10 @@ export const getDoctorPayoutStatus = async (req, res, next) => {
 // DEV / TEST helper: Simulate doctor payout approval / rejection
 export const simulateDoctorPayoutStatus = async (req, res, next) => {
   try {
+    if (process.env.NODE_ENV === "production") {
+      return req.http.forbidden("Payout status simulation is disabled in production.");
+    }
+
     const doctor = await Doctor.findOne({ userId: req.user._id });
     if (!doctor) {
       return req.http.notFound("Doctor profile not found.");

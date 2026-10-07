@@ -23,8 +23,8 @@ router.post("/login",    authLimiter, validate(["email", "password"]), login);
 
 // Verification and Reset
 router.get("/verify-email/:token", verifyEmail);
-router.post("/forgot-password", validate(["email"]), forgotPassword);
-router.post("/reset-password/:token", validate(["password"]), resetPassword);
+router.post("/forgot-password", authLimiter, validate(["email"]), forgotPassword);
+router.post("/reset-password/:token", authLimiter, validate(["password"]), resetPassword);
 
 // Token refreshing & logout
 router.post("/refresh", refresh);

@@ -290,37 +290,39 @@ export default function DoctorPayoutSetup({ profile }) {
         )}
       </div>
 
-      {/* ── Testing / Simulation Controls ── */}
-      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2 text-slate-600">
-          <span className="text-base">🧪</span>
-          <span className="font-bold">Test Payout Status Simulation:</span>
-          <span className="text-slate-400 text-[11px]">(Simulate Route activation or rejection during testing)</span>
+      {/* ── Testing / Simulation Controls (Dev Only) ── */}
+      {import.meta.env.DEV && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 text-slate-600">
+            <span className="text-base">🧪</span>
+            <span className="font-bold">Test Payout Status Simulation:</span>
+            <span className="text-slate-400 text-[11px]">(Simulate Route activation or rejection during testing)</span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => handleSimulateStatus("activated")}
+              className="px-2.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded font-bold transition-colors"
+            >
+              ✓ Set Activated
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSimulateStatus("pending")}
+              className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded font-bold transition-colors"
+            >
+              ⏳ Set Pending
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSimulateStatus("rejected", "PAN name mismatch with bank record")}
+              className="px-2.5 py-1 bg-rose-100 hover:bg-rose-200 text-rose-800 rounded font-bold transition-colors"
+            >
+              ✕ Set Rejected
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => handleSimulateStatus("activated")}
-            className="px-2.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded font-bold transition-colors"
-          >
-            ✓ Set Activated
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSimulateStatus("pending")}
-            className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded font-bold transition-colors"
-          >
-            ⏳ Set Pending
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSimulateStatus("rejected", "PAN name mismatch with bank record")}
-            className="px-2.5 py-1 bg-rose-100 hover:bg-rose-200 text-rose-800 rounded font-bold transition-colors"
-          >
-            ✕ Set Rejected
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* ── Form Section ── */}
       {isEditing && (

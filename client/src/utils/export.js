@@ -171,7 +171,6 @@ export const exportPrescriptionToPDF = (record, doctorName) => {
     doc.setTextColor(71, 85, 105);
     const splitInstructions = doc.splitTextToSize(record.generalInstructions, 180);
     doc.text(splitInstructions, 14, finalY + 6);
-    finalY += 12 + splitInstructions.length * 5;
   }
 
   // Footer / Doctor Sign-off
@@ -275,7 +274,6 @@ export const exportLabReportToPDF = (order) => {
     doc.setTextColor(71, 85, 105);
     const splitInterp = doc.splitTextToSize(result.interpretation, 180);
     doc.text(splitInterp, 14, finalY + 6);
-    finalY += 12 + splitInterp.length * 5;
   }
 
   // Signatures
@@ -478,8 +476,6 @@ export const exportInvoiceToPDF = (invoice, clinicInfo = {}) => {
       bodyStyles: { fontSize: 8 },
       styles: { cellPadding: 2 },
     });
-
-    endY = doc.lastAutoTable.finalY + 8;
   }
 
   // ── Footer & Sign-off ──

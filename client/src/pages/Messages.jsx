@@ -48,7 +48,11 @@ export default function Messages() {
             unreadCount: 0,
           }))
         );
-      } catch (_) {}
+      } catch (err) {
+        if (import.meta.env?.DEV) {
+          console.error("[Messages] Failed to load fallback conversations:", err);
+        }
+      }
     } finally {
       setLoading(false);
     }
