@@ -13,6 +13,7 @@ import {
   openUberRide,
   openUberRideToHospital,
   buildUberLink,
+  buildGoogleMapsLink,
   isMobileDevice
 } from "../utils/uberDeepLink";
 import {
@@ -75,9 +76,10 @@ export default function EmergencyHospitalTracking() {
   const [errorMessage, setErrorMessage] = useState(null);
   const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
 
-  // Twilio Calling on Desktop
+  // Twilio Calling & Address Copy
   const [callingTwilio, setCallingTwilio] = useState(false);
   const [copiedNumber, setCopiedNumber] = useState(false);
+  const [copiedAddress, setCopiedAddress] = useState(false);
 
   const emergencyPhone = getEmergencyPhoneNumber();
   const isMobile = isMobileDevice();
@@ -209,9 +211,9 @@ export default function EmergencyHospitalTracking() {
    * Does NOT trigger any new hospital searches or additional API calls.
    * 
    * Calls openUberRideToHospital(selectedHospital) which:
-   * - Sets Pickup = user's live location ('pickup=my_location')
-   * - Sets Dropoff = selectedHospital's lat, lng, name, and address
-   * - Opens native Uber app on Phone, or opens default browser on Windows.
+   * - Mobile: opens m.uber.com/ul/?action=setPickup&pickup=my_location... (triggers Uber app)
+   * - Desktop: opens m.uber.com/go/product-selection?pickup=my_location&drop[0]={json}
+   * - Automatically copies hospital destination address to clipboard as fallback.
    */
   const handleBookUber = () => {
     if (!selectedHospital || !selectedHospital.lat || !selectedHospital.lng) {
@@ -220,9 +222,32 @@ export default function EmergencyHospitalTracking() {
     }
 
     const opened = openUberRideToHospital(selectedHospital);
-    if (!opened) {
+    if (opened) {
+      if (!isMobile) {
+        toast.success("Opening Uber... Hospital address copied to clipboard for quick paste!", {
+          id: "uber-open-toast",
+          duration: 4500
+        });
+      }
+    } else {
       toast.error("Unable to generate Uber link for hospital.");
     }
+  };
+
+  /**
+   * Helper to manually copy hospital destination address
+   */
+  const handleCopyHospitalAddress = () => {
+    if (!selectedHospital) return;
+    const fullText = selectedHospital.address
+      ? `${selectedHospital.name}, ${selectedHospital.address}`
+      : selectedHospital.name;
+    navigator.clipboard?.writeText?.(fullText);
+    setCopiedAddress(true);
+    toast.success("Hospital address copied! You can paste it into Uber's dropoff box.", {
+      id: "copy-addr-toast"
+    });
+    setTimeout(() => setCopiedAddress(false), 3000);
   };
 
   /**
@@ -505,21 +530,32 @@ export default function EmergencyHospitalTracking() {
                   </span>
                 </div>
 
-                <div>
-                  <h2 className="text-lg font-black text-slate-900 leading-snug">{selectedHospital.name}</h2>
-                  <p className="text-xs text-slate-500 mt-1">{selectedHospital.address}</p>
-                  <div className="flex items-center gap-3 mt-2 text-xs font-semibold text-slate-600">
+                {/* ── Hospital Details & Destination Address ── */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      Destination Hospital ER
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md border border-emerald-200">
+                      Verified Facility
+                    </span>
+                  </div>
+                  <h3 className="font-extrabold text-slate-900 text-base leading-snug">{selectedHospital.name}</h3>
+                  <p className="text-slate-600 text-xs leading-relaxed">{selectedHospital.address}</p>
+                  <div className="flex items-center gap-3 pt-1 text-xs font-semibold text-slate-500">
                     <span className="flex items-center gap-1 text-blue-700">
                       <span>🛣️</span>
                       <span>{selectedHospital.roadDistanceKm || selectedHospital.distanceKm} km road distance</span>
                     </span>
                     <span>&bull;</span>
-                    <span className="text-emerald-700">Verified ER Facility</span>
+                    <span className="text-emerald-700 font-bold">
+                      ⚡ {selectedHospital.roadDurationMins || selectedHospital.etaMinutes || 5} min road ETA
+                    </span>
                   </div>
                 </div>
 
                 {/* ── "Book Uber to Hospital" ACTION BUTTON ── */}
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   <button
                     type="button"
                     onClick={handleBookUber}
@@ -548,10 +584,40 @@ export default function EmergencyHospitalTracking() {
                     )}
                   </button>
 
+                  {/* Fallback Action Buttons: Copy Address & Open in Google Maps */}
+                  <div className="grid grid-cols-2 gap-2 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={handleCopyHospitalAddress}
+                      disabled={!selectedHospital}
+                      className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-slate-200 transition disabled:opacity-50"
+                      title="Copy hospital address to clipboard"
+                    >
+                      <span>📋</span>
+                      <span>{copiedAddress ? "Address Copied! ✅" : "Copy Address"}</span>
+                    </button>
+
+                    <a
+                      href={selectedHospital ? buildGoogleMapsLink(selectedHospital) : "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="py-2.5 px-3 bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-blue-200 transition text-center"
+                      title="Open turn-by-turn directions in Google Maps"
+                    >
+                      <span>🗺️</span>
+                      <span>Open in Google Maps</span>
+                    </a>
+                  </div>
+
                   {/* Informational note required by specification */}
-                  <p className="text-[11px] text-slate-500 text-center leading-normal px-2">
-                    Uber will open with locations pre-filled. Tap Request there to confirm the ride.
-                  </p>
+                  <div className="text-[11px] text-slate-500 text-center leading-normal px-1 space-y-0.5 pt-1">
+                    <p>Uber will open with locations pre-filled. Tap Request there to confirm the ride.</p>
+                    {!isMobile && (
+                      <p className="text-[10px] text-slate-400">
+                        💡 On Windows desktop: If Uber's site drops the dropoff location, paste the copied address or use Open in Google Maps.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 

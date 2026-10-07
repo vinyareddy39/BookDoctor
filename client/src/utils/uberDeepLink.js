@@ -18,21 +18,22 @@
 export const UBER_CLIENT_ID = "DfjKZC3xXnBEObgCRl1ChUSdRJDnjwBP";
 
 /**
- * Helper function buildUberLink(hospital)
- * 
- * Reuses the already-computed nearest hospital object (name, lat, lng, address)
- * and returns the official Uber Universal Deep Link URL:
- *   https://m.uber.com/ul/?action=setPickup
- *     &pickup=my_location
- *     &dropoff[latitude]=<lat>
- *     &dropoff[longitude]=<lng>
- *     &dropoff[nickname]=<hospital name>
- *     &dropoff[formatted_address]=<address>
- * 
- * Uses URLSearchParams so that all query parameter values are safely URL-encoded.
- * Pickup is set to 'my_location' to let Uber auto-lock to the user's live location.
+ * Detects if the current browser session is running on a mobile device (Android / iOS).
+ * Uses a comprehensive user-agent check.
  */
-export function buildUberLink(hospital) {
+export function isMobileDevice() {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || navigator.vendor || window.opera || "";
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(ua);
+}
+
+/**
+ * 1. Mobile Uber Universal Deep Link (Android / iOS)
+ * Official mobile universal link format:
+ *   https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[latitude]=...&dropoff[longitude]=...&dropoff[nickname]=...&dropoff[formatted_address]=...
+ * Launches native Uber app directly or mobile web page.
+ */
+export function buildUberMobileLink(hospital) {
   if (!hospital || !hospital.lat || !hospital.lng) {
     return null;
   }
@@ -49,16 +50,72 @@ export function buildUberLink(hospital) {
 }
 
 /**
+ * 2. Desktop Uber Web Booking Link (Windows / macOS / Desktop Browser)
+ * Official desktop web booking URL with JSON-encoded drop[0] parameter:
+ *   https://m.uber.com/go/product-selection?pickup=my_location&drop[0]={"latitude":lat,"longitude":lng,"addressLine1":"...","addressLine2":"..."}
+ * URL-encoded via URLSearchParams.
+ */
+export function buildUberDesktopLink(hospital) {
+  if (!hospital || !hospital.lat || !hospital.lng) {
+    return null;
+  }
+
+  const dropObj = {
+    latitude: Number(hospital.lat),
+    longitude: Number(hospital.lng),
+    addressLine1: hospital.name || "Hospital Emergency Department",
+    addressLine2: hospital.address || ""
+  };
+
+  const params = new URLSearchParams();
+  params.append("pickup", "my_location");
+  params.append("drop[0]", JSON.stringify(dropObj));
+
+  return `https://m.uber.com/go/product-selection?${params.toString()}`;
+}
+
+/**
+ * 3. Helper function buildUberLink(hospital)
+ * Platform-aware Uber link builder:
+ * - On Mobile (Android/iOS): returns mobile universal deep link (m.uber.com/ul/...)
+ * - On Desktop (Windows): returns desktop web booking link (m.uber.com/go/product-selection...)
+ */
+export function buildUberLink(hospital, forceMobile = null) {
+  const isMobile = forceMobile !== null ? forceMobile : isMobileDevice();
+  return isMobile ? buildUberMobileLink(hospital) : buildUberDesktopLink(hospital);
+}
+
+/**
+ * 4. Google Maps Directions Link (Reliable Desktop & Mobile Fallback)
+ * Opens turn-by-turn driving directions from user's live location to the hospital.
+ */
+export function buildGoogleMapsLink(hospital) {
+  if (!hospital) return "https://www.google.com/maps";
+  const destination = hospital.lat && hospital.lng
+    ? `${hospital.lat},${hospital.lng}`
+    : encodeURIComponent(`${hospital.name || "Hospital"}, ${hospital.address || ""}`.trim());
+  return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`;
+}
+
+/**
  * Opens the pre-filled Uber ride link across Windows and Phone:
  * - Phone (Android / iOS): window.location.href triggers native OS Universal Links / App Links,
  *   launching the installed Uber app directly (or falling back to the mobile web page).
- * - Windows / Desktop: window.open(url, "_blank") opens m.uber.com in the default browser in a new tab.
+ * - Windows / Desktop: window.open(url, "_blank") opens m.uber.com/go/product-selection in a new browser tab.
+ * Also copies the hospital destination address to clipboard as an instant fallback.
  */
 export function openUberRideToHospital(hospital) {
-  const url = buildUberLink(hospital);
+  if (!hospital) return false;
+  const isMobile = isMobileDevice();
+  const url = buildUberLink(hospital, isMobile);
   if (!url) return false;
 
-  const isMobile = isMobileDevice();
+  // Copy hospital destination address to clipboard as an instant fallback
+  try {
+    const copyText = hospital.address ? `${hospital.name}, ${hospital.address}` : hospital.name;
+    navigator.clipboard?.writeText?.(copyText);
+  } catch (_) {}
+
   if (isMobile) {
     window.location.href = url;
   } else {
@@ -148,13 +205,6 @@ export function buildUberAppSchemeUrl({
   return `uber://riderequest?${params.toString()}`;
 }
 
-/**
- * Detects if the current browser session is running on a mobile device.
- */
-export function isMobileDevice() {
-  if (typeof navigator === "undefined") return false;
-  return /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-}
 
 /**
  * Launches the pre-filled Uber ride flow:
