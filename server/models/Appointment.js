@@ -31,7 +31,7 @@ const appointmentSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["pending", "confirmed", "cancelled", "completed"],
+      enum: ["pending", "confirmed", "cancelled", "completed", "no_show", "waiting", "called", "in_consultation"],
       default: "pending",
     },
 
@@ -65,7 +65,52 @@ const appointmentSchema = new mongoose.Schema(
     rescheduleCount: {
       type: Number,
       default: 0,
-    }
+    },
+
+    // ── Phase 3: Walk-In Queue & Conflict Tracking ──
+    type: {
+      type: String,
+      enum: ["scheduled", "walk_in"],
+      default: "scheduled",
+    },
+
+    tokenNumber: {
+      type: Number,
+      default: null,
+    },
+
+    queueStatus: {
+      type: String,
+      enum: ["none", "waiting", "called", "in_consultation", "completed", "skipped"],
+      default: "none",
+    },
+
+    duration: {
+      type: Number,
+      default: 30, // in minutes
+    },
+
+    notes: {
+      type: String,
+      default: "",
+    },
+
+    // ── Cancellation Details ──
+    cancellationReason: {
+      type: String,
+      default: "",
+    },
+
+    cancelledBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    cancelledAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
@@ -73,5 +118,7 @@ const appointmentSchema = new mongoose.Schema(
 // ─── Indexes for query performance ──────────────────────────────────────────
 appointmentSchema.index({ patientId: 1, appointmentDate: -1 });
 appointmentSchema.index({ doctorId: 1, status: 1 });
+appointmentSchema.index({ doctorId: 1, appointmentDate: 1, appointmentTime: 1 });
+appointmentSchema.index({ appointmentDate: 1, tokenNumber: 1 });
 
 export default mongoose.model("Appointment", appointmentSchema);

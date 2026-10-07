@@ -52,6 +52,8 @@ const PatientList        = lazy(() => import("./pages/PatientList.jsx"));
 const ClinicSettings     = lazy(() => import("./pages/ClinicSettings.jsx"));
 const DepartmentManagement = lazy(() => import("./pages/DepartmentManagement.jsx"));
 const ServiceCatalog     = lazy(() => import("./pages/ServiceCatalog.jsx"));
+const AppointmentCalendar = lazy(() => import("./pages/AppointmentCalendar.jsx"));
+const QueueDisplay        = lazy(() => import("./pages/QueueDisplay.jsx"));
 
 // Page loader fallback
 function PageLoader() {
@@ -165,6 +167,8 @@ function App() {
             {/* Clinic Operations (Receptionist / Doctor / Admin) */}
             <Route path="/reception/walk-in"    element={<RoleRoute roles={["receptionist", "clinic_admin", "admin"]}><WalkInRegistration /></RoleRoute>} />
             <Route path="/patients"             element={<RoleRoute roles={["receptionist", "doctor", "clinic_admin", "admin"]}><PatientList /></RoleRoute>} />
+            <Route path="/calendar"             element={<RoleRoute roles={["receptionist", "doctor", "clinic_admin", "admin"]}><AppointmentCalendar /></RoleRoute>} />
+            <Route path="/queue"                element={<AuthRoute><QueueDisplay /></AuthRoute>} />
 
             {/* Admin protected */}
             <Route path="/admin"                 element={<AdminRoute><AdminDashboard /></AdminRoute>} />

@@ -45,6 +45,12 @@ export const response = (req, res, next) => {
         message,
       }),
 
+    conflict: (message = "Conflict") =>
+      res.status(409).json({
+        success: false,
+        message,
+      }),
+
     serverError: (message = "Internal Server Error") =>
       res.status(500).json({
         success: false,

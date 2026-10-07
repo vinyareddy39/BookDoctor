@@ -224,3 +224,9 @@ export const triggerDashboardUpdate = (userId, message) => {
     io.to(socketId).emit("dashboard-update", { message });
   }
 };
+
+export const broadcastQueueUpdate = (data) => {
+  if (!io) return;
+  io.emit("queue-updated", data);
+};
+

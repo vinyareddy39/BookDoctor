@@ -1,15 +1,97 @@
 import Appointment from "../models/Appointment.js";
 import Doctor from "../models/Doctor.js";
+import DoctorLeave from "../models/DoctorLeave.js";
+import { recordAudit } from "../middleware/auditLogger.js";
 import { sendBookingConfirmation, sendCancellationEmail, sendRescheduledEmail } from "../service/emailService.js";
 import { sendNotificationToUser, triggerDashboardUpdate } from "../socket.js";
 import { refundPayment } from "./paymentController.js";
 
+// ── SERVER-SIDE CONFLICT DETECTION HELPER ──────────────────────────────────
+export const checkDoctorConflicts = async ({
+  doctorId,
+  appointmentDate,
+  appointmentTime,
+  excludeAppointmentId = null,
+}) => {
+  const [year, month, day] = typeof appointmentDate === "string" && appointmentDate.includes("-")
+    ? appointmentDate.split("T")[0].split("-").map(Number)
+    : [
+        new Date(appointmentDate).getFullYear(),
+        new Date(appointmentDate).getMonth() + 1,
+        new Date(appointmentDate).getDate(),
+      ];
+
+  const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
+  const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
+
+  // 1. Check if doctor is on approved leave on this date
+  const leave = await DoctorLeave.findOne({
+    doctorId,
+    status: "approved",
+    startDate: { $lte: endOfDay },
+    endDate: { $gte: startOfDay },
+  });
+
+  if (leave) {
+    return {
+      conflict: true,
+      reason: `Dr. is unavailable on this date (${leave.type}: ${leave.reason}). Please choose another date.`,
+    };
+  }
+
+  // 2. Check if doctor already has an active appointment at that exact slot
+  const query = {
+    doctorId,
+    appointmentTime,
+    status: { $in: ["pending", "confirmed", "waiting", "called", "in_consultation"] },
+    appointmentDate: { $gte: startOfDay, $lte: endOfDay },
+  };
+
+  if (excludeAppointmentId) {
+    query._id = { $ne: excludeAppointmentId };
+  }
+
+  const existingAppt = await Appointment.findOne(query);
+  if (existingAppt) {
+    return {
+      conflict: true,
+      reason: `Doctor already has an active appointment scheduled at ${appointmentTime} on this date. Please pick a different slot.`,
+    };
+  }
+
+  return { conflict: false };
+};
+
 // BOOK APPOINTMENT (patient only)
 export const bookAppointment = async (req, res, next) => {
   try {
+    const { doctorId, appointmentDate, appointmentTime } = req.body;
+
+    // Check for double-booking or doctor leave
+    const conflictCheck = await checkDoctorConflicts({
+      doctorId,
+      appointmentDate,
+      appointmentTime,
+    });
+
+    if (conflictCheck.conflict) {
+      return req.http.conflict(conflictCheck.reason);
+    }
+
     const appointment = await Appointment.create({
       ...req.body,
       patientId: req.user._id,
+    });
+
+    // Record audit log
+    recordAudit({
+      userId: req.user._id,
+      role: req.user.role,
+      action: "create",
+      resource: "appointment",
+      resourceId: appointment._id,
+      after: appointment.toObject(),
+      req,
     });
 
     // Send confirmation email (non-blocking)
@@ -46,17 +128,39 @@ export const bookAppointment = async (req, res, next) => {
   }
 };
 
-// GET APPOINTMENTS (role-scoped)
+// GET APPOINTMENTS (role-scoped, with calendar & date filtering)
 export const getAppointments = async (req, res, next) => {
   try {
     let query = {};
 
     if (req.user.role === "patient") {
-      query = { patientId: req.user._id };
+      query.patientId = req.user._id;
     } else if (req.user.role === "doctor") {
       const doctorDoc = await Doctor.findOne({ userId: req.user._id });
       if (!doctorDoc) return req.http.ok([], "No appointments found");
-      query = { doctorId: doctorDoc._id };
+      query.doctorId = doctorDoc._id;
+    } else if (req.query.doctorId) {
+      query.doctorId = req.query.doctorId;
+    }
+
+    // Status filter
+    if (req.query.status) {
+      query.status = req.query.status;
+    }
+
+    // Specific Date filter (e.g. YYYY-MM-DD for Calendar day view)
+    if (req.query.date) {
+      const [y, m, d] = req.query.date.split("-").map(Number);
+      const startOfDay = new Date(y, m - 1, d, 0, 0, 0, 0);
+      const endOfDay = new Date(y, m - 1, d, 23, 59, 59, 999);
+      query.appointmentDate = { $gte: startOfDay, $lte: endOfDay };
+    } else if (req.query.startDate && req.query.endDate) {
+      // Date range filter (e.g. for Week view)
+      const start = new Date(req.query.startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(req.query.endDate);
+      end.setHours(23, 59, 59, 999);
+      query.appointmentDate = { $gte: start, $lte: end };
     }
 
     const limit = parseInt(req.query.limit) || 100;
@@ -174,10 +278,34 @@ export const rescheduleAppointment = async (req, res, next) => {
       }
     }
 
+    // Server-side conflict detection on new date & time
+    const conflictCheck = await checkDoctorConflicts({
+      doctorId: appointment.doctorId,
+      appointmentDate,
+      appointmentTime,
+      excludeAppointmentId: appointment._id,
+    });
+
+    if (conflictCheck.conflict) {
+      return req.http.conflict(conflictCheck.reason);
+    }
+
+    const before = appointment.toObject();
     appointment.appointmentDate = appointmentDate;
     appointment.appointmentTime = appointmentTime;
     appointment.rescheduleCount += 1;
     await appointment.save();
+
+    recordAudit({
+      userId: req.user._id,
+      role: req.user.role,
+      action: "reschedule",
+      resource: "appointment",
+      resourceId: appointment._id,
+      before,
+      after: appointment.toObject(),
+      req,
+    });
 
     const populated = await Appointment.findById(appointment._id)
       .populate("patientId", "name email")
@@ -249,7 +377,50 @@ export const addPrescription = async (req, res, next) => {
   }
 };
 
-// CANCEL APPOINTMENT
+// MARK NO-SHOW (doctor, receptionist, admin)
+export const markNoShow = async (req, res, next) => {
+  try {
+    const appointment = await Appointment.findById(req.params.id);
+    if (!appointment) return req.http.notFound("Appointment not found");
+
+    if (req.user.role === "doctor") {
+      const doctorDoc = await Doctor.findOne({ userId: req.user._id });
+      if (!doctorDoc || String(appointment.doctorId) !== String(doctorDoc._id)) {
+        return req.http.forbidden("You can only manage your own appointments.");
+      }
+    }
+
+    const before = appointment.toObject();
+    appointment.status = "no_show";
+    appointment.queueStatus = "skipped";
+    await appointment.save();
+
+    recordAudit({
+      userId: req.user._id,
+      role: req.user.role,
+      action: "update",
+      resource: "appointment",
+      resourceId: appointment._id,
+      before,
+      after: appointment.toObject(),
+      req,
+    });
+
+    if (appointment.patientId) {
+      sendNotificationToUser(appointment.patientId, {
+        type: "STATUS_UPDATE",
+        title: "Appointment Marked No-Show",
+        message: "Your appointment has been marked as No-Show. Please contact reception to reschedule.",
+      });
+    }
+
+    return req.http.ok(appointment, "Appointment marked as No-Show");
+  } catch (err) {
+    next(err);
+  }
+};
+
+// CANCEL APPOINTMENT (with reason and audit log)
 export const cancelAppointment = async (req, res, next) => {
   try {
     const appointment = await Appointment.findById(req.params.id);
@@ -271,6 +442,8 @@ export const cancelAppointment = async (req, res, next) => {
       }
     }
 
+    const reason = req.body.cancellationReason || req.body.reason || "Cancelled by user";
+
     // If payment status is paid, trigger a refund
     if (appointment.paymentStatus === "paid") {
       const refundSuccess = await refundPayment(appointment._id);
@@ -279,8 +452,23 @@ export const cancelAppointment = async (req, res, next) => {
       }
     }
 
+    const before = appointment.toObject();
     appointment.status = "cancelled";
+    appointment.cancellationReason = reason;
+    appointment.cancelledBy = req.user._id;
+    appointment.cancelledAt = new Date();
     await appointment.save();
+
+    recordAudit({
+      userId: req.user._id,
+      role: req.user.role,
+      action: "cancel",
+      resource: "appointment",
+      resourceId: appointment._id,
+      before,
+      after: appointment.toObject(),
+      req,
+    });
 
     try {
       const populated = await Appointment.findById(appointment._id)

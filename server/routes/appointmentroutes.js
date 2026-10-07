@@ -6,6 +6,7 @@ import {
   rescheduleAppointment,
   addPrescription,
   cancelAppointment,
+  markNoShow,
   deleteAppointment,
   getAppointmentRoom,
   submitFeedback,
@@ -26,12 +27,13 @@ router.post(
 // Get all
 router.get("/", auth, getAppointments);
 
-// Update status (doctor or admin)
-router.put("/:id", auth, role("doctor", "admin"), updateAppointment);
+// Update status (doctor, clinic_admin, receptionist)
+router.put("/:id", auth, role("doctor", "clinic_admin", "admin", "receptionist"), updateAppointment);
 
-// Cancel / Reschedule
+// Cancel / Reschedule / No-Show
 router.patch("/:id/cancel", auth, cancelAppointment);
 router.patch("/:id/reschedule", auth, validate(["appointmentDate", "appointmentTime"]), rescheduleAppointment);
+router.patch("/:id/no-show", auth, role("doctor", "clinic_admin", "admin", "receptionist"), markNoShow);
 
 // Video Consultation Room
 router.get("/:id/room", auth, getAppointmentRoom);
@@ -43,6 +45,6 @@ router.patch("/:id/feedback", auth, role("patient"), validate(["rating"]), submi
 router.patch("/:id/prescription", auth, role("doctor"), validate(["prescription"]), addPrescription);
 
 // Hard delete (admin only)
-router.delete("/:id", auth, role("admin"), deleteAppointment);
+router.delete("/:id", auth, role("clinic_admin", "admin"), deleteAppointment);
 
 export default router;

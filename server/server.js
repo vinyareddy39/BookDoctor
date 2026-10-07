@@ -24,6 +24,8 @@ import clinicRoutes      from "./routes/clinicRoutes.js";
 import departmentRoutes  from "./routes/departmentRoutes.js";
 import serviceRoutes     from "./routes/serviceRoutes.js";
 import patientRoutes     from "./routes/patientRoutes.js";
+import doctorScheduleRoutes from "./routes/doctorScheduleRoutes.js";
+import queueRoutes       from "./routes/queueRoutes.js";
 import { triggerEmergencyCall } from "./controllers/emergencyController.js";
 import { handleOutboundCall, getConnectTwiml } from "./controllers/callController.js";
 
@@ -165,6 +167,8 @@ app.use("/api/clinic",       clinicRoutes);
 app.use("/api/departments",  departmentRoutes);
 app.use("/api/services",     serviceRoutes);
 app.use("/api/patients",     patientRoutes);
+app.use("/api/schedule",     doctorScheduleRoutes);
+app.use("/api/queue",        queueRoutes);
 app.post("/api/emergency-call", triggerEmergencyCall);
 
 // Twilio Voice Click-to-Call
