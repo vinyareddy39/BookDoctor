@@ -9,10 +9,20 @@
  * - Receptionists: restricted to front desk, scheduling, billing; strictly BLOCKED from clinical notes.
  */
 
+// System Roles List
+export const ROLES = ["clinic_admin", "doctor", "receptionist", "lab_technician", "patient"];
+
 // Normalized role alias helper
 export const normalizeRole = (role) => {
   if (role === "admin") return "clinic_admin";
   return role;
+};
+
+// Check if a given role has permission for a resource and action
+export const checkPermission = (role, resource, action) => {
+  const userRole = normalizeRole(role);
+  if (userRole === "clinic_admin") return true;
+  return PERMISSIONS[resource]?.[action]?.includes(userRole) || false;
 };
 
 // Declarative Permission Map: resource -> action -> allowed roles

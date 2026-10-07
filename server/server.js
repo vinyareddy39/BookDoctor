@@ -8,6 +8,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import * as Sentry from "@sentry/node";
 import { nodeProfilingIntegration } from "@sentry/profiling-node";
+import helmet from "helmet";
+import mongoSanitize from "./middleware/mongoSanitize.js";
 
 // Routes
 import authRoutes        from "./routes/authroutes.js";
@@ -60,14 +62,16 @@ const __dirname  = path.dirname(__filename);
 // ===============================
 // SENTRY INITIALIZATION
 // ===============================
-Sentry.init({
-  dsn: process.env.SENTRY_DSN || "",
-  integrations: [
-    nodeProfilingIntegration(),
-  ],
-  tracesSampleRate: 1.0,
-  profilesSampleRate: 1.0,
-});
+if (process.env.NODE_ENV !== "test") {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN || "",
+    integrations: [
+      nodeProfilingIntegration(),
+    ],
+    tracesSampleRate: 1.0,
+    profilesSampleRate: 1.0,
+  });
+}
 
 // ===============================
 // CORS — locked to allowed origins
@@ -109,6 +113,16 @@ initSocket(server, allowedOrigins);
 app.use("/api", apiLimiter);
 
 // ===============================
+// SECURITY HEADERS — HELMET
+// ===============================
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // Preserves Daily.co video iframes & WebRTC functionality
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+// ===============================
 // COMPRESSION
 // ===============================
 app.use(compression());
@@ -124,6 +138,9 @@ app.use(express.json({
   }
 }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+
+// NoSQL Injection Sanitization
+app.use(mongoSanitize);
 
 // Static uploads folder
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -208,7 +225,9 @@ app.use((req, res) => {
 // ===============================
 // GLOBAL ERROR HANDLER (must be last)
 // ===============================
-Sentry.setupExpressErrorHandler(app);
+if (process.env.NODE_ENV !== "test") {
+  Sentry.setupExpressErrorHandler(app);
+}
 app.use(errorHandler);
 
 // ===============================
