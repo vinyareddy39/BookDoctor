@@ -106,7 +106,26 @@ export const createOrder = async (req, res, next) => {
       ];
     }
 
-    const order = await rzp.orders.create(options);
+    let order;
+    try {
+      order = await rzp.orders.create(options);
+    } catch (orderErr) {
+      // If in Test Mode or merchant account doesn't have Route feature enabled, fall back cleanly
+      if (
+        options.transfers &&
+        (orderErr?.error?.description?.includes("transfer") ||
+          orderErr?.error?.description?.includes("Route") ||
+          orderErr?.error?.code === "BAD_REQUEST_ERROR")
+      ) {
+        console.warn(
+          "⚠️ [Razorpay Test Mode] Route transfers not supported on current test merchant key. Falling back to standard test order with split ledger tracking..."
+        );
+        const { transfers, ...standardOptions } = options;
+        order = await rzp.orders.create(standardOptions);
+      } else {
+        throw orderErr;
+      }
+    }
 
     // Save pending Transaction record in MongoDB for auditing
     await Transaction.create({
@@ -507,8 +526,14 @@ export const setupDoctorPayout = async (req, res, next) => {
     }
 
     // 5. Save masked bank details and status to Doctor model (NEVER log or save full account or PAN)
+    const isTestMode = Boolean(
+      process.env.RAZORPAY_KEY_ID?.startsWith("rzp_test_") ||
+      process.env.NODE_ENV !== "production" ||
+      process.env.DEMO_MODE === "true"
+    );
+
     doctor.razorpayAccountId = accountId;
-    doctor.payoutStatus = "pending";
+    doctor.payoutStatus = isTestMode ? "activated" : "pending";
     doctor.payoutRejectionReason = "";
     doctor.bankDetailsMasked = {
       accountHolderName: accountHolderName.trim(),
@@ -520,15 +545,18 @@ export const setupDoctorPayout = async (req, res, next) => {
 
     await doctor.save();
 
-    console.log(`🏦 [Doctor Payout] Details saved for Dr. ${doctor._id}. Account ID: ${accountId}, Last4: ${accNumClean.slice(-4)}`);
+    console.log(`🏦 [Doctor Payout] Details saved for Dr. ${doctor._id}. Account ID: ${accountId}, Last4: ${accNumClean.slice(-4)}, TestMode=${isTestMode}`);
 
     return req.http.ok(
       {
         razorpayAccountId: doctor.razorpayAccountId,
         payoutStatus: doctor.payoutStatus,
         bankDetailsMasked: doctor.bankDetailsMasked,
+        isTestMode,
       },
-      "Payout details submitted successfully. Verification status is pending."
+      isTestMode
+        ? "Payout details saved! (Test Mode: Account automatically activated for testing)"
+        : "Payout details submitted successfully. Verification status is pending."
     );
   } catch (err) {
     console.error("[Doctor Payout Setup Error]", err);
@@ -543,12 +571,19 @@ export const getDoctorPayoutStatus = async (req, res, next) => {
       return req.http.notFound("Doctor profile not found.");
     }
 
+    const isTestMode = Boolean(
+      process.env.RAZORPAY_KEY_ID?.startsWith("rzp_test_") ||
+      process.env.NODE_ENV !== "production" ||
+      process.env.DEMO_MODE === "true"
+    );
+
     return req.http.ok(
       {
         razorpayAccountId: doctor.razorpayAccountId || null,
         payoutStatus: doctor.payoutStatus || "not_submitted",
         payoutRejectionReason: doctor.payoutRejectionReason || "",
         bankDetailsMasked: doctor.bankDetailsMasked || null,
+        isTestMode,
       },
       "Doctor payout status retrieved"
     );

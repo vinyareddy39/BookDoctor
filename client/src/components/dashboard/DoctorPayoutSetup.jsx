@@ -98,6 +98,25 @@ export default function DoctorPayoutSetup({ profile }) {
     }
   };
 
+  const handleFillSample = () => {
+    const docName = profile?.userId?.name ? `Dr. ${profile.userId.name}` : "Dr. John Doe";
+    setForm({
+      accountHolderName: docName,
+      accountNumber: "98765432109876",
+      confirmAccountNumber: "98765432109876",
+      ifsc: "HDFC0001234",
+      pan: "ABCDE1234F",
+      address: profile?.address || "123 Medical Center Rd, Jubilee Hills",
+      city: profile?.city || "Hyderabad",
+      state: "Telangana",
+      postalCode: "500033",
+      phone: profile?.userId?.phone || "9876543210",
+      email: profile?.userId?.email || "doctor.test@example.com",
+    });
+    setErrors({});
+    toast.success("Sample test bank details loaded! Click 'Save & Submit' to activate.", { icon: "🧪" });
+  };
+
   const validate = () => {
     const errs = {};
     if (!form.accountHolderName.trim()) errs.accountHolderName = "Account holder name is required";
@@ -306,13 +325,23 @@ export default function DoctorPayoutSetup({ profile }) {
       {/* ── Form Section ── */}
       {isEditing && (
         <form onSubmit={handleSubmit} className="card p-6 sm:p-8 space-y-6">
-          <div className="border-b border-slate-100 pb-4">
-            <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
-              <span>💳</span> Bank Payout Details
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Razorpay Route requires these details to verify your identity and deposit consultation fees directly into your Indian bank account.
-            </p>
+          <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
+                <span>💳</span> Bank Payout Details
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Razorpay Route requires these details to verify your identity and deposit consultation fees directly into your Indian bank account.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleFillSample}
+              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 transition-colors flex items-center gap-1.5 self-start sm:self-center shrink-0"
+              title="Auto-fill verified Indian test bank details"
+            >
+              <span>🧪</span> Fill Sample Test Details
+            </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
