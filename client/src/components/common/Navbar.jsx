@@ -5,10 +5,8 @@ import NotificationBell from "./NotificationBell.jsx";
 import GlobalSearch from "./GlobalSearch.jsx";
 
 const NAV_LINKS = [
-  { label: "Home",     to: "/" },
-  { label: "Doctors",  to: "/doctors" },
-  { label: "About",    to: "/about" },
-  { label: "Contact",  to: "/contact" },
+  { label: "Home",    to: "/" },
+  { label: "Doctors", to: "/doctors" },
 ];
 
 

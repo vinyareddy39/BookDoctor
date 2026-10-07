@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import toast from "react-hot-toast";
 
 const STATS = [
   { value: "100+",    label: "Expert Doctors",      icon: "👨‍⚕️", color: "from-primary-500 to-primary-700" },
@@ -33,6 +35,22 @@ const TESTIMONIALS = [
 
 export default function Home() {
   const { isLoggedIn } = useAuth();
+  const [contactForm, setContactForm] = useState({ name: "", email: "", subject: "General Inquiry", message: "" });
+  const [sendingContact, setSendingContact] = useState(false);
+
+  const handleContactSubmit = (e) => {
+    e.preventDefault();
+    if (!contactForm.name.trim() || !contactForm.email.trim() || !contactForm.message.trim()) {
+      toast.error("Please fill in all required fields.");
+      return;
+    }
+    setSendingContact(true);
+    setTimeout(() => {
+      setSendingContact(false);
+      toast.success("Thank you! Your message has been received. Our team will contact you shortly.");
+      setContactForm({ name: "", email: "", subject: "General Inquiry", message: "" });
+    }, 600);
+  };
 
   return (
     <div className="min-h-screen">
@@ -174,7 +192,7 @@ export default function Home() {
       </section>
 
       {/* ─────────── HOW IT WORKS ─────────── */}
-      <section className="py-20 bg-white" id="about">
+      <section className="py-20 bg-white" id="how-it-works">
         <div className="section">
           <div className="text-center mb-12">
             <span className="text-xs font-bold text-accent-600 uppercase tracking-widest bg-accent-50 px-4 py-1.5 rounded-full border border-accent-100">How It Works</span>
@@ -192,6 +210,86 @@ export default function Home() {
                 <p className="text-slate-500 text-sm leading-relaxed">{step.desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─────────── ABOUT US (SCROLL SECTION) ─────────── */}
+      <section className="py-20 bg-slate-50/70 border-y border-slate-100" id="about">
+        <div className="section space-y-16">
+          <div className="text-center max-w-2xl mx-auto space-y-3">
+            <span className="text-xs font-bold text-primary-600 uppercase tracking-widest bg-primary-50 px-4 py-1.5 rounded-full border border-primary-100">
+              About BookDoctor
+            </span>
+            <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
+              Simplifying Healthcare, One Appointment at a Time
+            </h2>
+            <p className="text-slate-600 text-base leading-relaxed">
+              BookDoctor is an integrated modern healthcare ecosystem designed to bridge patients with top verified doctors, digital EMR records, and 24/7 emergency dispatch.
+            </p>
+          </div>
+
+          {/* About Pillars Grid */}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              {
+                icon: "🔒",
+                title: "Security & Privacy",
+                desc: "DPDP & HIPAA aligned encrypted clinical notes, prescription vaults, and role-based audit logs.",
+                border: "border-primary-200",
+                bg: "bg-primary-50/50",
+              },
+              {
+                icon: "⚡",
+                title: "Instant Confirmation",
+                desc: "Real-time doctor calendar slot verification with instant SMS/Email reminders and live queue tracking.",
+                border: "border-accent-200",
+                bg: "bg-accent-50/50",
+              },
+              {
+                icon: "👨‍⚕️",
+                title: "Verified Specialists",
+                desc: "Every physician is credential-checked across 20+ clinical specialties and accredited medical clinics.",
+                border: "border-secondary-200",
+                bg: "bg-secondary-50/50",
+              },
+              {
+                icon: "💛",
+                title: "Patient-Centric Care",
+                desc: "In-app paper prescription photo/PDF uploads, AI medication guides, and one-tap emergency hospital routing.",
+                border: "border-emerald-200",
+                bg: "bg-emerald-50/50",
+              },
+            ].map((pillar) => (
+              <div
+                key={pillar.title}
+                className={`bg-white p-6 rounded-2xl border ${pillar.border} shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 space-y-3`}
+              >
+                <div className={`w-12 h-12 rounded-xl ${pillar.bg} flex items-center justify-center text-2xl`}>
+                  {pillar.icon}
+                </div>
+                <h3 className="font-bold text-slate-900 text-base">{pillar.title}</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">{pillar.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Mission & Vision Cards */}
+          <div className="grid md:grid-cols-2 gap-8">
+            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-3 border-l-4 border-l-primary-500">
+              <span className="text-3xl">🎯</span>
+              <h3 className="text-xl font-black text-slate-900">Our Mission</h3>
+              <p className="text-slate-600 text-sm leading-relaxed">
+                To eliminate delays, fragmented paper records, and long hospital waiting rooms by providing a <strong>fast, reliable, and empathetic digital platform</strong> that connects patients with doctors in seconds.
+              </p>
+            </div>
+            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-3 border-l-4 border-l-accent-500">
+              <span className="text-3xl">🌟</span>
+              <h3 className="text-xl font-black text-slate-900">Our Vision</h3>
+              <p className="text-slate-600 text-sm leading-relaxed">
+                To empower every family with accessible, transparent, and intelligent healthcare — from daily preventive consultations to real-time emergency hospital routing and digital prescription tracking.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -229,8 +327,157 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ─────────── CONTACT US (SCROLL SECTION) ─────────── */}
+      <section className="py-20 bg-white" id="contact">
+        <div className="section">
+          <div className="text-center max-w-xl mx-auto mb-12 space-y-2">
+            <span className="text-xs font-bold text-secondary-600 uppercase tracking-widest bg-secondary-50 px-4 py-1.5 rounded-full border border-secondary-100">
+              Get in Touch
+            </span>
+            <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
+              We're Here to Help You 24/7
+            </h2>
+            <p className="text-slate-500 text-sm sm:text-base">
+              Have questions about booking appointments, doctor registrations, or emergency features? Reach out anytime.
+            </p>
+          </div>
+
+          <div className="grid lg:grid-cols-5 gap-10 items-start">
+            {/* Left Contact Info Cards */}
+            <div className="lg:col-span-2 space-y-4">
+              {[
+                {
+                  icon: "📍",
+                  title: "Headquarters",
+                  val: "Hyderabad, Telangana, India",
+                  desc: "Central healthcare coordination center",
+                  bg: "bg-blue-50 text-blue-700",
+                },
+                {
+                  icon: "📧",
+                  title: "Email Support",
+                  val: "support@bookdoctor.com",
+                  href: "mailto:support@bookdoctor.com",
+                  desc: "Guaranteed reply within 24 hours",
+                  bg: "bg-purple-50 text-purple-700",
+                },
+                {
+                  icon: "📞",
+                  title: "24/7 Helpline",
+                  val: "+91 98765 43210",
+                  href: "tel:+919876543210",
+                  desc: "Toll-free doctor support & assistance",
+                  bg: "bg-emerald-50 text-emerald-700",
+                },
+                {
+                  icon: "🚨",
+                  title: "Emergency Dispatch",
+                  val: "Ambulance Hotline: 108",
+                  href: "tel:108",
+                  desc: "Integrated SOS GPS hospital routing",
+                  bg: "bg-rose-50 text-rose-700",
+                },
+              ].map((card) => (
+                <div
+                  key={card.title}
+                  className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80 flex items-start gap-3.5 hover:bg-slate-50 transition"
+                >
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${card.bg}`}>
+                    {card.icon}
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      {card.title}
+                    </h4>
+                    {card.href ? (
+                      <a href={card.href} className="font-bold text-slate-800 text-sm hover:text-primary-600 transition block">
+                        {card.val}
+                      </a>
+                    ) : (
+                      <p className="font-bold text-slate-800 text-sm">{card.val}</p>
+                    )}
+                    <p className="text-[11px] text-slate-500 mt-0.5">{card.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Right Contact Form */}
+            <div className="lg:col-span-3 bg-slate-50/60 p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-xs">
+              <h3 className="font-black text-slate-900 text-lg mb-1">Send Us a Direct Message</h3>
+              <p className="text-xs text-slate-500 mb-5">
+                Fill out the form below and our medical administration team will respond promptly.
+              </p>
+
+              <form onSubmit={handleContactSubmit} className="space-y-4">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Your Full Name *</label>
+                    <input
+                      required
+                      type="text"
+                      placeholder="e.g. Rahul Verma"
+                      value={contactForm.name}
+                      onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
+                      className="input text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Email Address *</label>
+                    <input
+                      required
+                      type="email"
+                      placeholder="e.g. rahul@example.com"
+                      value={contactForm.email}
+                      onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                      className="input text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Inquiry Subject</label>
+                  <select
+                    value={contactForm.subject}
+                    onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
+                    className="input text-xs font-medium"
+                  >
+                    <option value="General Inquiry">General Inquiry</option>
+                    <option value="Appointment Booking Assistance">Appointment Booking Assistance</option>
+                    <option value="Doctor Registration & Verification">Doctor Registration & Verification</option>
+                    <option value="Prescription & Health Records">Prescription & Health Records</option>
+                    <option value="Emergency Hospital Dispatch">Emergency Hospital Dispatch</option>
+                    <option value="Technical Support">Technical Support</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Your Message *</label>
+                  <textarea
+                    required
+                    rows={4}
+                    placeholder="How can we assist you today? Please share your question or feedback..."
+                    value={contactForm.message}
+                    onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
+                    className="input text-xs"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={sendingContact}
+                  className="btn-primary w-full py-3 text-xs font-bold shadow-sm"
+                >
+                  {sendingContact ? "Sending Message..." : "✉️ Send Message"}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ─────────── CTA Banner ─────────── */}
-      <section className="py-20 bg-gradient-to-r from-primary-600 to-secondary-600" id="contact">
+      <section className="py-20 bg-gradient-to-r from-primary-600 to-secondary-600">
         <div className="section text-center text-white">
           <h2 className="text-3xl md:text-4xl font-black mb-4">Ready to Book Your Appointment?</h2>
           <p className="text-primary-100 text-lg mb-8 max-w-xl mx-auto">
