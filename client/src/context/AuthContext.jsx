@@ -77,6 +77,44 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // SESSION MANAGEMENT
+  const getSessions = async () => {
+    const res = await API.get("/auth/sessions");
+    return res.data?.data?.sessions || [];
+  };
+
+  const revokeSession = async (sessionId) => {
+    const res = await API.delete(`/auth/sessions/${sessionId}/revoke`);
+    return res.data;
+  };
+
+  const logoutAll = async () => {
+    try {
+      await API.post("/auth/logout-all");
+    } finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("userData");
+      setUser(null);
+    }
+  };
+
+  const isClinicAdmin = user?.role === "clinic_admin" || user?.role === "admin";
+  const isDoctor = user?.role === "doctor";
+  const isReceptionist = user?.role === "receptionist";
+  const isLabTech = user?.role === "lab_technician";
+  const isPatient = user?.role === "patient";
+
+  const hasRole = (...roles) => {
+    if (!user?.role) return false;
+    return roles.some(
+      (r) =>
+        r === user.role ||
+        (r === "admin" && user.role === "clinic_admin") ||
+        (r === "clinic_admin" && user.role === "admin")
+    );
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -84,12 +122,19 @@ export const AuthProvider = ({ children }) => {
         login,
         register,
         logout,
+        logoutAll,
+        getSessions,
+        revokeSession,
         loading,
         isLoggedIn: !!user,
-        isDoctor: user?.role === "doctor",
-        isPatient: user?.role === "patient",
-        isAdmin: user?.role === "admin",
-        role: user?.role || null,
+        isDoctor,
+        isPatient,
+        isAdmin: isClinicAdmin, // Retain backward-compatible flag
+        isClinicAdmin,
+        isReceptionist,
+        isLabTech,
+        hasRole,
+        role: user?.role === "admin" ? "clinic_admin" : user?.role || null,
       }}
     >
       {children}

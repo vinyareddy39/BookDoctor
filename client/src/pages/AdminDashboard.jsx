@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import API from "../services/api";
 import { RevenueChart, AppointmentVolumeChart } from "../components/common/Charts";
 import { exportToCSV, exportToPDF } from "../utils/export";
@@ -87,6 +88,13 @@ export default function AdminDashboard() {
             <p className="text-slate-500 text-xs sm:text-sm mt-1">Platform overview and statistics</p>
           </div>
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+            <Link
+              to="/admin/audit-logs"
+              className="flex-1 sm:flex-none btn-secondary py-2.5 px-4 text-xs sm:text-sm font-bold min-h-[44px] flex items-center justify-center gap-1.5"
+            >
+              <span>🛡️</span>
+              <span>Audit Logs</span>
+            </Link>
             <button 
               onClick={() => exportToCSV(analytics, "admin-analytics.csv")}
               className="flex-1 sm:flex-none btn-secondary py-2.5 px-4 text-xs sm:text-sm font-bold min-h-[44px]"

@@ -39,6 +39,7 @@ const About           = lazy(() => import("./pages/About.jsx"));
 const MessagesPage    = lazy(() => import("./pages/Messages.jsx"));
 const Contact         = lazy(() => import("./pages/Contact.jsx"));
 const AdminDashboard  = lazy(() => import("./pages/AdminDashboard.jsx"));
+const AuditLogViewer  = lazy(() => import("./pages/AuditLogViewer.jsx"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword.jsx"));
 const ResetPassword   = lazy(() => import("./pages/ResetPassword.jsx"));
 const VerifyEmail     = lazy(() => import("./pages/VerifyEmail.jsx"));
@@ -149,6 +150,7 @@ function App() {
 
             {/* Admin protected */}
             <Route path="/admin"              element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+            <Route path="/admin/audit-logs"   element={<AdminRoute><AuditLogViewer /></AdminRoute>} />
 
             {/* 404 */}
             <Route path="*" element={<NotFound />} />

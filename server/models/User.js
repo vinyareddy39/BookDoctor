@@ -75,8 +75,23 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["patient", "doctor", "admin"],
+      enum: [
+        "patient",
+        "doctor",
+        "clinic_admin",
+        "receptionist",
+        "lab_technician",
+        "admin" // Retained for backwards compatibility; auto-migrates to clinic_admin
+      ],
       default: "patient",
+    },
+
+    // Medical Record Number (MRN) for clinical identification
+    mrn: {
+      type: String,
+      sparse: true,
+      unique: true,
+      trim: true,
     },
 
     isVerified: {
@@ -123,8 +138,11 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// hash password before save
+// Auto-migrate legacy 'admin' to 'clinic_admin' and hash password before save
 userSchema.pre("save", async function () {
+  if (this.role === "admin") {
+    this.role = "clinic_admin";
+  }
   if (this.isModified("password")) {
     this.password = await bcrypt.hash(this.password, 10);
   }

@@ -98,7 +98,7 @@ export const auth = async (req, res, next) => {
 
 
 // ===============================
-// ROLE BASED ACCESS CONTROL
+// ROLE BASED ACCESS CONTROL (Backward-Compatible)
 // ===============================
 export const role = (...allowedRoles) => {
   return (req, res, next) => {
@@ -106,7 +106,13 @@ export const role = (...allowedRoles) => {
       return req.http.unauthorized("Login required");
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    const currentRole = req.user.role;
+    // Treat 'admin' and 'clinic_admin' interchangeably for existing routes
+    const effectiveRoles = allowedRoles.flatMap((r) =>
+      r === "admin" ? ["admin", "clinic_admin"] : r === "clinic_admin" ? ["admin", "clinic_admin"] : [r]
+    );
+
+    if (!effectiveRoles.includes(currentRole)) {
       return req.http.forbidden(
         "You do not have permission to access this resource"
       );
@@ -115,6 +121,9 @@ export const role = (...allowedRoles) => {
     next();
   };
 };
+
+export { authorize, enforceRecordScope, PERMISSIONS } from "./rbac.js";
+export { recordAudit, auditRequest } from "./auditLogger.js";
 
 
 // ===============================

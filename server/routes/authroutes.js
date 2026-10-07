@@ -7,7 +7,10 @@ import {
   resetPassword,
   refresh,
   logout,
-  getProfile
+  getProfile,
+  getSessions,
+  revokeSession,
+  logoutAll
 } from "../controllers/authController.js";
 import { auth, validate } from "../middleware/index.js";
 import { authLimiter } from "../middleware/rateLimiter.js";
@@ -26,6 +29,11 @@ router.post("/reset-password/:token", validate(["password"]), resetPassword);
 // Token refreshing & logout
 router.post("/refresh", refresh);
 router.post("/logout", logout);
+
+// Multi-device Session Management
+router.get("/sessions", auth, getSessions);
+router.delete("/sessions/:id/revoke", auth, revokeSession);
+router.post("/logout-all", auth, logoutAll);
 
 // Protected profile
 router.get("/profile", auth, getProfile);
