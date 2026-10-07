@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { exportPrescriptionToPDF, exportLabReportToPDF } from "../utils/export";
 import toast from "react-hot-toast";
 
 export default function PatientFollowUps() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState("prescriptions"); // 'prescriptions' | 'followups' | 'diagnoses' | 'lab-orders'
   const [prescriptions, setPrescriptions] = useState([]);
@@ -118,6 +120,20 @@ export default function PatientFollowUps() {
               Access your electronic prescriptions, diagnoses, and follow-up consultation requests
             </p>
           </div>
+
+          <button
+            onClick={() => {
+              logout();
+              navigate("/login");
+            }}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white font-semibold text-xs border border-rose-200 hover:border-rose-500 transition-all shadow-xs self-start sm:self-auto"
+            title="Logout from Patient Portal"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Logout
+          </button>
         </div>
 
         {/* Tab Bar */}

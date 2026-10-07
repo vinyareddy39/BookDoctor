@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import API from "../services/api";
 import toast from "react-hot-toast";
@@ -12,7 +13,8 @@ import { RevenueChart, AppointmentVolumeChart } from "../components/common/Chart
 import { exportToCSV, exportToPDF } from "../utils/export.js";
 
 export default function DoctorDashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const { socket } = useSocket();
   const [activeTab, setActiveTab] = useState("analytics");
   const [profile, setProfile] = useState(null);
@@ -211,19 +213,35 @@ export default function DoctorDashboard() {
             </div>
           </div>
 
-          {/* Availability Toggle */}
-          <div className="flex items-center gap-3 bg-slate-50 px-4 py-2.5 rounded-2xl border border-slate-100 shadow-inner">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Accepting Appointments:</span>
+          {/* Availability Toggle & Logout */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-3 bg-slate-50 px-4 py-2.5 rounded-2xl border border-slate-100 shadow-inner">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Accepting Appointments:</span>
+              <button
+                onClick={handleToggle}
+                disabled={toggling}
+                className={`relative inline-flex items-center focus:outline-none w-[50px] h-[26px] rounded-full transition-colors duration-200 ${profile?.isAvailable ? "bg-green-500" : "bg-slate-300"}`}
+              >
+                <span className={`inline-block bg-white rounded-full shadow-sm transform transition-transform duration-200 w-[22px] h-[22px] ${profile?.isAvailable ? "translate-x-[26px]" : "translate-x-[2px]"}`} />
+              </button>
+              <span className={`text-xs font-bold ${profile?.isAvailable ? "text-emerald-600" : "text-slate-400"}`}>
+                {toggling ? "Saving…" : profile?.isAvailable ? "Available" : "Unavailable"}
+              </span>
+            </div>
+
             <button
-              onClick={handleToggle}
-              disabled={toggling}
-              className={`relative inline-flex items-center focus:outline-none w-[50px] h-[26px] rounded-full transition-colors duration-200 ${profile?.isAvailable ? "bg-green-500" : "bg-slate-300"}`}
+              onClick={() => {
+                logout();
+                navigate("/doctor/login");
+              }}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white font-semibold text-xs border border-rose-200 hover:border-rose-500 transition-all shadow-xs"
+              title="Logout from Doctor Portal"
             >
-              <span className={`inline-block bg-white rounded-full shadow-sm transform transition-transform duration-200 w-[22px] h-[22px] ${profile?.isAvailable ? "translate-x-[26px]" : "translate-x-[2px]"}`} />
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Logout
             </button>
-            <span className={`text-xs font-bold ${profile?.isAvailable ? "text-emerald-600" : "text-slate-400"}`}>
-              {toggling ? "Saving…" : profile?.isAvailable ? "Available" : "Unavailable"}
-            </span>
           </div>
         </div>
       </div>

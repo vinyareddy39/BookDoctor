@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { exportPrescriptionToPDF } from "../utils/export";
@@ -17,7 +18,8 @@ const ICD_PRESETS = [
 ];
 
 export default function EmrPortal() {
-  const { user, isDoctor, isAdmin } = useAuth();
+  const { user, isDoctor, isAdmin, logout } = useAuth();
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState("notes"); // 'notes' | 'prescriptions' | 'diagnoses' | 'followups'
   const [patients, setPatients] = useState([]);
@@ -421,34 +423,50 @@ export default function EmrPortal() {
             </p>
           </div>
 
-          {/* Patient Quick Finder */}
-          <div className="relative w-full md:w-80">
-            <input
-              type="text"
-              value={patientSearch}
-              onChange={(e) => handleSearchPatient(e.target.value)}
-              placeholder="Search patient by Name or MRN..."
-              className="input py-2 text-xs font-semibold"
-            />
-            {patients.length > 0 && !selectedPatientId && (
-              <div className="absolute top-full left-0 right-0 mt-1 border border-slate-200 rounded-xl bg-white shadow-xl z-30 max-h-48 overflow-y-auto divide-y divide-slate-100">
-                {patients.map((p) => (
-                  <div
-                    key={p._id}
-                    onClick={() => handleSelectPatient(p)}
-                    className="p-2.5 text-xs hover:bg-primary-50 cursor-pointer flex justify-between items-center"
-                  >
-                    <div>
-                      <p className="font-bold text-slate-900">{p.name}</p>
-                      <p className="text-slate-400 text-[11px]">{p.phone}</p>
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            {/* Patient Quick Finder */}
+            <div className="relative flex-1 md:w-80">
+              <input
+                type="text"
+                value={patientSearch}
+                onChange={(e) => handleSearchPatient(e.target.value)}
+                placeholder="Search patient by Name or MRN..."
+                className="input py-2 text-xs font-semibold"
+              />
+              {patients.length > 0 && !selectedPatientId && (
+                <div className="absolute top-full left-0 right-0 mt-1 border border-slate-200 rounded-xl bg-white shadow-xl z-30 max-h-48 overflow-y-auto divide-y divide-slate-100">
+                  {patients.map((p) => (
+                    <div
+                      key={p._id}
+                      onClick={() => handleSelectPatient(p)}
+                      className="p-2.5 text-xs hover:bg-primary-50 cursor-pointer flex justify-between items-center"
+                    >
+                      <div>
+                        <p className="font-bold text-slate-900">{p.name}</p>
+                        <p className="text-slate-400 text-[11px]">{p.phone}</p>
+                      </div>
+                      <span className="font-mono text-[10px] font-bold text-primary-700 bg-primary-50 px-2 py-0.5 rounded">
+                        {p.mrn || "No MRN"}
+                      </span>
                     </div>
-                    <span className="font-mono text-[10px] font-bold text-primary-700 bg-primary-50 px-2 py-0.5 rounded">
-                      {p.mrn || "No MRN"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                logout();
+                navigate(isDoctor ? "/doctor/login" : "/login");
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white font-semibold text-xs border border-rose-200 hover:border-rose-500 transition-all shadow-xs whitespace-nowrap"
+              title="Logout"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Logout
+            </button>
           </div>
         </div>
 
