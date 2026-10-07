@@ -84,6 +84,7 @@ export default function AppointmentCard({ appointment }) {
 
   const [processingPayment, setProcessingPayment] = useState(false);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
+  const [runningTestPay, setRunningTestPay] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
 
   // Preload Razorpay Checkout SDK once
@@ -92,6 +93,29 @@ export default function AppointmentCard({ appointment }) {
       loadRazorpayScript();
     }
   }, [localPaymentStatus, isDoctorView]);
+
+  const handleTestPay = async () => {
+    if (runningTestPay || processingPayment || verifyingPayment) return;
+    setRunningTestPay(true);
+    setPaymentError(null);
+    const toastId = toast.loading("Processing test payment...", { id: "test-pay" });
+    try {
+      const res = await API.post("/payments/test-pay", { appointmentId: appointment._id });
+      if (res.data?.success || res.status === 200) {
+        toast.success("Test Payment completed successfully! ✓", { id: "test-pay" });
+        setLocalPaymentStatus("paid");
+        if (appointment) appointment.paymentStatus = "paid";
+      } else {
+        toast.error(res.data?.message || "Test payment failed", { id: "test-pay" });
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || "Test payment error";
+      toast.error(msg, { id: "test-pay" });
+      setPaymentError(msg);
+    } finally {
+      setRunningTestPay(false);
+    }
+  };
 
   const handlePayment = async () => {
     if (processingPayment || verifyingPayment) return;
@@ -367,26 +391,40 @@ export default function AppointmentCard({ appointment }) {
               {localPaymentStatus === "paid" ? "✓ Paid" : "Unpaid"}
             </span>
 
-            {/* Pay Consultation Fee Button (Patient Only) */}
+            {/* Pay Consultation Fee Buttons (Patient Only) */}
             {localPaymentStatus !== "paid" && !isDoctorView && (
-              <button
-                type="button"
-                onClick={() => {
-                  setPaymentError(null);
-                  handlePayment();
-                }}
-                disabled={processingPayment || verifyingPayment}
-                className="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow transition-colors flex items-center gap-1.5 active:scale-95"
-              >
-                <span>💳</span>
-                <span>
-                  {verifyingPayment
-                    ? "Verifying Payment..."
-                    : processingPayment
-                    ? "Opening Checkout..."
-                    : "Pay Consultation Fee"}
-                </span>
-              </button>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentError(null);
+                    handlePayment();
+                  }}
+                  disabled={processingPayment || verifyingPayment || runningTestPay}
+                  className="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow transition-colors flex items-center gap-1.5 active:scale-95"
+                  title="Open official Razorpay Sandbox Checkout modal"
+                >
+                  <span>💳</span>
+                  <span>
+                    {verifyingPayment
+                      ? "Verifying Payment..."
+                      : processingPayment
+                      ? "Opening Checkout..."
+                      : "Pay Consultation Fee (Test Mode)"}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleTestPay}
+                  disabled={processingPayment || verifyingPayment || runningTestPay}
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg shadow transition-colors flex items-center gap-1 active:scale-95"
+                  title="Simulate 1-click test payment without opening checkout modal"
+                >
+                  <span>⚡</span>
+                  <span>{runningTestPay ? "Processing..." : "Instant Test Pay"}</span>
+                </button>
+              </div>
             )}
 
             {/* Give feedback button if completed and no feedback yet */}

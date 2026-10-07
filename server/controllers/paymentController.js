@@ -264,6 +264,83 @@ export const verifyPayment = async (req, res, next) => {
 };
 
 // ==========================================
+// 2B. TEST PAY APPOINTMENT (Instant Test Mode Settlement)
+// ==========================================
+export const testPayAppointment = async (req, res, next) => {
+  try {
+    const { appointmentId } = req.body;
+    if (!appointmentId) {
+      return req.http.badRequest("Appointment ID is required");
+    }
+
+    const isTestMode = Boolean(
+      process.env.RAZORPAY_KEY_ID?.startsWith("rzp_test_") ||
+      process.env.NODE_ENV !== "production" ||
+      process.env.DEMO_MODE === "true"
+    );
+
+    if (!isTestMode) {
+      return req.http.badRequest("Test Pay is only permitted in Test/Sandbox Mode.");
+    }
+
+    const appointment = await Appointment.findById(appointmentId).populate("doctorId");
+    if (!appointment) {
+      return req.http.notFound("Appointment not found");
+    }
+
+    if (appointment.paymentStatus === "paid") {
+      return req.http.badRequest("Appointment is already paid.");
+    }
+
+    const isDocActivated = appointment?.doctorId?.payoutStatus === "activated" && Boolean(appointment?.doctorId?.razorpayAccountId);
+    const targetPayoutStatus = isDocActivated ? "transferred" : "payout_pending";
+
+    const simulatedPaymentId = `pay_test_${Date.now()}`;
+    const simulatedOrderId = `order_test_${Date.now()}`;
+    const feeAmount = appointment.amount || appointment.doctorId?.consultationFee || 500;
+
+    // Update appointment
+    await Appointment.findByIdAndUpdate(
+      appointmentId,
+      { paymentStatus: "paid", payoutStatus: targetPayoutStatus },
+      { new: true }
+    );
+
+    // Save transaction
+    await Transaction.create({
+      userId: req.user?._id || appointment.patientId,
+      appointmentId,
+      orderId: simulatedOrderId,
+      paymentId: simulatedPaymentId,
+      amount: feeAmount,
+      currency: "INR",
+      status: "captured",
+      doctorShare: feeAmount * 0.9,
+      platformCommission: feeAmount * 0.1,
+      customerDetails: {
+        name: req.user?.name || "Test Patient",
+        email: req.user?.email || "test@example.com",
+      },
+    });
+
+    if (appointment.doctorId) {
+      const docUserId = appointment.doctorId.userId || appointment.doctorId;
+      triggerDashboardUpdate(docUserId, "A consultation payment was captured (Test Mode)");
+    }
+
+    console.log(`✅ [Test Mode] Instant Test Payment processed for appointment ${appointmentId}: ${simulatedPaymentId}`);
+
+    return req.http.ok(
+      { paymentId: simulatedPaymentId, status: "captured", testMode: true },
+      "Test payment completed successfully! (Test Mode)"
+    );
+  } catch (err) {
+    console.error("[Test Pay Error]", err);
+    next(err);
+  }
+};
+
+// ==========================================
 // 3. WEBHOOK (Called by Razorpay asynchronously)
 // ==========================================
 export const razorpayWebhook = async (req, res, next) => {
