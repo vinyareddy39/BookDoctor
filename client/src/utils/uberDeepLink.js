@@ -18,8 +18,55 @@
 export const UBER_CLIENT_ID = "DfjKZC3xXnBEObgCRl1ChUSdRJDnjwBP";
 
 /**
- * Builds the official Universal Deep Link URL for Uber Ride Request
+ * Helper function buildUberLink(hospital)
+ * 
+ * Reuses the already-computed nearest hospital object (name, lat, lng, address)
+ * and returns the official Uber Universal Deep Link URL:
+ *   https://m.uber.com/ul/?action=setPickup
+ *     &pickup=my_location
+ *     &dropoff[latitude]=<lat>
+ *     &dropoff[longitude]=<lng>
+ *     &dropoff[nickname]=<hospital name>
+ *     &dropoff[formatted_address]=<address>
+ * 
+ * Uses URLSearchParams so that all query parameter values are safely URL-encoded.
+ * Pickup is set to 'my_location' to let Uber auto-lock to the user's live location.
  */
+export function buildUberLink(hospital) {
+  if (!hospital || !hospital.lat || !hospital.lng) {
+    return null;
+  }
+
+  const params = new URLSearchParams();
+  params.append("action", "setPickup");
+  params.append("pickup", "my_location");
+  params.append("dropoff[latitude]", String(hospital.lat));
+  params.append("dropoff[longitude]", String(hospital.lng));
+  params.append("dropoff[nickname]", hospital.name || "Hospital Emergency Department");
+  params.append("dropoff[formatted_address]", hospital.address || hospital.name || "Hospital");
+
+  return `https://m.uber.com/ul/?${params.toString()}`;
+}
+
+/**
+ * Opens the pre-filled Uber ride link across Windows and Phone:
+ * - Phone (Android / iOS): window.location.href triggers native OS Universal Links / App Links,
+ *   launching the installed Uber app directly (or falling back to the mobile web page).
+ * - Windows / Desktop: window.open(url, "_blank") opens m.uber.com in the default browser in a new tab.
+ */
+export function openUberRideToHospital(hospital) {
+  const url = buildUberLink(hospital);
+  if (!url) return false;
+
+  const isMobile = isMobileDevice();
+  if (isMobile) {
+    window.location.href = url;
+  } else {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+  return true;
+}
+
 export function buildUberUniversalUrl({
   userLat = null,
   userLng = null,

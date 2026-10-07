@@ -9,7 +9,12 @@ import {
   fetchCandidateHospitals,
   selectFastestHospitalByRoad
 } from "../services/hospitalService";
-import { openUberRide, isMobileDevice } from "../utils/uberDeepLink";
+import {
+  openUberRide,
+  openUberRideToHospital,
+  buildUberLink,
+  isMobileDevice
+} from "../utils/uberDeepLink";
 import {
   formatDialNumber,
   formatDisplayNumber,
@@ -68,6 +73,7 @@ export default function EmergencyHospitalTracking() {
   const [loading, setLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState("Acquiring your live location...");
   const [errorMessage, setErrorMessage] = useState(null);
+  const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
 
   // Twilio Calling on Desktop
   const [callingTwilio, setCallingTwilio] = useState(false);
@@ -93,6 +99,7 @@ export default function EmergencyHospitalTracking() {
   const acquireLiveLocation = () => {
     setLoading(true);
     setErrorMessage(null);
+    setLocationPermissionDenied(false);
     setLoadingMessage("Requesting GPS permission & capturing live location...");
 
     if (!navigator.geolocation) {
@@ -103,6 +110,7 @@ export default function EmergencyHospitalTracking() {
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        setLocationPermissionDenied(false);
         const loc = {
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
@@ -116,7 +124,9 @@ export default function EmergencyHospitalTracking() {
         console.warn("Geolocation acquisition failed:", err);
         let msg = "Could not acquire your live location.";
         if (err.code === 1) {
-          msg = "Location permission was denied. Please allow location access or enter your location manually below.";
+          // Permission Denied
+          setLocationPermissionDenied(true);
+          msg = "Location permission was denied. Please allow location access in your browser or device settings so Uber can auto-fill your pickup point, or enter your location manually below.";
         } else if (err.code === 2) {
           msg = "GPS position unavailable. Please enter your location manually.";
         } else if (err.code === 3) {
@@ -176,6 +186,7 @@ export default function EmergencyHospitalTracking() {
 
     setIsGeocodingManual(true);
     setErrorMessage(null);
+    setLocationPermissionDenied(false);
 
     try {
       const loc = await geocodeManualLocation(manualInput);
@@ -191,23 +202,27 @@ export default function EmergencyHospitalTracking() {
   };
 
   /**
-   * 3. Open Uber with Universal Deep Link (Pre-fills pickup + dropoff)
+   * 3. "Book Uber to Hospital" Handler
+   * 
+   * Reuses the nearest hospital object (selectedHospital) that was already
+   * computed and stored in component state.
+   * Does NOT trigger any new hospital searches or additional API calls.
+   * 
+   * Calls openUberRideToHospital(selectedHospital) which:
+   * - Sets Pickup = user's live location ('pickup=my_location')
+   * - Sets Dropoff = selectedHospital's lat, lng, name, and address
+   * - Opens native Uber app on Phone, or opens default browser on Windows.
    */
-  const handleOpenUber = () => {
-    if (!selectedHospital?.lat || !selectedHospital?.lng) {
-      toast.error("Please wait until the nearest hospital is identified.");
+  const handleBookUber = () => {
+    if (!selectedHospital || !selectedHospital.lat || !selectedHospital.lng) {
+      toast.error("Hospital not found yet. Please wait until nearest hospital is loaded.");
       return;
     }
 
-    openUberRide({
-      userLat: userLocation?.latitude,
-      userLng: userLocation?.longitude,
-      userAddress: userAddress || "Live Location",
-      hospLat: selectedHospital.lat,
-      hospLng: selectedHospital.lng,
-      hospitalName: selectedHospital.name,
-      hospitalAddress: selectedHospital.address || "Emergency Department"
-    });
+    const opened = openUberRideToHospital(selectedHospital);
+    if (!opened) {
+      toast.error("Unable to generate Uber link for hospital.");
+    }
   };
 
   /**
@@ -289,6 +304,31 @@ export default function EmergencyHospitalTracking() {
           </div>
         </div>
 
+        {/* ── Location Permission Denied Alert ── */}
+        {locationPermissionDenied && (
+          <div className="p-4 bg-rose-50 border-2 border-rose-300 rounded-2xl flex items-start gap-3.5 shadow-sm animate-fade-in">
+            <span className="text-2xl mt-0.5">🔒</span>
+            <div className="space-y-1 flex-1">
+              <h3 className="text-sm font-black text-rose-900 uppercase tracking-wide">
+                Location Permission Denied
+              </h3>
+              <p className="text-xs text-rose-700 leading-relaxed">
+                Location access was denied or blocked by your browser. Please enable location permissions in your browser or device settings so Uber can auto-fill your live pickup location, or enter your location manually below.
+              </p>
+              <div className="pt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={acquireLiveLocation}
+                  className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center gap-1.5"
+                >
+                  <span>🔄</span>
+                  <span>Enable Location & Retry</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Loading State ── */}
         {loading && (
           <div className="bg-white rounded-3xl p-10 border border-slate-200 shadow-sm text-center space-y-4">
@@ -345,6 +385,21 @@ export default function EmergencyHospitalTracking() {
                   {isGeocodingManual ? "Searching..." : "Set Location"}
                 </button>
               </form>
+            </div>
+
+            {/* Disabled Uber Button when hospital data is missing */}
+            <div className="pt-3 border-t border-slate-100 space-y-1.5">
+              <button
+                type="button"
+                disabled
+                className="w-full py-3.5 px-5 bg-slate-200 text-slate-400 font-bold rounded-xl text-xs flex items-center justify-center gap-2 cursor-not-allowed"
+              >
+                <span>🚗</span>
+                <span>Hospital not found yet</span>
+              </button>
+              <p className="text-[11px] text-slate-400 text-center">
+                Uber will open with locations pre-filled. Tap Request there to confirm the ride.
+              </p>
             </div>
           </div>
         )}
@@ -463,21 +518,41 @@ export default function EmergencyHospitalTracking() {
                   </div>
                 </div>
 
-                {/* ── PROMINENT OPEN UBER NOW BUTTON ── */}
-                <button
-                  type="button"
-                  onClick={handleOpenUber}
-                  className="w-full py-4 px-6 bg-black hover:bg-slate-900 active:scale-[0.98] text-white font-black rounded-2xl shadow-xl transition-all duration-200 flex items-center justify-center gap-3 text-base group"
-                >
-                  <span className="text-2xl group-hover:scale-110 transition-transform">🚗</span>
-                  <div className="text-left">
-                    <p className="leading-tight">Open Uber Now</p>
-                    <p className="text-[11px] font-normal text-slate-300">
-                      Pre-fills Pickup ({userAddress ? "Current GPS" : "Live Location"}) & Dropoff ({selectedHospital.name})
-                    </p>
-                  </div>
-                  <span className="ml-auto text-lg text-slate-400 group-hover:text-white transition-colors">➔</span>
-                </button>
+                {/* ── "Book Uber to Hospital" ACTION BUTTON ── */}
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={handleBookUber}
+                    disabled={!selectedHospital || !selectedHospital.lat || !selectedHospital.lng}
+                    className={`w-full py-4 px-6 font-black rounded-2xl shadow-xl transition-all duration-200 flex items-center justify-center gap-3 text-base group ${
+                      selectedHospital && selectedHospital.lat && selectedHospital.lng
+                        ? "bg-black hover:bg-slate-900 active:scale-[0.98] text-white cursor-pointer"
+                        : "bg-slate-300 text-slate-500 cursor-not-allowed shadow-none"
+                    }`}
+                  >
+                    <span className="text-2xl group-hover:scale-110 transition-transform">🚗</span>
+                    <div className="text-left flex-1 min-w-0">
+                      <p className="leading-tight">
+                        {selectedHospital && selectedHospital.lat && selectedHospital.lng
+                          ? "Book Uber to Hospital"
+                          : "Hospital not found yet"}
+                      </p>
+                      {selectedHospital && (
+                        <p className="text-[11px] font-normal text-slate-300 truncate">
+                          To: {selectedHospital.name} ({selectedHospital.roadDurationMins || selectedHospital.etaMinutes || 5} min road ETA)
+                        </p>
+                      )}
+                    </div>
+                    {selectedHospital && selectedHospital.lat && (
+                      <span className="ml-auto text-lg text-slate-400 group-hover:text-white transition-colors">➔</span>
+                    )}
+                  </button>
+
+                  {/* Informational note required by specification */}
+                  <p className="text-[11px] text-slate-500 text-center leading-normal px-2">
+                    Uber will open with locations pre-filled. Tap Request there to confirm the ride.
+                  </p>
+                </div>
               </div>
 
               {/* ── Ranked Hospital Alternative Cards ── */}
