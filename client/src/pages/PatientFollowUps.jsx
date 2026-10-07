@@ -20,6 +20,11 @@ export default function PatientFollowUps() {
   const [patientNotes, setPatientNotes] = useState("");
   const [submittingRequest, setSubmittingRequest] = useState(false);
 
+  // AI Plain-Language Explanations (Safety Guardrails)
+  const [loadingAiExplanation, setLoadingAiExplanation] = useState(false);
+  const [aiExplanationData, setAiExplanationData] = useState(null);
+  const [showAiModal, setShowAiModal] = useState(false);
+
   const fetchRecords = async () => {
     setLoading(true);
     try {
@@ -62,6 +67,40 @@ export default function PatientFollowUps() {
       toast.error(err.response?.data?.message || "Failed to submit request");
     } finally {
       setSubmittingRequest(false);
+    }
+  };
+
+  const handleExplainPrescription = async (rx) => {
+    setLoadingAiExplanation(true);
+    setShowAiModal(true);
+    try {
+      const res = await API.post("/ai/explain-instructions", {
+        medicines: rx.medicines || [],
+        lifestyleAdvice: rx.generalInstructions || "",
+      });
+      setAiExplanationData(res.data?.data);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to generate plain-language explanation");
+      setShowAiModal(false);
+    } finally {
+      setLoadingAiExplanation(false);
+    }
+  };
+
+  const handleExplainFollowUp = async (f) => {
+    setLoadingAiExplanation(true);
+    setShowAiModal(true);
+    try {
+      const res = await API.post("/ai/explain-instructions", {
+        medicines: [],
+        followUpPlan: `Follow-up Reason: ${f.reason}. Doctor's Plan: ${f.plan || "Review recovery"}`,
+      });
+      setAiExplanationData(res.data?.data);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to generate plain-language explanation");
+      setShowAiModal(false);
+    } finally {
+      setLoadingAiExplanation(false);
     }
   };
 
@@ -132,12 +171,20 @@ export default function PatientFollowUps() {
                           </p>
                         </div>
 
-                        <button
-                          onClick={() => exportPrescriptionToPDF(rx)}
-                          className="btn-primary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 shadow-sm"
-                        >
-                          <span>📄</span> Download PDF
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleExplainPrescription(rx)}
+                            className="btn-secondary py-2 px-3 text-xs font-bold flex items-center gap-1.5 text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 shadow-xs"
+                          >
+                            <span>✨</span> Explain in Plain English
+                          </button>
+                          <button
+                            onClick={() => exportPrescriptionToPDF(rx)}
+                            className="btn-primary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                          >
+                            <span>📄</span> Download PDF
+                          </button>
+                        </div>
                       </div>
 
                       <div className="overflow-x-auto">
@@ -209,17 +256,25 @@ export default function PatientFollowUps() {
                         </p>
                       </div>
 
-                      {f.status === "pending" && (
+                      <div className="flex items-center gap-2">
                         <button
-                          onClick={() => {
-                            setSelectedFollowUp(f);
-                            setPreferredDate(new Date(f.dueDate).toISOString().split("T")[0]);
-                          }}
-                          className="btn-primary py-2 px-3.5 text-xs font-bold whitespace-nowrap"
+                          onClick={() => handleExplainFollowUp(f)}
+                          className="btn-secondary py-1.5 px-3 text-xs font-bold flex items-center gap-1.5 text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100"
                         >
-                          Request Schedule
+                          <span>✨</span> Plain Guide
                         </button>
-                      )}
+                        {f.status === "pending" && (
+                          <button
+                            onClick={() => {
+                              setSelectedFollowUp(f);
+                              setPreferredDate(new Date(f.dueDate).toISOString().split("T")[0]);
+                            }}
+                            className="btn-primary py-1.5 px-3.5 text-xs font-bold whitespace-nowrap"
+                          >
+                            Request Schedule
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))
                 )}
@@ -409,6 +464,89 @@ export default function PatientFollowUps() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── AI PLAIN LANGUAGE EXPLANATION MODAL (PATIENT-FACING) ── */}
+        {showAiModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 animate-fade-in border border-slate-100 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between pb-3 border-b">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">✨</span>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-base">
+                      Easy-to-Understand Care Instructions
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Plain-language summary of your doctor's prescriptions and advice
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAiModal(false)}
+                  className="text-slate-400 hover:text-slate-600 text-lg"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Safety & Educational Disclaimer */}
+              <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl text-amber-900 text-xs space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                  <span>ℹ️</span> Educational Medical Summary
+                </div>
+                <p className="leading-relaxed text-amber-800">
+                  This explanation is prepared for your personal understanding. It does not replace 
+                  your doctor's direct advice, diagnose new illnesses, or alter prescribed dosages. 
+                  Always take medicines exactly as your prescription directs.
+                </p>
+              </div>
+
+              {loadingAiExplanation ? (
+                <div className="py-12 flex flex-col items-center justify-center space-y-3">
+                  <div className="w-9 h-9 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-xs font-semibold text-slate-500 animate-pulse">
+                    Translating medical instructions into plain English...
+                  </p>
+                </div>
+              ) : aiExplanationData ? (
+                <div className="space-y-4">
+                  <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-xl text-xs text-slate-800 whitespace-pre-wrap leading-relaxed font-sans">
+                    {aiExplanationData.explanation}
+                  </div>
+
+                  {aiExplanationData.disclaimer && (
+                    <div className="p-3 bg-slate-100 rounded-xl text-[11px] text-slate-500 italic">
+                      <span className="font-bold not-italic">Safety Notice: </span>
+                      {aiExplanationData.disclaimer}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                {aiExplanationData && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(aiExplanationData.explanation);
+                      toast.success("Instructions copied to clipboard!");
+                    }}
+                    className="btn-secondary text-xs py-2 px-3.5 font-bold flex items-center gap-1.5"
+                  >
+                    <span>📋</span> Copy to Clipboard
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowAiModal(false)}
+                  className="btn-primary text-xs py-2 px-4 font-bold"
+                >
+                  Understood
+                </button>
+              </div>
             </div>
           </div>
         )}

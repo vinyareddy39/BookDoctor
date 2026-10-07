@@ -77,6 +77,17 @@ export default function EmrPortal() {
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
   const [followUpForm, setFollowUpForm] = useState({ dueDate: "", reason: "", plan: "" });
 
+  // AI Intelligence State (Anthropic Backend with Safety Guardrails)
+  const [generatingAiSummary, setGeneratingAiSummary] = useState(false);
+  const [aiDraftSummary, setAiDraftSummary] = useState("");
+  const [aiSummaryNoteId, setAiSummaryNoteId] = useState(null);
+  const [showAiSummaryModal, setShowAiSummaryModal] = useState(false);
+  const [approvingAiSummary, setApprovingAiSummary] = useState(false);
+
+  const [generatingAiExplanation, setGeneratingAiExplanation] = useState(false);
+  const [aiExplanationData, setAiExplanationData] = useState(null);
+  const [showAiExplanationModal, setShowAiExplanationModal] = useState(false);
+
   // Search Patients
   const handleSearchPatient = async (q) => {
     setPatientSearch(q);
@@ -333,6 +344,68 @@ export default function EmrPortal() {
     }
   };
 
+  // AI Intelligence Handlers
+  const handleGenerateAiSummaryForNote = async (note) => {
+    setGeneratingAiSummary(true);
+    setAiSummaryNoteId(note._id);
+    setShowAiSummaryModal(true);
+    try {
+      const res = await API.post("/ai/visit-summary", {
+        chiefComplaint: note.chiefComplaint,
+        historyOfPresentIllness: note.historyOfPresentIllness,
+        vitals: note.vitals,
+        examination: note.examination,
+        assessment: note.assessment,
+        plan: note.plan,
+        diagnoses: note.diagnoses,
+      });
+      setAiDraftSummary(res.data?.data?.summary || "");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to generate AI summary");
+      setShowAiSummaryModal(false);
+    } finally {
+      setGeneratingAiSummary(false);
+    }
+  };
+
+  const handleApproveAiSummary = async () => {
+    if (!aiDraftSummary.trim()) {
+      toast.error("Summary cannot be empty");
+      return;
+    }
+    setApprovingAiSummary(true);
+    try {
+      await API.post("/ai/approve-summary", {
+        noteId: aiSummaryNoteId,
+        approvedSummary: aiDraftSummary,
+      });
+      toast.success("AI clinical summary approved and attached to medical chart!");
+      setShowAiSummaryModal(false);
+      fetchPatientData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to approve summary");
+    } finally {
+      setApprovingAiSummary(false);
+    }
+  };
+
+  const handleExplainPrescription = async (rx) => {
+    setGeneratingAiExplanation(true);
+    setShowAiExplanationModal(true);
+    try {
+      const res = await API.post("/ai/explain-instructions", {
+        medicines: rx.medicines,
+        lifestyleAdvice: rx.generalInstructions,
+      });
+      setAiExplanationData(res.data?.data);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to generate explanation");
+      setShowAiExplanationModal(false);
+    } finally {
+      setGeneratingAiExplanation(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50/70 py-8 px-4">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -542,31 +615,63 @@ export default function EmrPortal() {
                           </div>
                         </div>
 
-                        {/* Lock / Amend actions */}
-                        <div className="flex justify-between items-center pt-2 border-t text-[11px] text-slate-400">
+                        {/* Verified AI Clinical Summary */}
+                        {note.aiVisitSummary && (
+                          <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-xl p-3.5 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                                <span>✨</span> AI Clinical Visit Summary
+                              </span>
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
+                                Clinician Verified & Approved
+                              </span>
+                            </div>
+                            <p className="text-xs text-indigo-900 whitespace-pre-wrap leading-relaxed">
+                              {note.aiVisitSummary}
+                            </p>
+                            {note.aiSummaryApprovedAt && (
+                              <p className="text-[10px] text-indigo-500 font-medium">
+                                Documented with AI provenance • Verified on {new Date(note.aiSummaryApprovedAt).toLocaleString()}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Lock / Amend / AI actions */}
+                        <div className="flex flex-wrap justify-between items-center gap-2 pt-2 border-t text-[11px] text-slate-400">
                           <span>
                             {note.status === "signed" ? "🔒 Signed & locked (Tamper-proof)" : "✏️ Draft version"}
                           </span>
-                          {note.status === "signed" && (isDoctor || isAdmin) && (
-                            <button
-                              onClick={() => {
-                                setAmendingNote(note);
-                                setNoteForm({
-                                  chiefComplaint: note.chiefComplaint,
-                                  historyOfPresentIllness: note.historyOfPresentIllness,
-                                  examination: note.examination,
-                                  assessment: note.assessment,
-                                  plan: note.plan,
-                                  vitals: note.vitals || {},
-                                  diagnoses: note.diagnoses || [],
-                                });
-                                setShowNoteEditor(true);
-                              }}
-                              className="text-xs font-bold text-primary-600 hover:text-primary-700 underline"
-                            >
-                              Amend Clinical Note (v{note.version + 1})
-                            </button>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {note.status === "signed" && (isDoctor || isAdmin) && !note.aiVisitSummary && (
+                              <button
+                                onClick={() => handleGenerateAiSummaryForNote(note)}
+                                className="px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 flex items-center gap-1.5 transition"
+                              >
+                                <span>✨</span> Generate AI Summary
+                              </button>
+                            )}
+                            {note.status === "signed" && (isDoctor || isAdmin) && (
+                              <button
+                                onClick={() => {
+                                  setAmendingNote(note);
+                                  setNoteForm({
+                                    chiefComplaint: note.chiefComplaint,
+                                    historyOfPresentIllness: note.historyOfPresentIllness,
+                                    examination: note.examination,
+                                    assessment: note.assessment,
+                                    plan: note.plan,
+                                    vitals: note.vitals || {},
+                                    diagnoses: note.diagnoses || [],
+                                  });
+                                  setShowNoteEditor(true);
+                                }}
+                                className="text-xs font-bold text-primary-600 hover:text-primary-700 underline"
+                              >
+                                Amend Clinical Note (v{note.version + 1})
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -616,12 +721,20 @@ export default function EmrPortal() {
                             </div>
                           </div>
 
-                          <button
-                            onClick={() => exportPrescriptionToPDF(rx)}
-                            className="btn-secondary py-1.5 px-3 text-xs font-bold flex items-center gap-1.5 text-primary-700 bg-primary-50 border-primary-200 hover:bg-primary-100"
-                          >
-                            <span>📄</span> Download PDF
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleExplainPrescription(rx)}
+                              className="btn-secondary py-1.5 px-3 text-xs font-bold flex items-center gap-1.5 text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100"
+                            >
+                              <span>✨</span> AI Patient Guide
+                            </button>
+                            <button
+                              onClick={() => exportPrescriptionToPDF(rx)}
+                              className="btn-secondary py-1.5 px-3 text-xs font-bold flex items-center gap-1.5 text-primary-700 bg-primary-50 border-primary-200 hover:bg-primary-100"
+                            >
+                              <span>📄</span> Download PDF
+                            </button>
+                          </div>
                         </div>
 
                         {/* Medicine List */}
@@ -1234,6 +1347,177 @@ export default function EmrPortal() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── AI VISIT SUMMARY CLINICIAN REVIEW MODAL ── */}
+        {showAiSummaryModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 animate-fade-in border border-slate-100 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between pb-3 border-b">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">✨</span>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-base">
+                      Clinician Review: AI Visit Summary Draft
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Safety-critical human-in-the-loop review before chart attachment
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAiSummaryModal(false)}
+                  className="text-slate-400 hover:text-slate-600 text-lg"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Safety Banner */}
+              <div className="p-3.5 bg-amber-50 border border-amber-200/80 rounded-xl text-amber-900 text-xs space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                  <span>⚠️</span> CLINICIAN REVIEW REQUIRED
+                </div>
+                <p className="leading-relaxed text-amber-700">
+                  This summary is an AI-generated draft. As the attending clinician, verify all facts, 
+                  assessments, and recommendations for accuracy. You may edit the draft text below before signing. 
+                  Approval will be logged in the immutable audit trail with AI provenance.
+                </p>
+              </div>
+
+              {generatingAiSummary ? (
+                <div className="py-12 flex flex-col items-center justify-center space-y-3">
+                  <div className="w-9 h-9 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-xs font-semibold text-slate-500 animate-pulse">
+                    Synthesizing structured clinical note with AI guardrails...
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <label className="text-xs font-bold text-slate-700 block">
+                    Verified Clinical Summary (Editable by Clinician):
+                  </label>
+                  <textarea
+                    rows={8}
+                    value={aiDraftSummary}
+                    onChange={(e) => setAiDraftSummary(e.target.value)}
+                    placeholder="Enter or adjust the clinical summary..."
+                    className="input text-xs leading-relaxed font-sans"
+                  />
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>Draft generated via Anthropic Messages API (PII Redacted)</span>
+                    <span>{aiDraftSummary.length} characters</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowAiSummaryModal(false)}
+                  className="btn-secondary text-xs py-2.5 px-4 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={generatingAiSummary || approvingAiSummary || !aiDraftSummary.trim()}
+                  onClick={handleApproveAiSummary}
+                  className="flex-1 btn-primary text-xs py-2.5 font-bold flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  {approvingAiSummary ? (
+                    "Approving & Logging..."
+                  ) : (
+                    <>
+                      <span>🔒</span> Approve & Attach to Chart (Audit Logged)
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── AI PATIENT EXPLANATION MODAL (DOCTOR VIEW) ── */}
+        {showAiExplanationModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 animate-fade-in border border-slate-100 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between pb-3 border-b">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🤖</span>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-base">
+                      AI Plain-Language Medication Guide
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Educational patient instructions synthesized with strict safety guardrails
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAiExplanationModal(false)}
+                  className="text-slate-400 hover:text-slate-600 text-lg"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Guardrail Disclaimer Banner */}
+              <div className="p-3 bg-blue-50 border border-blue-200/80 rounded-xl text-blue-900 text-xs">
+                <div className="font-bold flex items-center gap-1.5 text-blue-800 mb-1">
+                  <span>ℹ️</span> Educational Patient Instructions
+                </div>
+                <p className="text-blue-700 leading-relaxed">
+                  Strictly explains timing and general precautions. Does not modify dosages, alter treatment,
+                  or diagnose new symptoms.
+                </p>
+              </div>
+
+              {generatingAiExplanation ? (
+                <div className="py-12 flex flex-col items-center justify-center space-y-3">
+                  <div className="w-9 h-9 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-xs font-semibold text-slate-500 animate-pulse">
+                    Translating medical instructions into clear, accessible plain language...
+                  </p>
+                </div>
+              ) : aiExplanationData ? (
+                <div className="space-y-4">
+                  <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-xl text-xs text-slate-800 whitespace-pre-wrap leading-relaxed font-sans">
+                    {aiExplanationData.explanation}
+                  </div>
+
+                  {aiExplanationData.disclaimer && (
+                    <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-[11px] text-amber-900 italic">
+                      <span className="font-bold not-italic">Medical Disclaimer: </span>
+                      {aiExplanationData.disclaimer}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                {aiExplanationData && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(aiExplanationData.explanation);
+                      toast.success("Explanation copied to clipboard!");
+                    }}
+                    className="btn-secondary text-xs py-2 px-3.5 font-bold flex items-center gap-1.5"
+                  >
+                    <span>📋</span> Copy Guide
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowAiExplanationModal(false)}
+                  className="btn-primary text-xs py-2 px-4 font-bold"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         )}

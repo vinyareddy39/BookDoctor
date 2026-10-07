@@ -101,6 +101,24 @@ const clinicalNoteSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // ── AI Summary & Physician Approval ──
+    aiVisitSummary: {
+      type: String,
+      default: null,
+    },
+    aiSummaryApproved: {
+      type: Boolean,
+      default: false,
+    },
+    aiSummaryApprovedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    aiSummaryApprovedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
