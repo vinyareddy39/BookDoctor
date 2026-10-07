@@ -494,20 +494,6 @@ export default function EmrPortal() {
                 </div>
               )}
             </div>
-
-            <button
-              onClick={() => {
-                logout();
-                navigate(isDoctor ? "/doctor/login" : "/login");
-              }}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white font-semibold text-xs border border-rose-200 hover:border-rose-500 transition-all shadow-xs whitespace-nowrap"
-              title="Logout"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              Logout
-            </button>
           </div>
         </div>
 

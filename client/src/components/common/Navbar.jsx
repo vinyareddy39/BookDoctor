@@ -27,8 +27,9 @@ export default function Navbar() {
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
 
   const handleLogout = () => {
+    const wasDoctor = isDoctor;
     logout();
-    navigate("/login");
+    navigate(wasDoctor ? "/doctor/login" : "/login");
   };
 
   const isActive = (to) => location.pathname === to;
