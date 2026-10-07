@@ -168,8 +168,29 @@ userSchema.methods.getEmailVerificationToken = function () {
   return token;
 };
 
+// generate unique Medical Record Number (MRN)
+userSchema.statics.generateMRN = async function () {
+  const year = new Date().getFullYear();
+  const prefix = `MED-${year}-`;
+  const lastPatient = await this.findOne({ mrn: new RegExp(`^${prefix}`) })
+    .sort({ mrn: -1 })
+    .select("mrn")
+    .lean();
+
+  let nextSeq = 1;
+  if (lastPatient && lastPatient.mrn) {
+    const parts = lastPatient.mrn.split("-");
+    const lastNum = parseInt(parts[parts.length - 1], 10);
+    if (!isNaN(lastNum)) {
+      nextSeq = lastNum + 1;
+    }
+  }
+  return `${prefix}${String(nextSeq).padStart(5, "0")}`;
+};
+
 // ─── Indexes for query performance ──────────────────────────────────────────
 userSchema.index({ email: 1, role: 1 });
 userSchema.index({ role: 1 });
+userSchema.index({ mrn: 1 });
 
 export default mongoose.model("User", userSchema);

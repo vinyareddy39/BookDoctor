@@ -125,6 +125,62 @@ export default function AdminDashboard() {
           ))}
         </div>
 
+        {/* Clinic Management Quick Hub */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <span>🏥</span> Clinic Operations & Management
+            </h2>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700">MedAssist Hub</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <Link
+              to="/admin/clinic-settings"
+              className="flex flex-col items-center text-center p-3.5 rounded-xl border border-slate-100 hover:border-primary-300 hover:bg-primary-50/40 transition group"
+            >
+              <span className="text-2xl mb-1.5 group-hover:scale-110 transition">⚙️</span>
+              <span className="text-xs font-bold text-slate-700 group-hover:text-primary-700">Clinic Settings</span>
+              <span className="text-[10px] text-slate-400">Hours, Tax, Info</span>
+            </Link>
+
+            <Link
+              to="/admin/departments"
+              className="flex flex-col items-center text-center p-3.5 rounded-xl border border-slate-100 hover:border-primary-300 hover:bg-primary-50/40 transition group"
+            >
+              <span className="text-2xl mb-1.5 group-hover:scale-110 transition">🏢</span>
+              <span className="text-xs font-bold text-slate-700 group-hover:text-primary-700">Departments</span>
+              <span className="text-[10px] text-slate-400">Clinical Units</span>
+            </Link>
+
+            <Link
+              to="/admin/services"
+              className="flex flex-col items-center text-center p-3.5 rounded-xl border border-slate-100 hover:border-primary-300 hover:bg-primary-50/40 transition group"
+            >
+              <span className="text-2xl mb-1.5 group-hover:scale-110 transition">📋</span>
+              <span className="text-xs font-bold text-slate-700 group-hover:text-primary-700">Services Catalog</span>
+              <span className="text-[10px] text-slate-400">Prices & Durations</span>
+            </Link>
+
+            <Link
+              to="/patients"
+              className="flex flex-col items-center text-center p-3.5 rounded-xl border border-slate-100 hover:border-primary-300 hover:bg-primary-50/40 transition group"
+            >
+              <span className="text-2xl mb-1.5 group-hover:scale-110 transition">👥</span>
+              <span className="text-xs font-bold text-slate-700 group-hover:text-primary-700">Patient Directory</span>
+              <span className="text-[10px] text-slate-400">Search & MRNs</span>
+            </Link>
+
+            <Link
+              to="/reception/walk-in"
+              className="flex flex-col items-center text-center p-3.5 rounded-xl border border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50/40 transition group"
+            >
+              <span className="text-2xl mb-1.5 group-hover:scale-110 transition">📝</span>
+              <span className="text-xs font-bold text-slate-700 group-hover:text-emerald-700">Walk-In Intake</span>
+              <span className="text-[10px] text-slate-400">Register Patient</span>
+            </Link>
+          </div>
+        </div>
+
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="card p-5">

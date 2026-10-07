@@ -58,6 +58,11 @@ const doctorSchema = new mongoose.Schema(
       default: "City Health Clinic",
     },
 
+    departmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+    },
+
     address: {
       type: String,
       default: "123 Main St, Hyderabad, Telangana, India",

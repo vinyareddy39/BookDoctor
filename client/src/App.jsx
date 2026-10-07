@@ -47,6 +47,11 @@ const VideoConsultation = lazy(() => import("./components/appointment/VideoConsu
 const AmbulanceDashboard = lazy(() => import("./pages/AmbulanceDashboard.jsx"));
 const ClickToCall        = lazy(() => import("./pages/ClickToCall.tsx"));
 const EmergencyHospitalTracking = lazy(() => import("./pages/EmergencyHospitalTracking.jsx"));
+const WalkInRegistration = lazy(() => import("./pages/WalkInRegistration.jsx"));
+const PatientList        = lazy(() => import("./pages/PatientList.jsx"));
+const ClinicSettings     = lazy(() => import("./pages/ClinicSettings.jsx"));
+const DepartmentManagement = lazy(() => import("./pages/DepartmentManagement.jsx"));
+const ServiceCatalog     = lazy(() => import("./pages/ServiceCatalog.jsx"));
 
 // Page loader fallback
 function PageLoader() {
@@ -82,6 +87,15 @@ function AdminRoute({ children }) {
   if (loading) return <PageLoader />;
   if (!isLoggedIn) return <Navigate to="/login" replace />;
   if (!isAdmin) return <Navigate to="/" replace />;
+  return children;
+}
+
+// Guard: flexible role-based route
+function RoleRoute({ roles, children, redirectTo = "/" }) {
+  const { isLoggedIn, hasRole, loading } = useAuth();
+  if (loading) return <PageLoader />;
+  if (!isLoggedIn) return <Navigate to="/login" replace />;
+  if (!hasRole(...roles)) return <Navigate to={redirectTo} replace />;
   return children;
 }
 
@@ -148,9 +162,16 @@ function App() {
             {/* Ambulance Driver (Demo) */}
             <Route path="/ambulance/dashboard" element={<AmbulanceDashboard />} />
 
+            {/* Clinic Operations (Receptionist / Doctor / Admin) */}
+            <Route path="/reception/walk-in"    element={<RoleRoute roles={["receptionist", "clinic_admin", "admin"]}><WalkInRegistration /></RoleRoute>} />
+            <Route path="/patients"             element={<RoleRoute roles={["receptionist", "doctor", "clinic_admin", "admin"]}><PatientList /></RoleRoute>} />
+
             {/* Admin protected */}
-            <Route path="/admin"              element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-            <Route path="/admin/audit-logs"   element={<AdminRoute><AuditLogViewer /></AdminRoute>} />
+            <Route path="/admin"                 element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+            <Route path="/admin/audit-logs"      element={<AdminRoute><AuditLogViewer /></AdminRoute>} />
+            <Route path="/admin/clinic-settings" element={<AdminRoute><ClinicSettings /></AdminRoute>} />
+            <Route path="/admin/departments"     element={<AdminRoute><DepartmentManagement /></AdminRoute>} />
+            <Route path="/admin/services"        element={<AdminRoute><ServiceCatalog /></AdminRoute>} />
 
             {/* 404 */}
             <Route path="*" element={<NotFound />} />

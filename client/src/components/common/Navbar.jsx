@@ -11,7 +11,7 @@ const NAV_LINKS = [
 
 
 export default function Navbar() {
-  const { isLoggedIn, isDoctor, isPatient, user, logout } = useAuth();
+  const { isLoggedIn, isDoctor, isPatient, isClinicAdmin, isReceptionist, isLabTech, isAdmin, user, logout } = useAuth();
   const navigate  = useNavigate();
   const location  = useLocation();
   const [menuOpen,   setMenuOpen]   = useState(false);
@@ -111,12 +111,60 @@ export default function Navbar() {
                   Dashboard
                 </Link>
                 <Link
+                  to="/patients"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/patients") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Patients
+                </Link>
+                <Link
                   to="/messages"
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
                     isActive("/messages") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
                   Chats
+                </Link>
+              </>
+            )}
+            {isReceptionist && (
+              <>
+                <Link
+                  to="/reception/walk-in"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/reception/walk-in") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Walk-In Desk
+                </Link>
+                <Link
+                  to="/patients"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/patients") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Patients
+                </Link>
+              </>
+            )}
+            {(isAdmin || isClinicAdmin) && (
+              <>
+                <Link
+                  to="/admin"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/admin") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Admin Portal
+                </Link>
+                <Link
+                  to="/patients"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/patients") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Patients
                 </Link>
               </>
             )}
@@ -208,7 +256,20 @@ export default function Navbar() {
           {isDoctor && (
             <>
               <Link to="/doctor/dashboard" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Dashboard</Link>
+              <Link to="/patients" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Patients</Link>
               <Link to="/messages" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Chats</Link>
+            </>
+          )}
+          {isReceptionist && (
+            <>
+              <Link to="/reception/walk-in" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Walk-In Desk</Link>
+              <Link to="/patients" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Patients</Link>
+            </>
+          )}
+          {(isAdmin || isClinicAdmin) && (
+            <>
+              <Link to="/admin" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Admin Portal</Link>
+              <Link to="/patients" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Patients</Link>
             </>
           )}
           <div className="pt-3 border-t border-slate-100 space-y-2">
