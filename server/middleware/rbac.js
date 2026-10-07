@@ -40,9 +40,9 @@ export const PERMISSIONS = {
     delete: [], // Clinical notes are immutable EMR records
   },
   prescription: {
-    create: ["doctor", "clinic_admin"],
+    create: ["doctor", "clinic_admin", "patient"],
     read:   ["doctor", "clinic_admin", "patient"],
-    update: ["doctor", "clinic_admin"],
+    update: ["doctor", "clinic_admin", "patient"],
     delete: [], // Prescriptions are historical clinical records
   },
   lab_order: {

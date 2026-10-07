@@ -132,6 +132,35 @@ export const exportPrescriptionToPDF = (record, doctorName) => {
     finalY = 74 + splitNotes.length * 6;
   }
 
+  // Attached Document info (Photo / PDF)
+  if (record.attachmentUrl) {
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 58, 138);
+    doc.text("Attached Prescription Document / Photo:", 14, finalY);
+    
+    doc.setFontSize(9.5);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    const attachDesc = `File: ${record.attachmentName || "Prescription File"} (${record.attachmentType === "pdf" ? "PDF Document" : "Photo/Image"}) - Uploaded by ${record.uploadedBy === "patient" ? "Patient" : "Doctor"}`;
+    doc.text(attachDesc, 14, finalY + 6);
+    doc.text("Original document is archived in the portal and available for download.", 14, finalY + 12);
+    finalY += 18;
+  }
+
+  // Notes & Remarks
+  if (record.notes) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 41, 59);
+    doc.text("Prescription Notes & Clinical Remarks:", 14, finalY);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    const splitClinicalNotes = doc.splitTextToSize(record.notes, 180);
+    doc.text(splitClinicalNotes, 14, finalY + 6);
+    finalY += 10 + splitClinicalNotes.length * 5;
+  }
+
   // General Instructions
   if (record.generalInstructions) {
     doc.setFontSize(10);

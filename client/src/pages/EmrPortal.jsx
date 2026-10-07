@@ -61,11 +61,16 @@ export default function EmrPortal() {
   const [prescriptions, setPrescriptions] = useState([]);
   const [loadingPrescriptions, setLoadingPrescriptions] = useState(false);
   const [showRxModal, setShowRxModal] = useState(false);
+  const [rxTabMode, setRxTabMode] = useState("digital"); // 'digital' | 'upload'
   const [medicines, setMedicines] = useState([
     { name: "", dosage: "1 tablet", frequency: "1-0-1", duration: "5 days", timing: "after_food", instructions: "" },
   ]);
   const [rxInstructions, setRxInstructions] = useState("");
+  const [rxFile, setRxFile] = useState(null);
+  const [rxFilePreview, setRxFilePreview] = useState(null);
+  const [rxNotes, setRxNotes] = useState("");
   const [savingRx, setSavingRx] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState(null); // { url, type, title }
 
   // Diagnosis State
   const [diagnosesList, setDiagnosesList] = useState([]);
@@ -263,6 +268,18 @@ export default function EmrPortal() {
     setMedicines(updated);
   };
 
+  // File change handler for prescription upload
+  const handleRxFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setRxFile(file);
+    if (file.type.startsWith("image/")) {
+      setRxFilePreview(URL.createObjectURL(file));
+    } else {
+      setRxFilePreview(null);
+    }
+  };
+
   // Save Prescription
   const handleSavePrescription = async (e) => {
     e.preventDefault();
@@ -271,24 +288,48 @@ export default function EmrPortal() {
       return;
     }
     const validMeds = medicines.filter((m) => m.name.trim());
-    if (validMeds.length === 0) {
-      toast.error("Please add at least one medicine with a name");
+    if (validMeds.length === 0 && !rxFile) {
+      toast.error("Please enter at least one medicine or attach a prescription photo/PDF");
       return;
     }
 
     setSavingRx(true);
     try {
-      const res = await API.post("/emr/prescriptions", {
-        patientId: selectedPatientId,
-        medicines: validMeds,
-        generalInstructions: rxInstructions,
-      });
+      let savedRx;
+      if (rxFile) {
+        const formData = new FormData();
+        formData.append("file", rxFile);
+        formData.append("patientId", selectedPatientId);
+        if (validMeds.length > 0) {
+          formData.append("medicines", JSON.stringify(validMeds));
+        }
+        if (rxInstructions) {
+          formData.append("generalInstructions", rxInstructions);
+        }
+        if (rxNotes) {
+          formData.append("notes", rxNotes);
+        }
+        const res = await API.post("/emr/prescriptions/upload", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        savedRx = res.data?.data;
+      } else {
+        const res = await API.post("/emr/prescriptions", {
+          patientId: selectedPatientId,
+          medicines: validMeds,
+          generalInstructions: rxInstructions,
+          notes: rxNotes,
+        });
+        savedRx = res.data?.data;
+      }
 
-      const savedRx = res.data?.data;
       toast.success("Prescription signed and issued!");
       setShowRxModal(false);
       setMedicines([{ name: "", dosage: "1 tablet", frequency: "1-0-1", duration: "5 days", timing: "after_food", instructions: "" }]);
       setRxInstructions("");
+      setRxNotes("");
+      setRxFile(null);
+      setRxFilePreview(null);
       fetchPatientData();
 
       // Offer immediate PDF download
@@ -726,26 +767,61 @@ export default function EmrPortal() {
                   <div className="space-y-3">
                     {prescriptions.map((rx) => (
                       <div key={rx._id} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-4">
-                        <div className="flex items-center justify-between border-b pb-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">💊</span>
+                        <div className="flex items-center justify-between border-b pb-3 flex-wrap gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-xl">
+                              {rx.attachmentType === "image" ? "📷" : rx.attachmentType === "pdf" ? "📄" : "💊"}
+                            </span>
                             <div>
-                              <h4 className="font-bold text-slate-900 text-sm">
-                                Prescription issued on {new Date(rx.signedAt || rx.createdAt).toLocaleDateString()}
-                              </h4>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-bold text-slate-900 text-sm">
+                                  Prescription • {new Date(rx.signedAt || rx.createdAt).toLocaleDateString()}
+                                </h4>
+                                {rx.uploadedBy === "patient" ? (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                    Uploaded by Patient
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    Doctor Issued
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-[11px] text-slate-400">
-                                By Dr. {rx.doctorId?.userId?.name || "Doctor"}
+                                {rx.uploadedBy === "patient"
+                                  ? `Uploaded document/photo by ${rx.patientId?.name || "Patient"}`
+                                  : `By Dr. ${rx.doctorId?.userId?.name || "Doctor"}`}
                               </p>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleExplainPrescription(rx)}
-                              className="btn-secondary py-1.5 px-3 text-xs font-bold flex items-center gap-1.5 text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100"
-                            >
-                              <span>✨</span> AI Patient Guide
-                            </button>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {rx.attachmentUrl && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewAttachment({
+                                    url: rx.attachmentUrl,
+                                    type: rx.attachmentType || "image",
+                                    title: rx.attachmentName || "Prescription File",
+                                    downloadUrl: `/api/emr/prescriptions/${rx._id}/attachment?download=1`,
+                                  })
+                                }
+                                className="btn-secondary py-1.5 px-3 text-xs font-bold flex items-center gap-1.5 text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100"
+                              >
+                                <span>👁️</span> View {rx.attachmentType === "pdf" ? "PDF" : "Photo"}
+                              </button>
+                            )}
+
+                            {rx.medicines?.length > 0 && (
+                              <button
+                                onClick={() => handleExplainPrescription(rx)}
+                                className="btn-secondary py-1.5 px-3 text-xs font-bold flex items-center gap-1.5 text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100"
+                              >
+                                <span>✨</span> AI Guide
+                              </button>
+                            )}
+
                             <button
                               onClick={() => exportPrescriptionToPDF(rx)}
                               className="btn-secondary py-1.5 px-3 text-xs font-bold flex items-center gap-1.5 text-primary-700 bg-primary-50 border-primary-200 hover:bg-primary-100"
@@ -755,38 +831,90 @@ export default function EmrPortal() {
                           </div>
                         </div>
 
-                        {/* Medicine List */}
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs">
-                            <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px]">
-                              <tr>
-                                <th className="p-2.5">#</th>
-                                <th className="p-2.5">Medicine Name</th>
-                                <th className="p-2.5">Dosage</th>
-                                <th className="p-2.5">Frequency</th>
-                                <th className="p-2.5">Duration</th>
-                                <th className="p-2.5">Timing & Instructions</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {rx.medicines?.map((m, idx) => (
-                                <tr key={idx} className="hover:bg-slate-50/50">
-                                  <td className="p-2.5 font-bold text-slate-400">{idx + 1}</td>
-                                  <td className="p-2.5 font-bold text-slate-900">{m.name}</td>
-                                  <td className="p-2.5 text-slate-600">{m.dosage}</td>
-                                  <td className="p-2.5 text-slate-600">{m.frequency}</td>
-                                  <td className="p-2.5 text-slate-600">{m.duration}</td>
-                                  <td className="p-2.5 text-slate-600">
-                                    <span className="capitalize font-semibold text-primary-700">
-                                      {m.timing?.replace("_", " ")}
-                                    </span>
-                                    {m.instructions && ` • ${m.instructions}`}
-                                  </td>
+                        {/* Attachment Box Banner */}
+                        {rx.attachmentUrl && (
+                          <div className="p-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 rounded-xl border border-blue-200/70 flex items-center justify-between gap-3 flex-wrap">
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-xl">
+                                {rx.attachmentType === "pdf" ? "📑" : "🖼️"}
+                              </span>
+                              <div>
+                                <p className="text-xs font-bold text-slate-800">
+                                  {rx.attachmentName || (rx.attachmentType === "pdf" ? "Prescription Document.pdf" : "Prescription Photo.jpg")}
+                                </p>
+                                <p className="text-[11px] text-slate-500">
+                                  Format: {rx.attachmentType?.toUpperCase()} • Available in-app and downloadable
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewAttachment({
+                                    url: rx.attachmentUrl,
+                                    type: rx.attachmentType || "image",
+                                    title: rx.attachmentName || "Prescription File",
+                                    downloadUrl: `/api/emr/prescriptions/${rx._id}/attachment?download=1`,
+                                  })
+                                }
+                                className="text-xs font-bold text-primary-700 hover:underline px-2 py-1 bg-white rounded border border-primary-200"
+                              >
+                                🔍 Preview
+                              </button>
+                              <a
+                                href={`/api/emr/prescriptions/${rx._id}/attachment?download=1`}
+                                download
+                                className="text-xs font-bold text-blue-700 hover:underline px-2 py-1 bg-white rounded border border-blue-200"
+                              >
+                                📥 Download
+                              </a>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Notes / Remarks */}
+                        {rx.notes && (
+                          <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200/80 text-xs">
+                            <span className="font-bold text-amber-900">Notes / Remarks:</span>{" "}
+                            <span className="text-amber-800">{rx.notes}</span>
+                          </div>
+                        )}
+
+                        {/* Medicine List (if present) */}
+                        {rx.medicines && rx.medicines.length > 0 && (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px]">
+                                <tr>
+                                  <th className="p-2.5">#</th>
+                                  <th className="p-2.5">Medicine Name</th>
+                                  <th className="p-2.5">Dosage</th>
+                                  <th className="p-2.5">Frequency</th>
+                                  <th className="p-2.5">Duration</th>
+                                  <th className="p-2.5">Timing & Instructions</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {rx.medicines.map((m, idx) => (
+                                  <tr key={idx} className="hover:bg-slate-50/50">
+                                    <td className="p-2.5 font-bold text-slate-400">{idx + 1}</td>
+                                    <td className="p-2.5 font-bold text-slate-900">{m.name}</td>
+                                    <td className="p-2.5 text-slate-600">{m.dosage}</td>
+                                    <td className="p-2.5 text-slate-600">{m.frequency}</td>
+                                    <td className="p-2.5 text-slate-600">{m.duration}</td>
+                                    <td className="p-2.5 text-slate-600">
+                                      <span className="capitalize font-semibold text-primary-700">
+                                        {m.timing?.replace("_", " ")}
+                                      </span>
+                                      {m.instructions && ` • ${m.instructions}`}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
 
                         {rx.generalInstructions && (
                           <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs">
@@ -1129,89 +1257,217 @@ export default function EmrPortal() {
                 <button onClick={() => setShowRxModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
               </div>
 
+              {/* Tab Selector */}
+              <div className="flex border-b border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setRxTabMode("digital")}
+                  className={`py-2 px-4 text-xs font-bold border-b-2 transition ${
+                    rxTabMode === "digital"
+                      ? "border-primary-600 text-primary-700 bg-primary-50/40"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  ✍️ Structured Prescription
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRxTabMode("upload")}
+                  className={`py-2 px-4 text-xs font-bold border-b-2 transition ${
+                    rxTabMode === "upload"
+                      ? "border-primary-600 text-primary-700 bg-primary-50/40"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  📷 / 📄 Upload Photo / PDF Scan
+                </button>
+              </div>
+
               <form onSubmit={handleSavePrescription} className="space-y-4">
-                <div className="space-y-2.5">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-800">Medicines ({medicines.length})</span>
-                    <button
-                      type="button"
-                      onClick={handleAddMedicineRow}
-                      className="text-xs font-bold text-primary-600 hover:underline"
-                    >
-                      + Add Medicine
-                    </button>
-                  </div>
+                {/* MODE 1: STRUCTURED FORM */}
+                {rxTabMode === "digital" && (
+                  <div className="space-y-2.5">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-800">Medicines ({medicines.length})</span>
+                      <button
+                        type="button"
+                        onClick={handleAddMedicineRow}
+                        className="text-xs font-bold text-primary-600 hover:underline"
+                      >
+                        + Add Medicine
+                      </button>
+                    </div>
 
-                  {medicines.map((med, idx) => (
-                    <div key={idx} className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-400">#{idx + 1} Medication</span>
-                        {medicines.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveMedicineRow(idx)}
-                            className="text-[11px] text-rose-500 font-bold hover:underline"
+                    {medicines.map((med, idx) => (
+                      <div key={idx} className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-slate-400">#{idx + 1} Medication</span>
+                          {medicines.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMedicineRow(idx)}
+                              className="text-[11px] text-rose-500 font-bold hover:underline"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <input
+                            placeholder="Medicine name (e.g. Paracetamol 650mg)"
+                            value={med.name}
+                            onChange={(e) => handleMedicineChange(idx, "name", e.target.value)}
+                            className="input text-xs font-semibold sm:col-span-2"
+                          />
+                          <input
+                            placeholder="Dosage (e.g. 1 tab)"
+                            value={med.dosage}
+                            onChange={(e) => handleMedicineChange(idx, "dosage", e.target.value)}
+                            className="input text-xs"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <input
+                            placeholder="Frequency (e.g. 1-0-1)"
+                            value={med.frequency}
+                            onChange={(e) => handleMedicineChange(idx, "frequency", e.target.value)}
+                            className="input text-xs"
+                          />
+                          <input
+                            placeholder="Duration (e.g. 5 days)"
+                            value={med.duration}
+                            onChange={(e) => handleMedicineChange(idx, "duration", e.target.value)}
+                            className="input text-xs"
+                          />
+                          <select
+                            value={med.timing}
+                            onChange={(e) => handleMedicineChange(idx, "timing", e.target.value)}
+                            className="input text-xs font-semibold"
                           >
-                            Remove
-                          </button>
-                        )}
-                      </div>
+                            <option value="after_food">After Food</option>
+                            <option value="before_food">Before Food</option>
+                            <option value="with_food">With Food</option>
+                            <option value="empty_stomach">Empty Stomach</option>
+                            <option value="bedtime">Bedtime</option>
+                            <option value="as_needed">As Needed (SOS)</option>
+                          </select>
+                        </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <input
-                          required
-                          placeholder="Medicine name (e.g. Paracetamol 650mg)"
-                          value={med.name}
-                          onChange={(e) => handleMedicineChange(idx, "name", e.target.value)}
-                          className="input text-xs font-semibold sm:col-span-2"
-                        />
-                        <input
-                          placeholder="Dosage (e.g. 1 tab)"
-                          value={med.dosage}
-                          onChange={(e) => handleMedicineChange(idx, "dosage", e.target.value)}
+                          placeholder="Additional instructions (e.g. take with lukewarm water)"
+                          value={med.instructions}
+                          onChange={(e) => handleMedicineChange(idx, "instructions", e.target.value)}
                           className="input text-xs"
                         />
                       </div>
+                    ))}
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <input
-                          placeholder="Frequency (e.g. 1-0-1)"
-                          value={med.frequency}
-                          onChange={(e) => handleMedicineChange(idx, "frequency", e.target.value)}
-                          className="input text-xs"
-                        />
-                        <input
-                          placeholder="Duration (e.g. 5 days)"
-                          value={med.duration}
-                          onChange={(e) => handleMedicineChange(idx, "duration", e.target.value)}
-                          className="input text-xs"
-                        />
-                        <select
-                          value={med.timing}
-                          onChange={(e) => handleMedicineChange(idx, "timing", e.target.value)}
-                          className="input text-xs font-semibold"
-                        >
-                          <option value="after_food">After Food</option>
-                          <option value="before_food">Before Food</option>
-                          <option value="with_food">With Food</option>
-                          <option value="empty_stomach">Empty Stomach</option>
-                          <option value="bedtime">Bedtime</option>
-                          <option value="as_needed">As Needed (SOS)</option>
-                        </select>
-                      </div>
+                    {/* Optional Attachment in Digital Mode */}
+                    <div className="pt-2">
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        Optional: Attach paper prescription photo or PDF scan
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        onChange={handleRxFileChange}
+                        className="text-xs file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                      />
+                      {rxFile && (
+                        <p className="text-[11px] text-emerald-600 mt-1 font-semibold">
+                          ✓ Attached: {rxFile.name} ({(rxFile.size / 1024).toFixed(0)} KB)
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* MODE 2: UPLOAD PHOTO OR PDF SCAN */}
+                {rxTabMode === "upload" && (
+                  <div className="space-y-3">
+                    <div className="border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center bg-slate-50/60 hover:bg-slate-50 transition">
+                      <span className="text-4xl block mb-2">📷 / 📄</span>
+                      <p className="text-xs font-bold text-slate-800">
+                        Upload Prescription Photo, Paper Scan, or PDF Document
+                      </p>
+                      <p className="text-[11px] text-slate-400 mb-3">
+                        Supported formats: JPG, PNG, WebP, PDF (Max: 15MB)
+                      </p>
 
                       <input
-                        placeholder="Additional instructions (e.g. take with lukewarm water)"
-                        value={med.instructions}
-                        onChange={(e) => handleMedicineChange(idx, "instructions", e.target.value)}
+                        type="file"
+                        id="doctorRxFileInput"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        onChange={handleRxFileChange}
+                        className="hidden"
+                      />
+                      <label
+                        htmlFor="doctorRxFileInput"
+                        className="btn-primary py-2 px-4 text-xs font-bold cursor-pointer inline-flex items-center gap-1.5"
+                      >
+                        <span>📁</span> Choose Prescription File
+                      </label>
+
+                      {rxFile && (
+                        <div className="mt-4 p-3 bg-white rounded-xl border border-slate-200 inline-block text-left max-w-md w-full">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">
+                                {rxFile.type === "application/pdf" ? "📄" : "🖼️"}
+                              </span>
+                              <div>
+                                <p className="text-xs font-bold text-slate-800 truncate max-w-[200px]">
+                                  {rxFile.name}
+                                </p>
+                                <p className="text-[10px] text-slate-400">
+                                  {(rxFile.size / 1024).toFixed(0)} KB
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRxFile(null);
+                                setRxFilePreview(null);
+                              }}
+                              className="text-xs text-rose-500 font-bold hover:underline"
+                            >
+                              Remove
+                            </button>
+                          </div>
+
+                          {rxFilePreview && (
+                            <div className="mt-2 text-center">
+                              <img
+                                src={rxFilePreview}
+                                alt="Prescription preview"
+                                className="max-h-44 mx-auto rounded-lg border object-contain"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        Prescription Notes / Clinical Remarks (Optional)
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={rxNotes}
+                        onChange={(e) => setRxNotes(e.target.value)}
+                        placeholder="e.g. Scanned physical copy from morning OPD consultation..."
                         className="input text-xs"
                       />
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
 
                 <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">General Advice & Notes</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">General Advice & Instructions</label>
                   <textarea
                     rows={2}
                     value={rxInstructions}
@@ -1234,7 +1490,7 @@ export default function EmrPortal() {
                     disabled={savingRx}
                     className="flex-1 btn-primary text-xs py-2.5 font-bold shadow-sm"
                   >
-                    {savingRx ? "Signing..." : "Sign & Issue Prescription"}
+                    {savingRx ? "Signing & Uploading..." : "Sign & Issue Prescription"}
                   </button>
                 </div>
               </form>
@@ -1534,6 +1790,72 @@ export default function EmrPortal() {
                   className="btn-primary text-xs py-2 px-4 font-bold"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── ATTACHMENT PREVIEW MODAL (PHOTO / PDF) ── */}
+        {previewAttachment && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl max-w-4xl w-full p-5 shadow-2xl space-y-4 animate-fade-in border border-slate-200 max-h-[95vh] flex flex-col">
+              <div className="flex items-center justify-between pb-3 border-b">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">
+                    {previewAttachment.type === "pdf" ? "📄" : "🖼️"}
+                  </span>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-sm sm:text-base">
+                      {previewAttachment.title}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Prescription Document Preview ({previewAttachment.type?.toUpperCase()})
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {previewAttachment.downloadUrl && (
+                    <a
+                      href={previewAttachment.downloadUrl}
+                      download
+                      className="btn-primary text-xs py-1.5 px-3 font-bold flex items-center gap-1"
+                    >
+                      <span>📥</span> Download
+                    </a>
+                  )}
+                  <button
+                    onClick={() => setPreviewAttachment(null)}
+                    className="text-slate-400 hover:text-slate-600 text-lg p-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-auto flex items-center justify-center bg-slate-100 rounded-xl p-2 min-h-[300px]">
+                {previewAttachment.type === "pdf" ? (
+                  <iframe
+                    src={previewAttachment.url}
+                    title="Prescription PDF"
+                    className="w-full h-[70vh] rounded-lg border bg-white"
+                  />
+                ) : (
+                  <img
+                    src={previewAttachment.url}
+                    alt="Prescription Scan"
+                    className="max-h-[70vh] max-w-full object-contain rounded-lg shadow-sm"
+                  />
+                )}
+              </div>
+
+              <div className="flex justify-end pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setPreviewAttachment(null)}
+                  className="btn-secondary text-xs py-2 px-4 font-bold"
+                >
+                  Close Preview
                 </button>
               </div>
             </div>

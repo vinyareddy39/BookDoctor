@@ -43,7 +43,7 @@ const prescriptionSchema = new mongoose.Schema(
     doctorId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Doctor",
-      required: true,
+      default: null,
       index: true,
     },
     appointmentId: {
@@ -68,8 +68,35 @@ const prescriptionSchema = new mongoose.Schema(
     },
     medicines: {
       type: [medicineItemSchema],
-      required: true,
-      validate: [(v) => v.length > 0, "At least one medicine must be prescribed"],
+      default: [],
+      validate: [
+        function (v) {
+          return (Array.isArray(v) && v.length > 0) || Boolean(this.attachmentUrl);
+        },
+        "Either prescribed medicines or an uploaded prescription document/photo is required",
+      ],
+    },
+    attachmentUrl: {
+      type: String,
+      default: null,
+    },
+    attachmentType: {
+      type: String,
+      enum: ["image", "pdf", null],
+      default: null,
+    },
+    attachmentName: {
+      type: String,
+      default: null,
+    },
+    uploadedBy: {
+      type: String,
+      enum: ["doctor", "patient", "clinic_admin"],
+      default: "doctor",
+    },
+    notes: {
+      type: String,
+      default: "",
     },
     generalInstructions: {
       type: String,

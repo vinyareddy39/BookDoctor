@@ -1,3 +1,5 @@
+import path from "path";
+import fs from "fs";
 import ClinicalNote from "../models/ClinicalNote.js";
 import Diagnosis from "../models/Diagnosis.js";
 import Prescription from "../models/Prescription.js";
@@ -7,6 +9,7 @@ import Doctor from "../models/Doctor.js";
 import User from "../models/User.js";
 import { recordAudit } from "../middleware/auditLogger.js";
 import { sendNotificationToUser } from "../socket.js";
+import { PRESCRIPTION_UPLOAD_DIR } from "../middleware/prescriptionUpload.js";
 
 // Helper: resolve doctor id for current user if doctor
 const resolveDoctorId = async (user) => {
@@ -326,7 +329,23 @@ export const updateDiagnosis = async (req, res, next) => {
 
 export const createPrescription = async (req, res, next) => {
   try {
-    const { patientId, appointmentId, clinicalNoteId, medicines, generalInstructions, validUntil } = req.body;
+    const {
+      patientId: reqPatientId,
+      appointmentId,
+      clinicalNoteId,
+      medicines,
+      generalInstructions,
+      validUntil,
+      attachmentUrl,
+      attachmentType,
+      attachmentName,
+      notes,
+    } = req.body;
+
+    let patientId = reqPatientId;
+    if (req.user.role === "patient") {
+      patientId = req.user._id;
+    }
 
     let doctorId = req.body.doctorId;
     if (req.user.role === "doctor") {
@@ -334,24 +353,46 @@ export const createPrescription = async (req, res, next) => {
       if (!doctorId) return req.http.badRequest("Doctor profile not found");
     }
 
-    if (!patientId || !medicines || medicines.length === 0) {
-      return req.http.badRequest("patientId and at least one medicine item are required");
+    let parsedMedicines = [];
+    if (Array.isArray(medicines)) {
+      parsedMedicines = medicines;
+    } else if (typeof medicines === "string" && medicines.trim()) {
+      try {
+        parsedMedicines = JSON.parse(medicines);
+      } catch (_) {
+        parsedMedicines = [];
+      }
     }
+
+    if (!patientId) {
+      return req.http.badRequest("patientId is required");
+    }
+
+    if (parsedMedicines.length === 0 && !attachmentUrl) {
+      return req.http.badRequest("Either prescribed medicines or an uploaded prescription document/photo is required");
+    }
+
+    const uploadedBy = req.user.role === "patient" ? "patient" : (req.user.role === "doctor" ? "doctor" : "clinic_admin");
 
     const prescription = await Prescription.create({
       patientId,
-      doctorId,
+      doctorId: doctorId || null,
       appointmentId: appointmentId || null,
       clinicalNoteId: clinicalNoteId || null,
-      medicines,
+      medicines: parsedMedicines,
+      attachmentUrl: attachmentUrl || null,
+      attachmentType: attachmentType || null,
+      attachmentName: attachmentName || null,
+      uploadedBy,
+      notes: notes || "",
       generalInstructions: generalInstructions || "",
       validUntil: validUntil ? new Date(validUntil) : undefined,
       signedAt: new Date(),
     });
 
     // Backward-compatibility: if linked to appointment, update appointment.prescription string
-    if (appointmentId) {
-      const summaryText = medicines
+    if (appointmentId && parsedMedicines.length > 0) {
+      const summaryText = parsedMedicines
         .map((m) => `• ${m.name} - ${m.dosage}, ${m.frequency} (${m.duration}) [${m.timing}] ${m.instructions}`)
         .join("\n");
 
@@ -372,18 +413,201 @@ export const createPrescription = async (req, res, next) => {
       req,
     });
 
-    // Notify patient
-    sendNotificationToUser(patientId, {
-      type: "PRESCRIPTION_ADDED",
-      title: "New Prescription Issued",
-      message: `Your doctor has uploaded a formal electronic prescription. You can view or download the PDF anytime.`,
-    });
+    // Notify appropriate party
+    if (uploadedBy === "patient" && doctorId) {
+      const doc = await Doctor.findById(doctorId).populate("userId");
+      if (doc?.userId?._id) {
+        sendNotificationToUser(doc.userId._id, {
+          type: "PRESCRIPTION_UPLOADED",
+          title: "Patient Uploaded Prescription",
+          message: `A patient has uploaded their prescription document/photo for your review.`,
+        });
+      }
+    } else {
+      sendNotificationToUser(patientId, {
+        type: "PRESCRIPTION_ADDED",
+        title: "New Prescription Available",
+        message: `Your prescription is ready. You can view, download, or inspect the document anytime.`,
+      });
+    }
 
     const populated = await Prescription.findById(prescription._id)
       .populate("patientId", "name mrn email phone")
-      .populate({ path: "doctorId", populate: { path: "userId", select: "name qualification" } });
+      .populate({ path: "doctorId", populate: { path: "userId", select: "name qualification clinicName" } });
 
     return req.http.created(populated, "Prescription saved and published successfully");
+  } catch (err) {
+    next(err);
+  }
+};
+
+// UPLOAD / UPDATE PRESCRIPTION DOCUMENT (PHOTO OR PDF)
+export const uploadPrescription = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return req.http.badRequest("Please select a prescription photo or PDF file to upload");
+    }
+
+    const { prescriptionId, notes, generalInstructions, appointmentId } = req.body;
+    let targetPatientId = req.body.patientId;
+    if (req.user.role === "patient" || !targetPatientId) {
+      targetPatientId = req.user._id;
+    }
+
+    let doctorId = req.body.doctorId;
+    if (req.user.role === "doctor") {
+      doctorId = await resolveDoctorId(req.user);
+    }
+
+    const mime = req.file.mimetype.toLowerCase();
+    let attachmentType = "image";
+    if (mime === "application/pdf") {
+      attachmentType = "pdf";
+    }
+
+    const attachmentUrl = `/uploads/prescriptions/${req.file.filename}`;
+    const attachmentName = req.file.originalname;
+
+    // Case 1: Updating an existing prescription (e.g. updating the photo)
+    if (prescriptionId) {
+      const existingRx = await Prescription.findById(prescriptionId);
+      if (!existingRx) {
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        return req.http.notFound("Prescription record not found to update");
+      }
+
+      // Check ownership
+      if (req.user.role === "patient" && String(existingRx.patientId) !== String(req.user._id)) {
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        return req.http.forbidden("Access denied: You can only update your own prescription");
+      }
+
+      const before = existingRx.toObject();
+      // Remove old file from disk if present
+      if (existingRx.attachmentUrl) {
+        const oldFilename = path.basename(existingRx.attachmentUrl);
+        const oldPath = path.join(PRESCRIPTION_UPLOAD_DIR, oldFilename);
+        if (fs.existsSync(oldPath)) {
+          try { fs.unlinkSync(oldPath); } catch (_) {}
+        }
+      }
+
+      existingRx.attachmentUrl = attachmentUrl;
+      existingRx.attachmentType = attachmentType;
+      existingRx.attachmentName = attachmentName;
+      if (notes !== undefined) existingRx.notes = notes;
+      if (generalInstructions !== undefined) existingRx.generalInstructions = generalInstructions;
+      existingRx.version = (existingRx.version || 1) + 1;
+      await existingRx.save();
+
+      recordAudit({
+        userId: req.user._id,
+        role: req.user.role,
+        action: "update",
+        resource: "prescription",
+        resourceId: existingRx._id,
+        before,
+        after: existingRx.toObject(),
+        req,
+      });
+
+      const populated = await Prescription.findById(existingRx._id)
+        .populate("patientId", "name mrn email phone")
+        .populate({ path: "doctorId", populate: { path: "userId", select: "name qualification clinicName" } });
+
+      return req.http.ok(populated, "Prescription document updated successfully");
+    }
+
+    // Case 2: Creating a new prescription with uploaded file
+    let parsedMedicines = [];
+    if (req.body.medicines) {
+      try {
+        parsedMedicines = typeof req.body.medicines === "string" ? JSON.parse(req.body.medicines) : req.body.medicines;
+      } catch (_) {
+        parsedMedicines = [];
+      }
+    }
+
+    const uploadedBy = req.user.role === "patient" ? "patient" : (req.user.role === "doctor" ? "doctor" : "clinic_admin");
+
+    const newRx = await Prescription.create({
+      patientId: targetPatientId,
+      doctorId: doctorId || null,
+      appointmentId: appointmentId || null,
+      attachmentUrl,
+      attachmentType,
+      attachmentName,
+      uploadedBy,
+      notes: notes || "",
+      generalInstructions: generalInstructions || "",
+      medicines: Array.isArray(parsedMedicines) ? parsedMedicines : [],
+      signedAt: new Date(),
+    });
+
+    recordAudit({
+      userId: req.user._id,
+      role: req.user.role,
+      action: "create",
+      resource: "prescription",
+      resourceId: newRx._id,
+      after: newRx.toObject(),
+      req,
+    });
+
+    if (uploadedBy === "patient") {
+      sendNotificationToUser(targetPatientId, {
+        type: "PRESCRIPTION_UPLOADED",
+        title: "Prescription Uploaded",
+        message: "Your prescription photo/PDF has been uploaded and saved securely.",
+      });
+    } else {
+      sendNotificationToUser(targetPatientId, {
+        type: "PRESCRIPTION_ADDED",
+        title: "Prescription Shared with You",
+        message: "Your doctor has uploaded and shared a prescription document/photo with you.",
+      });
+    }
+
+    const populated = await Prescription.findById(newRx._id)
+      .populate("patientId", "name mrn email phone")
+      .populate({ path: "doctorId", populate: { path: "userId", select: "name qualification clinicName" } });
+
+    return req.http.created(populated, "Prescription uploaded and shared successfully");
+  } catch (err) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    next(err);
+  }
+};
+
+// DOWNLOAD / STREAM PRESCRIPTION ATTACHMENT
+export const downloadPrescriptionAttachment = async (req, res, next) => {
+  try {
+    const prescription = await Prescription.findById(req.params.id);
+    if (!prescription || !prescription.attachmentUrl) {
+      return req.http.notFound("No prescription attachment found");
+    }
+
+    if (req.user.role === "patient" && String(prescription.patientId) !== String(req.user._id)) {
+      return req.http.forbidden("Access denied: You may only view your own prescriptions");
+    }
+
+    const filename = path.basename(prescription.attachmentUrl);
+    const filePath = path.join(PRESCRIPTION_UPLOAD_DIR, filename);
+
+    if (!fs.existsSync(filePath)) {
+      return req.http.notFound("Attachment file not found on disk");
+    }
+
+    const ext = path.extname(filename).toLowerCase();
+    const contentType = ext === ".pdf" ? "application/pdf" : (ext === ".png" ? "image/png" : "image/jpeg");
+    const disposition = req.query.download === "1" ? "attachment" : "inline";
+    const downloadName = prescription.attachmentName || `prescription_${prescription._id}${ext}`;
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", `${disposition}; filename="${encodeURIComponent(downloadName)}"`);
+    return res.sendFile(filePath);
   } catch (err) {
     next(err);
   }

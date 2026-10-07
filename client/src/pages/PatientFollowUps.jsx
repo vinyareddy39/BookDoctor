@@ -22,6 +22,17 @@ export default function PatientFollowUps() {
   const [patientNotes, setPatientNotes] = useState("");
   const [submittingRequest, setSubmittingRequest] = useState(false);
 
+  // Patient Upload Prescription modal
+  const [showUploadRxModal, setShowUploadRxModal] = useState(false);
+  const [uploadingRx, setUploadingRx] = useState(false);
+  const [rxUploadFile, setRxUploadFile] = useState(null);
+  const [rxUploadPreview, setRxUploadPreview] = useState(null);
+  const [rxUploadNotes, setRxUploadNotes] = useState("");
+  const [updatingRxId, setUpdatingRxId] = useState(null);
+
+  // Document/Photo Preview Modal
+  const [previewModal, setPreviewModal] = useState(null); // { url, type, title, downloadUrl }
+
   // AI Plain-Language Explanations (Safety Guardrails)
   const [loadingAiExplanation, setLoadingAiExplanation] = useState(false);
   const [aiExplanationData, setAiExplanationData] = useState(null);
@@ -69,6 +80,70 @@ export default function PatientFollowUps() {
       toast.error(err.response?.data?.message || "Failed to submit request");
     } finally {
       setSubmittingRequest(false);
+    }
+  };
+
+  const handleOpenUploadModal = (existingRx = null) => {
+    if (existingRx) {
+      setUpdatingRxId(existingRx._id);
+      setRxUploadNotes(existingRx.notes || "");
+    } else {
+      setUpdatingRxId(null);
+      setRxUploadNotes("");
+    }
+    setRxUploadFile(null);
+    setRxUploadPreview(null);
+    setShowUploadRxModal(true);
+  };
+
+  const handleRxFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setRxUploadFile(file);
+    if (file.type.startsWith("image/")) {
+      setRxUploadPreview(URL.createObjectURL(file));
+    } else {
+      setRxUploadPreview(null);
+    }
+  };
+
+  const handleUploadRxSubmit = async (e) => {
+    e.preventDefault();
+    if (!rxUploadFile) {
+      toast.error("Please select a prescription photo or PDF document");
+      return;
+    }
+
+    setUploadingRx(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", rxUploadFile);
+      if (updatingRxId) {
+        formData.append("prescriptionId", updatingRxId);
+      }
+      if (rxUploadNotes) {
+        formData.append("notes", rxUploadNotes);
+      }
+
+      await API.post("/emr/prescriptions/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      toast.success(
+        updatingRxId
+          ? "Prescription photo/PDF updated successfully!"
+          : "Prescription uploaded and saved successfully!"
+      );
+      setShowUploadRxModal(false);
+      setRxUploadFile(null);
+      setRxUploadPreview(null);
+      setRxUploadNotes("");
+      setUpdatingRxId(null);
+      fetchRecords();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to upload prescription");
+    } finally {
+      setUploadingRx(false);
     }
   };
 
@@ -169,66 +244,190 @@ export default function PatientFollowUps() {
             {/* PRESCRIPTIONS */}
             {activeTab === "prescriptions" && (
               <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                  <div>
+                    <h2 className="font-black text-slate-800 text-sm flex items-center gap-1.5">
+                      <span>💊</span> Prescription Archive ({prescriptions.length})
+                    </h2>
+                    <p className="text-slate-400 text-xs">
+                      Official digital prescriptions and your uploaded paper/photo scans
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenUploadModal()}
+                    className="btn-primary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 self-start sm:self-auto shadow-xs"
+                  >
+                    <span>📷</span> Upload Prescription (Photo / PDF)
+                  </button>
+                </div>
+
                 {prescriptions.length === 0 ? (
                   <div className="bg-white p-12 rounded-2xl border text-center text-slate-400">
                     <span className="text-4xl block mb-2">💊</span>
                     <p className="font-bold text-sm">No electronic prescriptions found.</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Have a paper prescription? Click "Upload Prescription" to add a photo or PDF.
+                    </p>
                   </div>
                 ) : (
                   prescriptions.map((rx) => (
                     <div key={rx._id} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-4">
-                      <div className="flex items-center justify-between border-b pb-3">
-                        <div>
-                          <h3 className="font-black text-slate-900 text-sm">
-                            Prescribed by Dr. {rx.doctorId?.userId?.name || "Doctor"}
-                          </h3>
-                          <p className="text-xs text-slate-400">
-                            {new Date(rx.signedAt || rx.createdAt).toLocaleDateString()} • Valid for 30 days
-                          </p>
+                      <div className="flex items-center justify-between border-b pb-3 flex-wrap gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-xl">
+                            {rx.attachmentType === "image" ? "📷" : rx.attachmentType === "pdf" ? "📄" : "💊"}
+                          </span>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-black text-slate-900 text-sm">
+                                {rx.uploadedBy === "patient"
+                                  ? "My Uploaded Prescription"
+                                  : `Prescribed by Dr. ${rx.doctorId?.userId?.name || "Doctor"}`}
+                              </h3>
+                              {rx.uploadedBy === "patient" ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                  Uploaded by You
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  Official Doctor Rx
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-400">
+                              {new Date(rx.signedAt || rx.createdAt).toLocaleDateString()} • {rx.version > 1 ? `Version ${rx.version} • ` : ""}Valid for 30 days
+                            </p>
+                          </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleExplainPrescription(rx)}
-                            className="btn-secondary py-2 px-3 text-xs font-bold flex items-center gap-1.5 text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 shadow-xs"
-                          >
-                            <span>✨</span> Explain in Plain English
-                          </button>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {rx.attachmentUrl && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPreviewModal({
+                                  url: rx.attachmentUrl,
+                                  type: rx.attachmentType || "image",
+                                  title: rx.attachmentName || "Prescription Document",
+                                  downloadUrl: `/api/emr/prescriptions/${rx._id}/attachment?download=1`,
+                                })
+                              }
+                              className="btn-secondary py-1.5 px-3 text-xs font-bold flex items-center gap-1.5 text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100"
+                            >
+                              <span>👁️</span> View {rx.attachmentType === "pdf" ? "PDF" : "Photo"}
+                            </button>
+                          )}
+
+                          {rx.uploadedBy === "patient" && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenUploadModal(rx)}
+                              className="btn-secondary py-1.5 px-2.5 text-xs font-bold flex items-center gap-1 text-slate-700 hover:bg-slate-100"
+                              title="Update or replace this prescription photo/PDF"
+                            >
+                              <span>🔄</span> Update File
+                            </button>
+                          )}
+
+                          {rx.medicines?.length > 0 && (
+                            <button
+                              onClick={() => handleExplainPrescription(rx)}
+                              className="btn-secondary py-1.5 px-3 text-xs font-bold flex items-center gap-1.5 text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 shadow-xs"
+                            >
+                              <span>✨</span> Plain English
+                            </button>
+                          )}
+
                           <button
                             onClick={() => exportPrescriptionToPDF(rx)}
-                            className="btn-primary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                            className="btn-primary py-1.5 px-3 text-xs font-bold flex items-center gap-1.5 shadow-sm"
                           >
                             <span>📄</span> Download PDF
                           </button>
                         </div>
                       </div>
 
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs">
-                          <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold">
-                            <tr>
-                              <th className="p-2.5">Medicine</th>
-                              <th className="p-2.5">Dosage</th>
-                              <th className="p-2.5">Frequency</th>
-                              <th className="p-2.5">Duration</th>
-                              <th className="p-2.5">When to take</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {rx.medicines?.map((m, idx) => (
-                              <tr key={idx}>
-                                <td className="p-2.5 font-bold text-slate-900">{m.name}</td>
-                                <td className="p-2.5 text-slate-600">{m.dosage}</td>
-                                <td className="p-2.5 text-slate-600">{m.frequency}</td>
-                                <td className="p-2.5 text-slate-600">{m.duration}</td>
-                                <td className="p-2.5 font-semibold text-primary-700 capitalize">
-                                  {m.timing?.replace("_", " ")}
-                                </td>
+                      {/* Attachment Document Box */}
+                      {rx.attachmentUrl && (
+                        <div className="p-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 rounded-xl border border-blue-200/70 flex items-center justify-between gap-3 flex-wrap">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-xl">
+                              {rx.attachmentType === "pdf" ? "📑" : "🖼️"}
+                            </span>
+                            <div>
+                              <p className="text-xs font-bold text-slate-800">
+                                {rx.attachmentName || (rx.attachmentType === "pdf" ? "Prescription Document.pdf" : "Prescription Photo.jpg")}
+                              </p>
+                              <p className="text-[11px] text-slate-500">
+                                Format: {rx.attachmentType?.toUpperCase()} • Archived securely in portal
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPreviewModal({
+                                  url: rx.attachmentUrl,
+                                  type: rx.attachmentType || "image",
+                                  title: rx.attachmentName || "Prescription Document",
+                                  downloadUrl: `/api/emr/prescriptions/${rx._id}/attachment?download=1`,
+                                })
+                              }
+                              className="text-xs font-bold text-primary-700 hover:underline px-2.5 py-1 bg-white rounded border border-primary-200"
+                            >
+                              🔍 View Document
+                            </button>
+                            <a
+                              href={`/api/emr/prescriptions/${rx._id}/attachment?download=1`}
+                              download
+                              className="text-xs font-bold text-blue-700 hover:underline px-2.5 py-1 bg-white rounded border border-blue-200"
+                            >
+                              📥 Download File
+                            </a>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Notes / Remarks */}
+                      {rx.notes && (
+                        <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200/80 text-xs">
+                          <span className="font-bold text-amber-900">Notes / Remarks:</span>{" "}
+                          <span className="text-amber-800">{rx.notes}</span>
+                        </div>
+                      )}
+
+                      {/* Medicines Table */}
+                      {rx.medicines && rx.medicines.length > 0 && (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold">
+                              <tr>
+                                <th className="p-2.5">Medicine</th>
+                                <th className="p-2.5">Dosage</th>
+                                <th className="p-2.5">Frequency</th>
+                                <th className="p-2.5">Duration</th>
+                                <th className="p-2.5">When to take</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {rx.medicines.map((m, idx) => (
+                                <tr key={idx}>
+                                  <td className="p-2.5 font-bold text-slate-900">{m.name}</td>
+                                  <td className="p-2.5 text-slate-600">{m.dosage}</td>
+                                  <td className="p-2.5 text-slate-600">{m.frequency}</td>
+                                  <td className="p-2.5 text-slate-600">{m.duration}</td>
+                                  <td className="p-2.5 font-semibold text-primary-700 capitalize">
+                                    {m.timing?.replace("_", " ")}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
 
                       {rx.generalInstructions && (
                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs text-slate-600">
@@ -561,6 +760,196 @@ export default function PatientFollowUps() {
                   className="btn-primary text-xs py-2 px-4 font-bold"
                 >
                   Understood
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── PATIENT UPLOAD / UPDATE PRESCRIPTION MODAL ── */}
+        {showUploadRxModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+            <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 my-8 border border-slate-100 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between pb-3 border-b">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">📷</span>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-base">
+                      {updatingRxId ? "Update Prescription Photo / File" : "Upload Prescription Photo / PDF"}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Save your paper prescriptions and share with your attending doctors
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowUploadRxModal(false)}
+                  className="text-slate-400 hover:text-slate-600 text-lg"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleUploadRxSubmit} className="space-y-4">
+                <div className="border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center bg-slate-50/60 hover:bg-slate-50 transition">
+                  <span className="text-4xl block mb-2">📸 / 📄</span>
+                  <p className="text-xs font-bold text-slate-800">
+                    Take a Photo or Select Prescription File
+                  </p>
+                  <p className="text-[11px] text-slate-400 mb-3">
+                    Supports JPG, PNG, WebP photos & PDF documents (Up to 15MB)
+                  </p>
+
+                  <input
+                    type="file"
+                    id="patientRxUploadInput"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    onChange={handleRxFileChange}
+                    className="hidden"
+                  />
+                  <label
+                    htmlFor="patientRxUploadInput"
+                    className="btn-primary py-2 px-4 text-xs font-bold cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                  >
+                    <span>📁</span> Choose Photo / Document
+                  </label>
+
+                  {rxUploadFile && (
+                    <div className="mt-4 p-3 bg-white rounded-xl border border-slate-200 inline-block text-left w-full">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 truncate">
+                          <span className="text-lg">
+                            {rxUploadFile.type === "application/pdf" ? "📄" : "🖼️"}
+                          </span>
+                          <div className="truncate">
+                            <p className="text-xs font-bold text-slate-800 truncate">
+                              {rxUploadFile.name}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              {(rxUploadFile.size / 1024).toFixed(0)} KB • {rxUploadFile.type || "Document"}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRxUploadFile(null);
+                            setRxUploadPreview(null);
+                          }}
+                          className="text-xs text-rose-500 font-bold hover:underline ml-2"
+                        >
+                          Remove
+                        </button>
+                      </div>
+
+                      {rxUploadPreview && (
+                        <div className="mt-3 text-center bg-slate-50 p-2 rounded-lg border">
+                          <img
+                            src={rxUploadPreview}
+                            alt="Prescription preview"
+                            className="max-h-48 mx-auto rounded object-contain"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Notes & Doctor / Clinic Details (Optional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={rxUploadNotes}
+                    onChange={(e) => setRxUploadNotes(e.target.value)}
+                    placeholder="e.g. Prescription from Dr. Rao for chronic cough, dated 10th October..."
+                    className="input text-xs"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-3 border-t">
+                  <button
+                    type="button"
+                    onClick={() => setShowUploadRxModal(false)}
+                    className="flex-1 btn-secondary text-xs py-2.5 font-bold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={uploadingRx || !rxUploadFile}
+                    className="flex-1 btn-primary text-xs py-2.5 font-bold shadow-sm"
+                  >
+                    {uploadingRx ? "Uploading..." : updatingRxId ? "Update Prescription" : "Upload & Save"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── ATTACHMENT PREVIEW MODAL (PATIENT-FACING) ── */}
+        {previewModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl max-w-4xl w-full p-5 shadow-2xl space-y-4 animate-fade-in border border-slate-200 max-h-[95vh] flex flex-col">
+              <div className="flex items-center justify-between pb-3 border-b">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">
+                    {previewModal.type === "pdf" ? "📄" : "🖼️"}
+                  </span>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-sm sm:text-base">
+                      {previewModal.title}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Prescription Document Preview ({previewModal.type?.toUpperCase()})
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {previewModal.downloadUrl && (
+                    <a
+                      href={previewModal.downloadUrl}
+                      download
+                      className="btn-primary text-xs py-1.5 px-3 font-bold flex items-center gap-1 shadow-xs"
+                    >
+                      <span>📥</span> Download
+                    </a>
+                  )}
+                  <button
+                    onClick={() => setPreviewModal(null)}
+                    className="text-slate-400 hover:text-slate-600 text-lg p-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-auto flex items-center justify-center bg-slate-100 rounded-xl p-2 min-h-[300px]">
+                {previewModal.type === "pdf" ? (
+                  <iframe
+                    src={previewModal.url}
+                    title="Prescription PDF"
+                    className="w-full h-[70vh] rounded-lg border bg-white"
+                  />
+                ) : (
+                  <img
+                    src={previewModal.url}
+                    alt="Prescription Scan"
+                    className="max-h-[70vh] max-w-full object-contain rounded-lg shadow-sm"
+                  />
+                )}
+              </div>
+
+              <div className="flex justify-end pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setPreviewModal(null)}
+                  className="btn-secondary text-xs py-2 px-4 font-bold"
+                >
+                  Close Preview
                 </button>
               </div>
             </div>

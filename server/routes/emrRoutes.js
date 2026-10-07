@@ -9,6 +9,8 @@ import {
   createDiagnosis,
   updateDiagnosis,
   createPrescription,
+  uploadPrescription,
+  downloadPrescriptionAttachment,
   getPrescriptions,
   getPrescriptionById,
   createFollowUp,
@@ -18,6 +20,7 @@ import {
 } from "../controllers/emrController.js";
 import { auth } from "../middleware/index.js";
 import { authorize } from "../middleware/rbac.js";
+import { prescriptionUpload } from "../middleware/prescriptionUpload.js";
 
 const router = express.Router();
 
@@ -35,8 +38,10 @@ router.put("/diagnoses/:id", auth, authorize("diagnosis", "update"), updateDiagn
 
 // ── 3. Prescriptions ──
 router.post("/prescriptions", auth, authorize("prescription", "create"), createPrescription);
+router.post("/prescriptions/upload", auth, authorize("prescription", "create"), prescriptionUpload.single("file"), uploadPrescription);
 router.get("/prescriptions", auth, authorize("prescription", "read"), getPrescriptions);
 router.get("/prescriptions/:id", auth, authorize("prescription", "read"), getPrescriptionById);
+router.get("/prescriptions/:id/attachment", auth, authorize("prescription", "read"), downloadPrescriptionAttachment);
 
 // ── 4. Follow-Ups ──
 router.post("/follow-ups", auth, authorize("follow_up", "create"), createFollowUp);
