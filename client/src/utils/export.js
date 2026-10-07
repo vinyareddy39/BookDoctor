@@ -157,3 +157,111 @@ export const exportPrescriptionToPDF = (record, doctorName) => {
   const cleanDate = new Date(dateStr).toISOString().split("T")[0];
   doc.save(`Prescription_${patName.replace(/\s+/g, "_")}_${cleanDate}.pdf`);
 };
+
+export const exportLabReportToPDF = (order) => {
+  if (!order) return;
+
+  const doc = new jsPDF();
+  const patient = order.patientId || {};
+  const doctor = order.doctorId || {};
+  const docName = doctor.userId?.name || doctor.name || "Ordering Physician";
+  const patName = patient.name || "Patient";
+  const result = order.labResultId || {};
+  const parameters = result.parameters || [];
+
+  // ── Header / Lab Banner ──
+  doc.setFillColor(15, 23, 42); // slate-900
+  doc.rect(0, 0, 210, 24, "F");
+
+  doc.setFontSize(16);
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.text("MedAssist Laboratory • Diagnostic Test Report", 14, 16);
+
+  // ── Patient & Order Metadata ──
+  doc.setFontSize(9.5);
+  doc.setTextColor(71, 85, 105);
+  doc.setFont("helvetica", "normal");
+
+  // Left Column
+  doc.text(`Patient: ${patName}`, 14, 34);
+  doc.text(`MRN: ${patient.mrn || "N/A"}`, 14, 40);
+  doc.text(`Gender/Age: ${patient.gender?.toUpperCase() || "N/A"}`, 14, 46);
+  doc.text(`Ordering Doctor: Dr. ${docName}`, 14, 52);
+
+  // Right Column
+  doc.text(`Order Number: ${order.orderNumber}`, 120, 34);
+  doc.text(`Priority: ${order.priority?.toUpperCase()}`, 120, 40);
+  doc.text(`Ordered Date: ${new Date(order.orderedAt).toLocaleDateString()}`, 120, 46);
+  if (order.releasedAt) {
+    doc.text(`Released Date: ${new Date(order.releasedAt).toLocaleDateString()}`, 120, 52);
+  }
+
+  // Divider
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(226, 232, 240);
+  doc.line(14, 56, 196, 56);
+
+  // ── Test Panels Ordered ──
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 41, 59);
+  const testNames = order.tests?.map((t) => t.name).join(", ") || "Laboratory Investigation";
+  doc.text(`Tests Ordered: ${testNames}`, 14, 63);
+
+  // ── Parameters Table ──
+  const tableData = parameters.map((p) => [
+    p.name,
+    p.value,
+    p.unit || "-",
+    p.referenceRange || "-",
+    p.flag?.toUpperCase() || "NORMAL",
+  ]);
+
+  doc.autoTable({
+    startY: 68,
+    head: [["Test Parameter", "Observed Value", "Units", "Reference Range", "Flag"]],
+    body: tableData,
+    theme: "striped",
+    headStyles: { fillColor: [15, 23, 42], fontSize: 9, fontStyle: "bold" },
+    bodyStyles: { fontSize: 8.5 },
+    styles: { cellPadding: 2.5 },
+    didParseCell: function (data) {
+      if (data.column.index === 4 && data.cell.text[0] && data.cell.text[0] !== "NORMAL") {
+        data.cell.styles.textColor = [220, 38, 38]; // Red for abnormal/critical
+        data.cell.styles.fontStyle = "bold";
+      }
+    },
+  });
+
+  let finalY = doc.lastAutoTable.finalY + 10;
+
+  // Clinical Interpretation
+  if (result.interpretation) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 41, 59);
+    doc.text("Laboratory Comments & Clinical Interpretation:", 14, finalY);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    const splitInterp = doc.splitTextToSize(result.interpretation, 180);
+    doc.text(splitInterp, 14, finalY + 6);
+    finalY += 12 + splitInterp.length * 5;
+  }
+
+  // Signatures
+  doc.setFontSize(9);
+  doc.setTextColor(148, 163, 184);
+  doc.text("Verified by Certified Clinical Laboratory Technician.", 14, 275);
+  doc.text("MedAssist Electronic Verification System", 14, 280);
+
+  doc.setTextColor(30, 41, 59);
+  doc.text(`Entered by: ${order.resultEnteredBy?.name || "Lab Tech"}`, 130, 268);
+  doc.text(`Verified by: ${order.verifiedBy?.name || "Medical Officer"}`, 130, 274);
+  doc.setLineWidth(0.3);
+  doc.line(130, 278, 196, 278);
+  doc.text("Authorized Laboratory Sign-off", 130, 283);
+
+  const cleanOrderNum = (order.orderNumber || "LAB").replace(/[^a-zA-Z0-9-]/g, "_");
+  doc.save(`LabReport_${cleanOrderNum}.pdf`);
+};

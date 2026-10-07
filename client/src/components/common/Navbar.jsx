@@ -127,6 +127,14 @@ export default function Navbar() {
                   EMR
                 </Link>
                 <Link
+                  to="/lab"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/lab") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Lab
+                </Link>
+                <Link
                   to="/calendar"
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
                     isActive("/calendar") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
@@ -157,6 +165,26 @@ export default function Navbar() {
                   }`}
                 >
                   Chats
+                </Link>
+              </>
+            )}
+            {isLabTech && (
+              <>
+                <Link
+                  to="/lab"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/lab") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Lab Worklist
+                </Link>
+                <Link
+                  to="/patients"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/patients") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Patients
                 </Link>
               </>
             )}
@@ -213,6 +241,14 @@ export default function Navbar() {
                   }`}
                 >
                   EMR
+                </Link>
+                <Link
+                  to="/lab"
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                    isActive("/lab") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Lab
                 </Link>
                 <Link
                   to="/calendar"
@@ -330,10 +366,17 @@ export default function Navbar() {
             <>
               <Link to="/doctor/dashboard" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Dashboard</Link>
               <Link to="/emr"      className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">EMR</Link>
+              <Link to="/lab"      className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Lab</Link>
               <Link to="/calendar" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Calendar</Link>
               <Link to="/queue"    className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Live Queue</Link>
               <Link to="/patients" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Patients</Link>
               <Link to="/messages" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Chats</Link>
+            </>
+          )}
+          {isLabTech && (
+            <>
+              <Link to="/lab"      className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Lab Worklist</Link>
+              <Link to="/patients" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Patients</Link>
             </>
           )}
           {isReceptionist && (
@@ -348,6 +391,7 @@ export default function Navbar() {
             <>
               <Link to="/admin"    className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Admin Portal</Link>
               <Link to="/emr"      className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">EMR</Link>
+              <Link to="/lab"      className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Lab</Link>
               <Link to="/calendar" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Calendar</Link>
               <Link to="/queue"    className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Live Queue</Link>
               <Link to="/patients" className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Patients</Link>

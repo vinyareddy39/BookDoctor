@@ -162,6 +162,15 @@ export default function AdminDashboard() {
             </Link>
 
             <Link
+              to="/lab"
+              className="flex flex-col items-center text-center p-3.5 rounded-xl border border-indigo-100 hover:border-indigo-300 hover:bg-indigo-50/40 transition group"
+            >
+              <span className="text-2xl mb-1.5 group-hover:scale-110 transition">🔬</span>
+              <span className="text-xs font-bold text-slate-700 group-hover:text-indigo-700">Lab Diagnostics</span>
+              <span className="text-[10px] text-slate-400">Orders & Results</span>
+            </Link>
+
+            <Link
               to="/admin/clinic-settings"
               className="flex flex-col items-center text-center p-3.5 rounded-xl border border-slate-100 hover:border-primary-300 hover:bg-primary-50/40 transition group"
             >

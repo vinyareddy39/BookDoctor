@@ -1,16 +1,17 @@
 import { useState, useEffect } from "react";
 import API from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { exportPrescriptionToPDF } from "../utils/export";
+import { exportPrescriptionToPDF, exportLabReportToPDF } from "../utils/export";
 import toast from "react-hot-toast";
 
 export default function PatientFollowUps() {
   const { user } = useAuth();
 
-  const [activeTab, setActiveTab] = useState("prescriptions"); // 'prescriptions' | 'followups' | 'diagnoses'
+  const [activeTab, setActiveTab] = useState("prescriptions"); // 'prescriptions' | 'followups' | 'diagnoses' | 'lab-orders'
   const [prescriptions, setPrescriptions] = useState([]);
   const [followUps, setFollowUps] = useState([]);
   const [diagnoses, setDiagnoses] = useState([]);
+  const [labOrders, setLabOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Request Follow-up modal
@@ -22,14 +23,16 @@ export default function PatientFollowUps() {
   const fetchRecords = async () => {
     setLoading(true);
     try {
-      const [rxRes, fuRes, diagRes] = await Promise.all([
+      const [rxRes, fuRes, diagRes, labRes] = await Promise.all([
         API.get("/emr/prescriptions"),
         API.get("/emr/follow-ups"),
         API.get("/emr/diagnoses"),
+        API.get("/lab/orders").catch(() => ({ data: { data: [] } })),
       ]);
       setPrescriptions(rxRes.data?.data || []);
       setFollowUps(fuRes.data?.data || []);
       setDiagnoses(diagRes.data?.data || []);
+      setLabOrders(labRes.data?.data || []);
     } catch (err) {
       console.warn("Failed to load patient records:", err);
     } finally {
@@ -79,16 +82,17 @@ export default function PatientFollowUps() {
         </div>
 
         {/* Tab Bar */}
-        <div className="flex rounded-2xl bg-white p-1.5 border border-slate-200/80 shadow-sm gap-1">
+        <div className="flex flex-wrap rounded-2xl bg-white p-1.5 border border-slate-200/80 shadow-sm gap-1">
           {[
             { id: "prescriptions", label: `Prescriptions (${prescriptions.length})`, icon: "💊" },
             { id: "followups", label: `Follow-Ups (${followUps.length})`, icon: "🗓️" },
             { id: "diagnoses", label: `Diagnoses & Health (${diagnoses.length})`, icon: "🏷️" },
+            { id: "lab-orders", label: `Lab Reports (${labOrders.length})`, icon: "🧪" },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 ${
+              className={`flex-1 min-w-[130px] py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 ${
                 activeTab === tab.id
                   ? "bg-primary-600 text-white shadow-sm"
                   : "text-slate-600 hover:bg-slate-50"
@@ -249,6 +253,114 @@ export default function PatientFollowUps() {
                       </div>
                     ))}
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* LAB ORDERS & RESULTS */}
+            {activeTab === "lab-orders" && (
+              <div className="space-y-4">
+                {labOrders.length === 0 ? (
+                  <div className="bg-white p-12 rounded-2xl border text-center text-slate-400">
+                    <span className="text-4xl block mb-2">🧪</span>
+                    <p className="font-bold text-sm">No diagnostic lab requisitions found.</p>
+                  </div>
+                ) : (
+                  labOrders.map((order) => {
+                    const isReleased = order.status === "released";
+                    const docName = order.doctorId?.userId?.name || order.doctorId?.name || "Doctor";
+                    const params = order.labResultId?.parameters || [];
+
+                    return (
+                      <div key={order._id} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-black text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
+                                {order.orderNumber}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                                  isReleased
+                                    ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                                    : "bg-amber-100 text-amber-700 border border-amber-200"
+                                }`}
+                              >
+                                {isReleased ? "Report Ready" : order.status.replace("_", " ")}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1">
+                              Requisitioned by Dr. {docName} • {new Date(order.orderedAt).toLocaleDateString()}
+                            </p>
+                          </div>
+
+                          {isReleased && (
+                            <button
+                              onClick={() => exportLabReportToPDF(order)}
+                              className="btn-primary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 shadow-sm self-start sm:self-auto"
+                            >
+                              <span>📄</span> Download Lab Report (PDF)
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Tests requested */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {order.tests?.map((t, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-900 text-xs font-semibold"
+                            >
+                              {t.name}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Findings preview if released */}
+                        {isReleased && params.length > 0 ? (
+                          <div className="overflow-x-auto border border-slate-100 rounded-xl">
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px]">
+                                <tr>
+                                  <th className="py-2 px-3">Test Parameter</th>
+                                  <th className="py-2 px-3">Result Value</th>
+                                  <th className="py-2 px-3">Reference Range</th>
+                                  <th className="py-2 px-3">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {params.map((p, pIdx) => (
+                                  <tr key={pIdx}>
+                                    <td className="py-2 px-3 font-semibold text-slate-800">{p.name}</td>
+                                    <td className="py-2 px-3 font-bold text-slate-900">{p.value} {p.unit}</td>
+                                    <td className="py-2 px-3 text-slate-400">{p.referenceRange || "-"}</td>
+                                    <td className="py-2 px-3">
+                                      <span
+                                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                          p.flag === "normal"
+                                            ? "text-emerald-700 bg-emerald-50"
+                                            : "text-rose-700 bg-rose-50"
+                                        }`}
+                                      >
+                                        {p.flag}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : !isReleased ? (
+                          <div className="bg-amber-50/60 p-3.5 rounded-xl border border-amber-200/70 text-xs text-amber-800 flex items-center gap-2">
+                            <span className="text-base">⏳</span>
+                            <span>
+                              Specimen is currently being analyzed by the laboratory. Detailed values will be accessible here immediately upon official pathologist release.
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })
                 )}
               </div>
             )}
