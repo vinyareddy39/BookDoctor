@@ -7,7 +7,8 @@ import toast from "react-hot-toast";
 import API from "../services/api";
 import {
   fetchCandidateHospitals,
-  selectFastestHospitalByRoad
+  selectFastestHospitalByRoad,
+  fetchRoadRoutePath
 } from "../services/hospitalService";
 import {
   buildUberLinks,
@@ -83,6 +84,7 @@ export default function EmergencyHospitalTracking() {
   const [gettingLocationForUber, setGettingLocationForUber] = useState(false);
   const [showDesktopPanel, setShowDesktopPanel] = useState(false);
   const [desktopUberData, setDesktopUberData] = useState(null);
+  const [roadRouteGeometry, setRoadRouteGeometry] = useState(null);
 
   const emergencyPhone = getEmergencyPhoneNumber();
   const isMobile = isMobileDevice();
@@ -100,6 +102,19 @@ export default function EmergencyHospitalTracking() {
       acquireLiveLocation();
     }
   }, []);
+
+  /**
+   * Fetch road driving route path (OSRM road geometry) between user and selected hospital
+   */
+  useEffect(() => {
+    if (userLocation?.latitude && selectedHospital?.lat) {
+      fetchRoadRoutePath(userLocation, selectedHospital).then((pts) => {
+        if (pts && pts.length > 0) {
+          setRoadRouteGeometry(pts);
+        }
+      });
+    }
+  }, [userLocation, selectedHospital]);
 
   const acquireLiveLocation = () => {
     setLoading(true);
@@ -345,11 +360,11 @@ export default function EmergencyHospitalTracking() {
       window.location.href = appUrl;
     } else {
       // DESKTOP (Windows/Mac/Linux):
-      // Open Uber with prefilled pickup and dropoff coordinates immediately in a new tab!
-      window.open(targetDesktopUrl, "_blank", "noopener,noreferrer");
-      toast.success("Opening Uber with pre-filled locations! Destination address also copied.", {
-        icon: "🚗",
-        duration: 4500
+      // Open Google Maps driving route directly in a new tab with 100% pre-filled origin, destination & turn-by-turn path!
+      window.open(gMapsUrl, "_blank", "noopener,noreferrer");
+      toast.success("Opening turn-by-turn driving route in Google Maps (100% pre-filled)!", {
+        icon: "🗺️",
+        duration: 5000
       });
       setShowDesktopPanel(true);
     }
@@ -609,15 +624,20 @@ export default function EmergencyHospitalTracking() {
                     </Marker>
                   ))}
 
-                  {/* Route Polyline from User to Selected Hospital */}
+                  {/* Route Polyline from User to Selected Hospital (OSRM Driving Road Path) */}
                   <Polyline
-                    positions={[
-                      [userLocation.latitude, userLocation.longitude],
-                      [selectedHospital.lat, selectedHospital.lng]
-                    ]}
+                    positions={
+                      roadRouteGeometry && roadRouteGeometry.length > 0
+                        ? roadRouteGeometry
+                        : [
+                            [userLocation.latitude, userLocation.longitude],
+                            [selectedHospital.lat, selectedHospital.lng]
+                          ]
+                    }
                     color="#2563eb"
-                    weight={4}
-                    dashArray="8, 8"
+                    weight={roadRouteGeometry ? 5 : 4}
+                    opacity={0.85}
+                    dashArray={roadRouteGeometry ? null : "8, 8"}
                   />
                 </MapContainer>
               </div>
@@ -690,19 +710,25 @@ export default function EmergencyHospitalTracking() {
                     {gettingLocationForUber ? (
                       <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
                     ) : (
-                      <span className="text-2xl group-hover:scale-110 transition-transform">🚗</span>
+                      <span className="text-2xl group-hover:scale-110 transition-transform">
+                        {isAndroidOrIOS() ? "🚗" : "🗺️"}
+                      </span>
                     )}
                     <div className="text-left flex-1 min-w-0">
                       <p className="leading-tight">
                         {gettingLocationForUber
                           ? "Acquiring live location..."
                           : selectedHospital && (selectedHospital.lat || selectedHospital.latitude)
-                          ? "Book Uber to Hospital"
+                          ? isAndroidOrIOS()
+                            ? "Book Uber to Hospital"
+                            : "Open Driving Route (Google Maps 100% Pre-filled)"
                           : "Hospital not found yet"}
                       </p>
                       {selectedHospital && !gettingLocationForUber && (
                         <p className="text-[11px] font-normal text-slate-300 truncate">
-                          To: {selectedHospital.name} ({selectedHospital.roadDurationMins || selectedHospital.etaMinutes || 5} min road ETA)
+                          {isAndroidOrIOS()
+                            ? `To: ${selectedHospital.name} (${selectedHospital.roadDurationMins || selectedHospital.etaMinutes || 5} min road ETA)`
+                            : `Turn-by-turn driving path to ${selectedHospital.name} (${selectedHospital.roadDurationMins || selectedHospital.etaMinutes || 5} min road ETA)`}
                         </p>
                       )}
                     </div>
@@ -713,7 +739,9 @@ export default function EmergencyHospitalTracking() {
 
                   {/* Informational note required by specification */}
                   <p className="text-[11px] text-slate-500 text-center leading-normal px-2 pt-1 font-medium">
-                    Uber will open with locations pre-filled. Tap Request there to confirm the ride.
+                    {isAndroidOrIOS()
+                      ? "Uber will open with locations pre-filled. Tap Request there to confirm the ride."
+                      : "Google Maps opens with your live origin and hospital destination 100% pre-filled. Desktop Uber panel & phone QR code available below."}
                   </p>
 
                   {/* ── STEP 3: Desktop Panel (Windows/Mac/Linux) ── */}

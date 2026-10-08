@@ -429,3 +429,34 @@ export async function fetchRoadWeights(userLoc, hospitals) {
   }
   return roadWeights;
 }
+
+/**
+ * Fetches actual road driving polyline geometry between user location and selected hospital
+ * via OSRM Route service. Returns array of [lat, lng] points for Leaflet Polyline.
+ */
+export async function fetchRoadRoutePath(userLoc, hospital) {
+  if (!userLoc?.latitude || !hospital?.lat) return null;
+  try {
+    const userLat = Number(userLoc.latitude ?? userLoc.lat);
+    const userLng = Number(userLoc.longitude ?? userLoc.lng);
+    const hospLat = Number(hospital.latitude ?? hospital.lat);
+    const hospLng = Number(hospital.longitude ?? hospital.lng);
+
+    const url = `https://router.project-osrm.org/route/v1/driving/${userLng},${userLat};${hospLng},${hospLat}?overview=full&geometries=geojson`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(4500) });
+    if (res.ok) {
+      const data = await res.json();
+      const coords = data.routes?.[0]?.geometry?.coordinates;
+      if (Array.isArray(coords) && coords.length > 0) {
+        // GeoJSON coordinates are [lng, lat], Leaflet expects [lat, lng]
+        return coords.map(([lng, lat]) => [lat, lng]);
+      }
+    }
+  } catch (err) {
+    if (import.meta.env?.DEV) {
+      console.warn("[hospitalService] OSRM route geometry fetch failed:", err);
+    }
+  }
+  return null;
+}
+
