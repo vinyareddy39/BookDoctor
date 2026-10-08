@@ -741,16 +741,17 @@ export default function EmergencyHospitalTracking() {
                       </div>
 
                       {/* Status & prefill information */}
-                      <div className="p-3 bg-white/95 rounded-xl border border-amber-200 text-xs text-amber-900 font-semibold leading-relaxed shadow-sm space-y-1">
-                        <p>
-                          🚀 <strong>Uber Opened:</strong> We launched Uber in a new tab with your live pickup and hospital dropoff coordinates.
+                      <div className="p-3 bg-white/95 rounded-xl border border-amber-200 text-xs text-amber-900 font-semibold leading-relaxed shadow-sm space-y-1.5">
+                        <p className="flex items-center gap-1.5">
+                          <span>📋</span>
+                          <span><strong>Hospital address copied to clipboard!</strong> In the opened Uber tab, click <em>"Dropoff location"</em> and press <kbd className="px-1.5 py-0.5 text-[11px] font-bold bg-amber-100 border border-amber-300 rounded text-amber-900">Ctrl + V</kbd>.</span>
                         </p>
-                        <p className="text-[11px] text-slate-600 font-normal">
-                          If your desktop browser prompts for destination, the hospital address is already copied to your clipboard — simply press <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 border border-slate-300 rounded text-slate-700">Ctrl+V</kbd>.
+                        <p className="text-[11px] text-slate-500 font-normal">
+                          Uber's desktop website does not auto-populate form fields via URL on Windows. Use the copied address or scan the QR code below on your phone for 100% automatic pre-fill.
                         </p>
                       </div>
 
-                      {/* Hospital name and full address */}
+                      {/* Hospital destination card */}
                       <div className="p-3.5 bg-white rounded-xl border border-amber-200 text-xs space-y-1 shadow-sm">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                           Destination Hospital & Emergency Address
@@ -763,37 +764,68 @@ export default function EmergencyHospitalTracking() {
                         </p>
                       </div>
 
-                      {/* Action buttons: Copy address, Open in Google Maps, Open Uber */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {/* QR Code for instant phone scan prefill */}
+                      <div className="p-3 bg-white rounded-xl border border-amber-200 flex items-center gap-3 shadow-sm">
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=110x110&margin=4&data=${encodeURIComponent(desktopUberData.webUrl)}`}
+                          alt="Scan with phone for 1-tap Uber ride"
+                          className="w-20 h-20 rounded-lg border border-slate-200 shrink-0 bg-white"
+                          loading="lazy"
+                        />
+                        <div className="text-xs space-y-1">
+                          <p className="font-bold text-slate-900 flex items-center gap-1">
+                            <span>📱</span>
+                            <span>Want 100% Auto-fill on Phone?</span>
+                          </p>
+                          <p className="text-[11px] text-slate-600 leading-normal">
+                            Scan this QR code with your phone camera &mdash; it immediately launches your phone's Uber app with both pickup & hospital prefilled!
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Action buttons: Copy address, Open in Google Maps, Native Windows App, Open Uber Web */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <button
                           type="button"
                           onClick={handleCopyHospitalAddress}
-                          className="py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-slate-300 shadow-sm transition active:scale-95"
+                          className="py-2.5 px-2.5 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-slate-300 shadow-sm transition active:scale-95 text-center"
                           title="Copy hospital address to clipboard"
                         >
                           <span>📋</span>
-                          <span>{copiedAddress ? "Copied! ✅" : "Copy address"}</span>
+                          <span>{copiedAddress ? "Copied! ✅" : "Copy Address"}</span>
                         </button>
 
                         <a
                           href={desktopUberData.googleMapsUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 text-center"
-                          title="Open driving directions in Google Maps"
+                          className="py-2.5 px-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 text-center"
+                          title="Open turn-by-turn driving directions in Google Maps (100% pre-filled)"
                         >
                           <span>🗺️</span>
-                          <span>Open in Google Maps</span>
+                          <span>Google Maps</span>
                         </a>
 
                         <button
                           type="button"
+                          onClick={() => {
+                            window.location.href = desktopUberData.appUrl;
+                          }}
+                          className="py-2.5 px-2.5 bg-slate-800 hover:bg-black text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 text-center"
+                          title="Open native Windows Uber App if installed from Microsoft Store"
+                        >
+                          <span>💻</span>
+                          <span>Windows App</span>
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => window.open(desktopUberData.desktopWebUrl || desktopUberData.webUrl, "_blank", "noopener,noreferrer")}
-                          className="py-2.5 px-3 bg-black hover:bg-slate-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 text-center"
-                          title="Open Uber in new browser tab"
+                          className="py-2.5 px-2.5 bg-black hover:bg-slate-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 text-center"
+                          title="Reopen Uber Web in browser"
                         >
                           <span>🚗</span>
-                          <span>Open Uber Again</span>
+                          <span>Uber Web</span>
                         </button>
                       </div>
                     </div>
