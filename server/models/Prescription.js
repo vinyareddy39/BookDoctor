@@ -133,8 +133,28 @@ const prescriptionSchema = new mongoose.Schema(
     },
     source: {
       type: String,
-      enum: ["doctor_structured", "extracted", "manual"],
+      enum: ["doctor_structured", "extracted", "manual", "patient_upload", "ocr"],
       default: "doctor_structured",
+    },
+    doctorName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    clinicName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    rawOcrText: {
+      type: String,
+      default: "",
+    },
+    ocrConfidence: {
+      type: Number,
+      default: 0.0,
+      min: 0.0,
+      max: 1.0,
     },
     medications: {
       type: [medicationItemSchema],

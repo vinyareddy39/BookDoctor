@@ -3,8 +3,13 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Ensure prescription uploads directory exists under server/uploads/prescriptions
-const PRESCRIPTION_UPLOAD_DIR = path.resolve("server/uploads/prescriptions");
+const PRESCRIPTION_UPLOAD_DIR = path.resolve(__dirname, "../uploads/prescriptions");
 if (!fs.existsSync(PRESCRIPTION_UPLOAD_DIR)) {
   fs.mkdirSync(PRESCRIPTION_UPLOAD_DIR, { recursive: true });
 }

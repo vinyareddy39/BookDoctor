@@ -12,12 +12,15 @@ import {
   inviteCaregiver,
   getCaregiverLinks,
   revokeCaregiverLink,
+  uploadHandwrittenPrescription,
 } from "../controllers/prescriptionController.js";
 import { auth } from "../middleware/index.js";
+import { prescriptionUpload } from "../middleware/prescriptionUpload.js";
 
 const router = express.Router();
 
 // ── Prescriptions & Recovery Plans ──
+router.post("/prescriptions/upload", auth, prescriptionUpload.single("file"), uploadHandwrittenPrescription);
 router.post("/prescriptions", auth, saveStructuredPrescription);
 router.get("/prescriptions/by-appointment/:appointmentId", auth, getPrescriptionByAppointment);
 router.post("/prescriptions/:id/extract", auth, extractPrescription);

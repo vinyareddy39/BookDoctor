@@ -8,6 +8,7 @@ import User from "../models/User.js";
 import { recordAudit } from "../middleware/auditLogger.js";
 import { createNotification } from "../services/notificationService.js";
 import { parsePrescriptionText } from "../services/prescriptionParser.js";
+import { processPrescriptionFile } from "../services/ocrService.js";
 
 // Helper: resolve Doctor doc id for logged-in user
 const resolveDoctorId = async (user) => {
@@ -386,10 +387,16 @@ export const getPatientRecoveryPlan = async (req, res, next) => {
       .populate("appointmentId", "appointmentDate appointmentTime")
       .sort({ createdAt: -1 });
 
-    const latestActive = prescriptions.find((p) => p.status === "active") || prescriptions[0] || null;
+    let currentPlan = null;
+    if (req.query.planId) {
+      currentPlan = prescriptions.find((p) => String(p._id) === String(req.query.planId)) || null;
+    }
+    if (!currentPlan) {
+      currentPlan = prescriptions.find((p) => p.status === "active") || prescriptions[0] || null;
+    }
 
     return req.http.ok({
-      currentPlan: latestActive,
+      currentPlan,
       allPlans: prescriptions,
     });
   } catch (err) {
@@ -413,11 +420,13 @@ export const getTodayDoses = async (req, res, next) => {
     // Default to client provided date or today in YYYY-MM-DD
     const todayStr = req.query.date || new Date().toISOString().split("T")[0];
 
-    const doses = await DoseEvent.find({
-      patientId,
-      scheduledDate: todayStr,
-    })
-      .populate("prescriptionId", "doctorId status notes")
+    const filter = { patientId, scheduledDate: todayStr };
+    if (req.query.prescriptionId) {
+      filter.prescriptionId = req.query.prescriptionId;
+    }
+
+    const doses = await DoseEvent.find(filter)
+      .populate("prescriptionId", "doctorId status notes doctorName clinicName")
       .sort({ scheduledAt: 1 });
 
     return req.http.ok(doses);
@@ -708,3 +717,85 @@ export const revokeCaregiverLink = async (req, res, next) => {
     next(err);
   }
 };
+
+// 12. UPLOAD HANDWRITTEN PRESCRIPTION (PHOTO OR PDF) & RUN OCR EXTRACTION
+export const uploadHandwrittenPrescription = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return req.http.badRequest("Prescription file (photo or PDF) is required");
+    }
+
+    let targetPatientId = req.user._id;
+
+    // Caregiver or doctor uploading for a patient
+    if (req.body.patientId && req.body.patientId !== String(req.user._id)) {
+      const access = await checkCaregiverAccess(req.body.patientId, req.user._id);
+      if (!access.allowed && req.user.role !== "doctor" && req.user.role !== "admin") {
+        return req.http.forbidden("Access denied: Not authorized to upload prescription for this patient");
+      }
+      targetPatientId = req.body.patientId;
+    }
+
+    const {
+      doctorName = "",
+      clinicName = "",
+      notes = "",
+      validUntil,
+    } = req.body;
+
+    // Process file via OCR service
+    const ocrResult = await processPrescriptionFile(req.file.path, req.file.mimetype);
+
+    const isPdf = req.file.mimetype.toLowerCase().includes("pdf");
+    const attachmentUrl = `/uploads/prescriptions/${req.file.filename}`;
+
+    // Create DRAFT Prescription record
+    // CRITICAL SAFETY RULE: Status is strictly "draft", zero DoseEvents generated until explicit review & confirmation
+    const prescription = await Prescription.create({
+      patientId: targetPatientId,
+      status: "draft",
+      source: "patient_upload",
+      uploadedBy: req.user.role === "doctor" ? "doctor" : "patient",
+      doctorName: doctorName.trim(),
+      clinicName: clinicName.trim(),
+      notes: notes.trim(),
+      attachmentUrl,
+      attachmentType: isPdf ? "pdf" : "image",
+      attachmentName: req.file.originalname,
+      rawOcrText: ocrResult.rawOcrText,
+      ocrConfidence: ocrResult.ocrConfidence,
+      medications: ocrResult.draftMedications,
+      validUntil: validUntil ? new Date(validUntil) : undefined,
+    });
+
+    recordAudit({
+      userId: req.user._id,
+      role: req.user.role,
+      action: "upload_prescription",
+      resource: "prescription",
+      resourceId: prescription._id,
+      after: {
+        attachmentUrl,
+        attachmentType: prescription.attachmentType,
+        medicationCount: ocrResult.draftMedications.length,
+        ocrConfidence: ocrResult.ocrConfidence,
+      },
+      req,
+    });
+
+    return req.http.created(
+      {
+        prescription,
+        medications: ocrResult.draftMedications,
+        rawOcrText: ocrResult.rawOcrText,
+        ocrConfidence: ocrResult.ocrConfidence,
+        engine: ocrResult.engine,
+        attachmentUrl,
+      },
+      "Handwritten prescription uploaded and processed into draft medications. Please review each field before confirming."
+    );
+  } catch (err) {
+    next(err);
+  }
+};
+
