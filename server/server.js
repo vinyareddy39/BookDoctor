@@ -176,13 +176,20 @@ app.use(response);
 // DATABASE CONNECTION
 // ===============================
 const connectDB = async () => {
+  const uri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/bookdoctor";
   try {
     mongoose.set("returnDocument", "after");
-    const conn = await mongoose.connect(process.env.MONGO_URI);
+    const conn = await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
-    console.error("❌ DB Connection Error:", error.message);
-    process.exit(1);
+    console.warn(`⚠️ Primary MongoDB connection timed out (${error.message}). Trying local fallback...`);
+    try {
+      const conn = await mongoose.connect("mongodb://127.0.0.1:27017/bookdoctor", { serverSelectionTimeoutMS: 4000 });
+      console.log(`✅ Connected to fallback local MongoDB: ${conn.connection.host}`);
+    } catch (localErr) {
+      console.error("❌ DB Connection Error:", localErr.message);
+      process.exit(1);
+    }
   }
 };
 
