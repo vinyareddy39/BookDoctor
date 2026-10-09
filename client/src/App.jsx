@@ -61,6 +61,7 @@ const BillingManagement   = lazy(() => import("./pages/BillingManagement.jsx"));
 const PatientTimeline     = lazy(() => import("./pages/PatientTimeline.jsx"));
 const ReceptionDashboard  = lazy(() => import("./pages/ReceptionDashboard.jsx"));
 const RecoveryPlan        = lazy(() => import("./pages/RecoveryPlan.jsx"));
+const PublicTracking      = lazy(() => import("./pages/PublicTracking.jsx"));
 
 // Page loader fallback
 function PageLoader() {
@@ -151,6 +152,7 @@ function App() {
             <Route path="/forgot-password"   element={<ForgotPassword />} />
             <Route path="/reset-password"     element={<ResetPassword />} />
             <Route path="/verify-email"       element={<VerifyEmail />} />
+            <Route path="/track/:token"       element={<PublicTracking />} />
 
             {/* Patient protected */}
             <Route path="/book/:id"             element={<AuthRoute><BookAppointment /></AuthRoute>} />

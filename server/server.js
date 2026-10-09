@@ -37,6 +37,7 @@ import documentRoutes    from "./routes/documentRoutes.js";
 import searchRoutes      from "./routes/searchRoutes.js";
 import aiRoutes          from "./routes/aiRoutes.js";
 import prescriptionRoutes from "./routes/prescriptionRoutes.js";
+import sosRoutes         from "./routes/sosRoutes.js";
 import { triggerEmergencyCall } from "./controllers/emergencyController.js";
 import { handleOutboundCall, getConnectTwiml } from "./controllers/callController.js";
 
@@ -226,6 +227,7 @@ app.use("/api/documents",    documentRoutes);
 app.use("/api/search",       searchRoutes);
 app.use("/api/ai",           aiRoutes);
 app.use("/api",              prescriptionRoutes);
+app.use("/api/sos",          sosRoutes);
 app.post("/api/emergency-call", triggerEmergencyCall);
 
 // Twilio Voice Click-to-Call

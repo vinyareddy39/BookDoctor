@@ -1,4 +1,5 @@
 import Emergency from "../models/Emergency.js";
+import SosEvent from "../models/SosEvent.js";
 import Doctor from "../models/Doctor.js";
 import Ambulance from "../models/Ambulance.js";
 import Hospital from "../models/Hospital.js";
@@ -267,11 +268,49 @@ export const getIncomingEmergencies = async (req, res, next) => {
     const doctor = await Doctor.findOne({ userId: req.user._id });
     if (!doctor) return req.http.forbidden("User is not a doctor");
 
-    const emergencies = await Emergency.find({ assignedDoctorId: doctor._id, status: "active" })
-      .populate("patientId", "name phone medicalId")
-      .sort({ createdAt: -1 });
+    const [emergencies, sosEvents] = await Promise.all([
+      Emergency.find({ assignedDoctorId: doctor._id, status: "active" })
+        .populate("patientId", "name phone medicalId")
+        .sort({ createdAt: -1 }),
+      SosEvent.find({
+        shareWithDoctorConsent: true,
+        status: { $in: ["initiated", "triage_critical", "hospital_selected", "ride_confirmed", "en_route"] },
+        $or: [
+          { assignedDoctorId: doctor._id },
+          { assignedDoctorId: null },
+        ],
+      })
+        .populate("patientId", "name phone")
+        .sort({ createdAt: -1 })
+        .limit(20),
+    ]);
 
-    return req.http.ok(emergencies, "Incoming emergencies retrieved");
+    const formattedSosEvents = sosEvents.map((sos) => ({
+      _id: sos._id,
+      patientId: {
+        name: sos.patientId?.name || "Emergency Patient",
+        phone: sos.patientId?.phone || "Hidden for privacy",
+      },
+      emergencyType: sos.critical ? "Critical ER" : "Emergency ER",
+      hospital: sos.hospital?.name || "Local Emergency ER",
+      hospitalAddress: sos.hospital?.address || "",
+      rideStatus: sos.rideStatus,
+      status: sos.status,
+      critical: sos.critical,
+      etaMinutes: sos.driver?.etaMinutes || sos.hospital?.travelDurationMinutes || 5,
+      location: {
+        lat: sos.location?.lat ? parseFloat(sos.location.lat.toFixed(2)) : null,
+        lng: sos.location?.lng ? parseFloat(sos.location.lng.toFixed(2)) : null,
+        address: sos.location?.address || "GPS Location",
+      },
+      driver: sos.driver,
+      createdAt: sos.createdAt,
+      type: "SOS_UBER_EVENT",
+    }));
+
+
+
+    return req.http.ok([...emergencies, ...formattedSosEvents], "Incoming emergencies retrieved");
   } catch (err) {
     next(err);
   }

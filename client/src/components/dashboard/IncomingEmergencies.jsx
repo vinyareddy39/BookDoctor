@@ -116,43 +116,75 @@ export default function IncomingEmergencies({ doctorProfile, setDoctorProfile })
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {emergencies.map(em => {
+          {emergencies.map((em) => {
+            const isUberEvent = em.type === "SOS_UBER_EVENT";
             const loc = em.locationHistory?.[em.locationHistory.length - 1] || em.location;
+
             return (
               <div key={em._id} className="card p-5 border-l-4 border-l-red-500 bg-white shadow-sm hover:shadow-md transition-all">
-                <div className="flex justify-between items-start mb-4">
+                <div className="flex justify-between items-start mb-3">
                   <div>
                     <h4 className="font-black text-lg text-slate-900">{em.patientId?.name || "Unknown Patient"}</h4>
-                    <p className="text-sm text-red-600 font-bold uppercase tracking-wider">{em.emergencyType} SOS</p>
+                    <p className="text-xs text-red-600 font-bold uppercase tracking-wider">
+                      {isUberEvent ? `🚨 SOS Uber: En Route to ${em.hospital}` : `${em.emergencyType} SOS`}
+                    </p>
                   </div>
-                  <span className="bg-red-100 text-red-700 font-bold px-3 py-1 rounded-full text-xs animate-pulse">LIVE</span>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-2 text-sm bg-slate-50 p-3 rounded-lg mb-4">
-                  <div>
-                    <span className="block text-slate-400 text-xs font-bold uppercase">Blood Group</span>
-                    <span className="font-semibold text-slate-700">{em.patientId?.medicalId?.bloodGroup || "--"}</span>
-                  </div>
-                  <div>
-                    <span className="block text-slate-400 text-xs font-bold uppercase">Allergies</span>
-                    <span className="font-semibold text-slate-700">{em.patientId?.medicalId?.allergies || "None"}</span>
-                  </div>
-                  <div className="col-span-2">
-                    <span className="block text-slate-400 text-xs font-bold uppercase">Conditions</span>
-                    <span className="font-semibold text-slate-700">{em.patientId?.medicalId?.conditions || "None"}</span>
-                  </div>
+                  <span className={`font-bold px-2.5 py-0.5 rounded-full text-xs ${
+                    isUberEvent ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-700 animate-pulse"
+                  }`}>
+                    {isUberEvent ? `Uber: ${em.rideStatus || "Dispatched"}` : "LIVE"}
+                  </span>
                 </div>
 
-                <div className="flex justify-between items-center text-sm pt-2 border-t border-slate-100">
+                {isUberEvent ? (
+                  <div className="bg-slate-50 p-3 rounded-xl mb-4 text-xs space-y-1.5 border border-slate-100">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400 font-bold uppercase">Destination Hospital:</span>
+                      <span className="font-bold text-slate-800">{em.hospital}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400 font-bold uppercase">Estimated Arrival:</span>
+                      <span className="font-bold text-primary-700">~{em.etaMinutes} mins</span>
+                    </div>
+                    {em.driver?.name && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400 font-bold uppercase">Uber Vehicle:</span>
+                        <span className="font-semibold text-slate-700">{em.driver.vehicle} ({em.driver.plate})</span>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-slate-400 italic pt-1 border-t border-slate-200/60">
+                      * Location rounded to ~1 km for privacy consent.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 text-sm bg-slate-50 p-3 rounded-lg mb-4">
+                    <div>
+                      <span className="block text-slate-400 text-xs font-bold uppercase">Blood Group</span>
+                      <span className="font-semibold text-slate-700">{em.patientId?.medicalId?.bloodGroup || "--"}</span>
+                    </div>
+                    <div>
+                      <span className="block text-slate-400 text-xs font-bold uppercase">Allergies</span>
+                      <span className="font-semibold text-slate-700">{em.patientId?.medicalId?.allergies || "None"}</span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="block text-slate-400 text-xs font-bold uppercase">Conditions</span>
+                      <span className="font-semibold text-slate-700">{em.patientId?.medicalId?.conditions || "None"}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-100">
                   <span className="text-slate-500">Contact: <b>{em.patientId?.phone || "N/A"}</b></span>
-                  <a 
-                    href={`https://maps.google.com/maps?q=${loc.lat},${loc.lng}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary-600 font-bold hover:underline flex items-center gap-1"
-                  >
-                    ?? Open GPS Route
-                  </a>
+                  {loc?.lat && loc?.lng && (
+                    <a 
+                      href={`https://www.openstreetmap.org/?mlat=${loc.lat}&mlon=${loc.lng}#map=15/${loc.lat}/${loc.lng}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary-600 font-bold hover:underline flex items-center gap-1"
+                    >
+                      🗺️ OpenStreetMap Location
+                    </a>
+                  )}
                 </div>
               </div>
             );

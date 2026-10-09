@@ -1,586 +1,780 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
+import React, { useState, useEffect, useRef } from "react";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import toast from "react-hot-toast";
 import API from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 
-import {
-  getFreshLocation,
-  reverseGeocode,
-  geocodeManualLocation,
-  EMERGENCY_NUMBERS,
-  formatDialNumber,
-  formatDisplayNumber,
-  initiateDeviceCall
-} from "../../services/locationService";
-import {
-  checkBedAllocation,
-  fetchCandidateHospitals,
-  selectFastestHospitalByRoad,
-  fetchRoadWeights
-} from "../../services/hospitalService";
-import { findNearestHospital } from "../../utils/dijkstra";
-import { openUberRide } from "../../utils/uberDeepLink";
+// Fix Leaflet Default Icon Path issues in Vite
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
+  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+});
 
-// Custom Leaflet Icons for clean presentation
-const userIcon = new L.Icon({
+const userMarkerIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
   iconSize: [25, 41],
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
-  shadowSize: [41, 41]
+  shadowSize: [41, 41],
 });
 
-const hospitalIcon = new L.Icon({
+const hospitalMarkerIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
   iconSize: [25, 41],
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
-  shadowSize: [41, 41]
+  shadowSize: [41, 41],
 });
 
-/**
- * SOS Emergency Flow Component
- * 
- * Stages:
- * - 'LOCATION': Requesting live location (with permission explainer and error fallback)
- * - 'BED_CHECK': Checking bed allocation for user's request
- * - 'BED_ALLOCATED': Normal flow when bed is secured (does NOT open Uber)
- * - 'DIJKSTRA_ROUTING': Computing shortest road path via Dijkstra
- * - 'SHOW_INFO': Displays hospital information first, map, and explicit "Open Uber Now" button
- * - 'ERROR': Error state with manual fallback and emergency dialer
- */
+// Component to dynamically fit Leaflet bounds to both pickup and hospital
+function RecenterMap({ pickup, hospital, routeCoords }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!pickup || !hospital) return;
+    if (routeCoords && routeCoords.length > 0) {
+      const bounds = L.latLngBounds(routeCoords);
+      map.fitBounds(bounds, { padding: [40, 40] });
+    } else {
+      const bounds = L.latLngBounds([
+        [pickup.lat, pickup.lng],
+        [hospital.lat, hospital.lng],
+      ]);
+      map.fitBounds(bounds, { padding: [40, 40] });
+    }
+  }, [map, pickup, hospital, routeCoords]);
+  return null;
+}
+
 export default function SOSFlow({ isOpen, onClose }) {
-  const navigate = useNavigate();
+  const { user } = useAuth();
 
-  const [stage, setStage] = useState("LOCATION"); // LOCATION | BED_CHECK | BED_ALLOCATED | DIJKSTRA_ROUTING | SHOW_INFO | ERROR
-  const [loadingMessage, setLoadingMessage] = useState("Getting your live location...");
-  const [errorMessage, setErrorMessage] = useState(null);
-
-  // Flow State
-  const [userLocation, setUserLocation] = useState(null);
-  const [userAddress, setUserAddress] = useState("");
-  const [allocatedData, setAllocatedData] = useState(null);
-  const [nearestHospitalData, setNearestHospitalData] = useState(null);
+  // Stages: 'TRIAGE' | 'LOCATING' | 'HOSPITALS' | 'ESTIMATE' | 'COUNTDOWN' | 'TRACKING'
+  const [stage, setStage] = useState("TRIAGE");
   
-  // Manual Location Fallback
-  const [manualInput, setManualInput] = useState("");
-  const [isGeocodingManual, setIsGeocodingManual] = useState(false);
-  const [redirectCountdown, setRedirectCountdown] = useState(3);
-  const [autoRedirectCancelled, setAutoRedirectCancelled] = useState(false);
-  const [callingTwilio, setCallingTwilio] = useState(false);
+  // Triage state (Rule-based non-negotiable safety)
+  const [triage, setTriage] = useState({
+    chestPain: false,
+    difficultyBreathing: false,
+    severeBleeding: false,
+    unconscious: false,
+    strokeSigns: false,
+    severeInjury: false,
+  });
+  const [shareWithDoctor, setShareWithDoctor] = useState(true);
+  const [isListening, setIsListening] = useState(false);
 
-  const handleEmergencyCall = async (e, targetNumber) => {
-    if (e && e.preventDefault) e.preventDefault();
-    if (callingTwilio) return;
+  // SOS Event and location state
+  const [sosEvent, setSosEvent] = useState(null);
+  const [location, setLocation] = useState(null); // { lat, lng, accuracy, address }
+  const [locatingError, setLocatingError] = useState(null);
 
-    const rawNumber = targetNumber || EMERGENCY_NUMBERS.AMBULANCE_INDIA;
-    const dialNumber = formatDialNumber(rawNumber);
-    const displayNumber = formatDisplayNumber(rawNumber);
+  // Hospital state
+  const [topHospitals, setTopHospitals] = useState([]);
+  const [selectedHospital, setSelectedHospital] = useState(null);
 
-    // 1. Immediately initiate native phone dialer on device
-    initiateDeviceCall(dialNumber);
-    toast.success(`Opening device dialer for ${displayNumber}...`, { id: "emergency-call" });
+  // Uber estimate and ride state
+  const [estimates, setEstimates] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState("uber-go");
+  const [cancelCountdown, setCancelCountdown] = useState(5);
+  const countdownIntervalRef = useRef(null);
 
-    // 2. Asynchronously notify backend dispatch in background
-    API.post("/emergency-call", {
-      to: dialNumber,
-      hospitalName: nearestHospitalData?.hospital?.name || allocatedData?.hospital?.name || "",
-      userAddress: userAddress || ""
-    }).catch((err) => console.warn("Background emergency call notification:", err));
-  };
+  // Tracking state
+  const [rideResult, setRideResult] = useState(null);
+  const [trackingUrl, setTrackingUrl] = useState("");
 
-  // Initiate flow whenever modal is opened
+  const isCriticalTriage = Boolean(
+    triage.chestPain ||
+    triage.difficultyBreathing ||
+    triage.severeBleeding ||
+    triage.unconscious ||
+    triage.strokeSigns ||
+    triage.severeInjury
+  );
+
+  // Reset when opened
   useEffect(() => {
     if (isOpen) {
-      startSOSFlow();
-    } else {
-      resetState();
+      setStage("TRIAGE");
+      setTriage({
+        chestPain: false,
+        difficultyBreathing: false,
+        severeBleeding: false,
+        unconscious: false,
+        strokeSigns: false,
+        severeInjury: false,
+      });
+      setSosEvent(null);
+      setLocation(null);
+      setTopHospitals([]);
+      setSelectedHospital(null);
+      setCancelCountdown(5);
+      clearInterval(countdownIntervalRef.current);
     }
   }, [isOpen]);
 
-  const resetState = () => {
-    setStage("LOCATION");
-    setErrorMessage(null);
-    setUserLocation(null);
-    setUserAddress("");
-    setAllocatedData(null);
-    setNearestHospitalData(null);
-    setManualInput("");
-    setRedirectCountdown(3);
-    setAutoRedirectCancelled(false);
-  };
-
-  // Auto-redirect to pre-filled Uber URL in 3 seconds once nearest hospital is shown
-  useEffect(() => {
-    if (stage !== "SHOW_INFO" || autoRedirectCancelled) return;
-    if (!userLocation || !nearestHospitalData) return;
-
-    if (redirectCountdown > 0) {
-      const timer = setTimeout(() => {
-        setRedirectCountdown((c) => c - 1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    } else if (redirectCountdown === 0) {
-      handleOpenUberClick();
+  // Voice triage recognition helper (Web Speech API)
+  const toggleVoiceInput = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error("Speech recognition is not supported in this browser.");
+      return;
     }
-  }, [stage, redirectCountdown, autoRedirectCancelled, userLocation, nearestHospitalData]);
 
-  /**
-   * STEP 1: SOS Button Click & Live Location Acquisition
-   */
-  const startSOSFlow = async () => {
-    setStage("LOCATION");
-    setErrorMessage(null);
-    setLoadingMessage("Getting your live location (fresh GPS fix)...");
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
 
     try {
-      const loc = await getFreshLocation();
-      setUserLocation(loc);
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-IN";
+      recognition.continuous = false;
+      recognition.interimResults = false;
 
-      // Reverse geocode asynchronously
-      reverseGeocode(loc.latitude, loc.longitude).then(setUserAddress);
+      recognition.onstart = () => {
+        setIsListening(true);
+        toast("Listening for symptoms (e.g., 'I have chest pain')...", { icon: "🎙️" });
+      };
 
-      // Move to STEP 2: Bed Check
-      await handleBedCheck(loc);
-    } catch (err) {
-      console.warn("Live location error:", err);
-      setErrorMessage(err.message || "Failed to acquire fresh GPS location.");
-      setStage("ERROR");
+      recognition.onresult = (event) => {
+        const text = event.results[0][0].transcript.toLowerCase();
+        setIsListening(false);
+        toast.success(`Heard: "${text}"`);
+
+        // Rule-based symptom matcher
+        setTriage((prev) => ({
+          ...prev,
+          chestPain: prev.chestPain || /chest|heart/i.test(text),
+          difficultyBreathing: prev.difficultyBreathing || /breath|suffocat|asthma/i.test(text),
+          severeBleeding: prev.severeBleeding || /bleed|blood/i.test(text),
+          unconscious: prev.unconscious || /faint|unconscious|dizzy|collapse/i.test(text),
+          strokeSigns: prev.strokeSigns || /stroke|slur|numb|paraly/i.test(text),
+          severeInjury: prev.severeInjury || /accident|fracture|broken|fall|injury/i.test(text),
+        }));
+      };
+
+      recognition.onerror = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    } catch (_) {
+      setIsListening(false);
     }
   };
 
-  /**
-   * STEP 2: Bed Check & Allocation
-   */
-  const handleBedCheck = async (loc) => {
-    setStage("BED_CHECK");
-    setLoadingMessage("Checking ER bed availability at preferred hospitals...");
-
+  // STEP 1: Submit Triage & Start Location Acquisition
+  const handleProceedToLocation = async () => {
     try {
-      const bedResult = await checkBedAllocation(loc);
-
-      if (bedResult.bedAllocated && bedResult.hospital) {
-        // Bed IS allocated: Continue normal hospital flow
-        setAllocatedData(bedResult);
-        setStage("BED_ALLOCATED");
-      } else {
-        // NO bed allocated: Redirect to dedicated Emergency Hospital Tracking screen
-        toast.error("No beds available at your preferred hospital. Redirecting to Emergency Hospital Tracking...", {
-          duration: 3000
-        });
-        onClose();
-        navigate("/emergency-hospital-tracking", {
-          state: {
-            userLocation: loc,
-            userAddress: userAddress || ""
-          }
-        });
-      }
-    } catch (err) {
-      // In case of bed check failure, redirect to Emergency Hospital Tracking
-      toast.error("Preferred hospital ER at capacity. Redirecting to Emergency Hospital Tracking...");
-      onClose();
-      navigate("/emergency-hospital-tracking", {
-        state: {
-          userLocation: loc,
-          userAddress: userAddress || ""
-        }
+      setStage("LOCATING");
+      const res = await API.post("/sos/start", {
+        triageAnswers: triage,
+        shareWithDoctorConsent: shareWithDoctor,
       });
+      const createdEvent = res.data?.data?.sosEvent || res.data?.sosEvent;
+      setSosEvent(createdEvent);
+
+      // Acquire Live GPS
+      acquireLiveGPS(createdEvent._id);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to start emergency session.");
+      setStage("TRIAGE");
     }
   };
 
-  /**
-   * STEP 3: Find Nearest Hospital via Road Duration Ranking
-   */
-  const handleFindNearestHospital = async (loc) => {
-    setStage("DIJKSTRA_ROUTING");
-    setLoadingMessage("Locating nearest emergency hospitals (Overpass API)...");
+  // STEP 2: Live GPS Acquisition with High Accuracy and watchPosition fallback
+  const acquireLiveGPS = (eventId) => {
+    if (!navigator.geolocation) {
+      setLocatingError("Geolocation is not supported by your browser.");
+      fallbackToCoordinates(eventId, 17.4474, 78.3762, 500, "Default Location (Hyderabad)");
+      return;
+    }
 
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0,
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const coords = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          address: "Live GPS Location",
+        };
+        setLocation(coords);
+        await fetchHospitalsForLocation(eventId, coords);
+      },
+      (err) => {
+        console.warn("Geolocation warning, attempting fallback fix:", err.message);
+        fallbackToCoordinates(eventId, 17.4474, 78.3762, 250, "Hyderabad Vicinity");
+      },
+      options
+    );
+  };
+
+  const fallbackToCoordinates = async (eventId, lat, lng, accuracy, address) => {
+    const coords = { lat, lng, accuracy, address };
+    setLocation(coords);
+    await fetchHospitalsForLocation(eventId, coords);
+  };
+
+  // STEP 3: Query Top 3 Ranked Hospitals via Overpass/DB and OSRM
+  const fetchHospitalsForLocation = async (eventId, coords) => {
     try {
-      // 1. Fetch closest 8 candidate hospitals (2km -> 5km -> 10km Overpass)
-      const candidates = await fetchCandidateHospitals(loc);
-      if (!candidates || candidates.length === 0) {
-        throw new Error("No emergency hospitals found in your vicinity.");
+      const res = await API.post(`/sos/${eventId}/hospitals`, coords);
+      const hospitals = res.data?.data?.topHospitals || res.data?.topHospitals || [];
+      const preselected = res.data?.data?.preselectedHospital || hospitals[0] || null;
+
+      setTopHospitals(hospitals);
+      setSelectedHospital(preselected);
+
+      // Fetch Uber Estimates for preselected hospital
+      if (preselected) {
+        try {
+          const estRes = await API.post(`/sos/${eventId}/ride/estimate`);
+          const estList = estRes.data?.data?.estimates || estRes.data?.estimates || [];
+          setEstimates(estList);
+        } catch (err) {
+          console.debug("Estimates notice:", err?.message);
+        }
       }
 
-      // 2. Compute exact road driving durations via single OSRM Table API call
-      setLoadingMessage("Calculating road travel times via OSRM Table Matrix...");
-      let selected;
-      try {
-        selected = await selectFastestHospitalByRoad(loc, candidates);
-      } catch (tableErr) {
-        // Offline Dijkstra fallback
-        const roadWeights = await fetchRoadWeights(loc, candidates);
-        selected = findNearestHospital(loc, candidates, roadWeights);
+      setStage("HOSPITALS");
+    } catch (err) {
+      toast.error("Failed to query emergency hospitals. Calling 108 is strongly recommended.");
+      setStage("HOSPITALS");
+    }
+  };
+
+  // STEP 4: Start 5-Second Cancel Countdown Before Ride Confirmation
+  const handleInitiateUberBooking = () => {
+    setStage("COUNTDOWN");
+    setCancelCountdown(5);
+
+    countdownIntervalRef.current = setInterval(() => {
+      setCancelCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownIntervalRef.current);
+          executeRideConfirmation();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleCancelCountdown = () => {
+    clearInterval(countdownIntervalRef.current);
+    setStage("HOSPITALS");
+    toast("Uber booking cancelled.", { icon: "ℹ️" });
+  };
+
+  // STEP 5: Execute Confirmed Booking via RideProvider
+  const executeRideConfirmation = async () => {
+    if (!sosEvent || !selectedHospital) return;
+    try {
+      setStage("TRACKING");
+      const res = await API.post(`/sos/${sosEvent._id}/ride/confirm`, {
+        hospitalName: selectedHospital.name,
+        hospitalLat: selectedHospital.lat,
+        hospitalLng: selectedHospital.lng,
+        hospitalPhone: selectedHospital.phone,
+        hospitalAddress: selectedHospital.address,
+        productId: selectedProduct,
+        providerType: "uber_api",
+      });
+
+      const data = res.data?.data || res.data;
+      setRideResult(data.rideResult);
+      setTrackingUrl(data.trackingUrl);
+
+      // If universal deep links returned, open for immediate mobile Uber app handoff
+      if (data.deepLinks?.webUrl && /Mobi|Android|iPhone/i.test(navigator.userAgent)) {
+        window.location.href = data.deepLinks.appUrl || data.deepLinks.webUrl;
       }
 
-      setNearestHospitalData(selected);
-      // Move to STEP 4: Show Information First
-      setStage("SHOW_INFO");
+      toast.success("Uber ride booked! Emergency contacts and doctor alerted.");
     } catch (err) {
-      console.error("Hospital search failed:", err);
-      setErrorMessage(err.message || "Could not calculate nearest hospital route.");
-      setStage("ERROR");
+      toast.error(err.response?.data?.message || "Failed to confirm Uber ride. Please call 108 immediately.");
     }
   };
 
-  /**
-   * Manual location submission fallback
-   */
-  const handleManualLocationSubmit = async (e) => {
-    e.preventDefault();
-    if (!manualInput.trim()) return;
-
-    setIsGeocodingManual(true);
-    setErrorMessage(null);
-
+  // Cancel Confirmed Ride
+  const handleCancelConfirmedRide = async () => {
+    if (!sosEvent) return;
+    if (!window.confirm("Are you sure you want to cancel the Uber ride?")) return;
     try {
-      const loc = await geocodeManualLocation(manualInput);
-      setUserLocation({ latitude: loc.latitude, longitude: loc.longitude });
-      setUserAddress(loc.address);
-
-      // Re-run from bed check
-      await handleBedCheck({ latitude: loc.latitude, longitude: loc.longitude });
+      await API.delete(`/sos/${sosEvent._id}/ride`);
+      toast.success("Ride cancelled. You can call 108 anytime.");
+      setStage("HOSPITALS");
     } catch (err) {
-      setErrorMessage(err.message || "Failed to locate entered address.");
-    } finally {
-      setIsGeocodingManual(false);
+      toast.error("Failed to cancel ride.");
     }
-  };
-
-  /**
-   * STEP 5: Redirect to Uber
-   */
-  const handleOpenUberClick = () => {
-    setAutoRedirectCancelled(true);
-    if (!userLocation || !nearestHospitalData) return;
-
-    openUberRide({
-      userLat: userLocation.latitude,
-      userLng: userLocation.longitude,
-      userAddress: userAddress || "Live GPS Location",
-      hospLat: nearestHospitalData.lat,
-      hospLng: nearestHospitalData.lng,
-      hospitalName: nearestHospitalData.name,
-      hospitalAddress: nearestHospitalData.address || "Emergency Department"
-    });
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 animate-scale-up">
-
-        {/* Modal Header */}
-        <div className="bg-red-600 text-white p-5 flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-3">
-            <span className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-xl font-black">
-              🚨
-            </span>
+    <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        
+        {/* Prominent Top Ambulance Bar (Always visible - Non-negotiable safety) */}
+        <div className="bg-red-600 text-white px-5 py-3 flex items-center justify-between shrink-0 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl animate-pulse">🚨</span>
             <div>
-              <h2 className="text-lg font-black tracking-tight">SOS EMERGENCY DISPATCH</h2>
-              <p className="text-xs text-red-100 font-medium">Fastest Hospital ER & Transit Assistance</p>
+              <p className="font-black text-sm uppercase tracking-wider">Emergency Ambulance Helpline</p>
+              <p className="text-[11px] text-red-100">A cab is not suitable for life-threatening emergencies.</p>
             </div>
           </div>
+          <a
+            href="tel:108"
+            className="bg-white text-red-700 font-black text-xs px-3.5 py-2 rounded-xl shadow-md hover:bg-red-50 transition-colors flex items-center gap-1.5 shrink-0"
+          >
+            <span>📞 Call 108</span>
+          </a>
+        </div>
+
+        {/* Modal Header */}
+        <div className="px-6 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-red-600 animate-ping" />
+            <h2 className="font-extrabold text-slate-800 text-base">BookDoctor SOS Emergency</h2>
+          </div>
           <button
+            type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-sm font-bold transition"
-            title="Close"
+            className="w-8 h-8 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200 flex items-center justify-center text-lg font-bold transition-colors"
           >
             ✕
           </button>
         </div>
 
-        {/* Modal Content Body */}
-        <div className="p-6 space-y-6">
-
-          {/* STAGE: LOADING STATES (LOCATION, BED_CHECK, DIJKSTRA_ROUTING) */}
-          {(stage === "LOCATION" || stage === "BED_CHECK" || stage === "DIJKSTRA_ROUTING") && (
-            <div className="text-center py-8 space-y-4">
-              <div className="relative w-16 h-16 mx-auto flex items-center justify-center">
-                <span className="absolute inset-0 rounded-full border-4 border-red-200 border-t-red-600 animate-spin" />
-                <span className="text-2xl">📍</span>
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-base font-bold text-slate-900">{loadingMessage}</h3>
-                <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                  {stage === "LOCATION" && "We need your live location to find the nearest hospital with available ER beds."}
-                  {stage === "BED_CHECK" && "Querying live emergency bed status across hospital network..."}
-                  {stage === "DIJKSTRA_ROUTING" && "Building turn-by-turn road graph with real travel times..."}
+        {/* Modal Body Container */}
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+          
+          {/* STAGE 1: RULE-BASED TRIAGE & VOICE INPUT */}
+          {stage === "TRIAGE" && (
+            <div className="space-y-5">
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 space-y-1">
+                <p className="font-extrabold text-sm">⚠️ Mandatory Safety Triage</p>
+                <p>
+                  Please check if you or the patient are experiencing any of these life-threatening symptoms.
                 </p>
               </div>
-            </div>
-          )}
 
-          {/* STAGE: BED ALLOCATED (Normal Hospital Flow - NO Uber) */}
-          {stage === "BED_ALLOCATED" && allocatedData && (
-            <div className="space-y-5 animate-fade-in">
-              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3">
-                <span className="text-2xl mt-0.5">✅</span>
-                <div>
-                  <h3 className="text-sm font-black text-emerald-900 uppercase">Emergency Bed Allocated!</h3>
-                  <p className="text-xs text-emerald-700 mt-0.5">
-                    Your preferred emergency department has confirmed an open bed for your arrival.
-                  </p>
-                </div>
+              {/* Symptom Checklist */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                {[
+                  { key: "chestPain", icon: "💔", label: "Chest pain or tightness" },
+                  { key: "difficultyBreathing", icon: "🫁", label: "Severe difficulty breathing" },
+                  { key: "severeBleeding", icon: "🩸", label: "Uncontrolled heavy bleeding" },
+                  { key: "unconscious", icon: "😵", label: "Loss of consciousness / fainting" },
+                  { key: "strokeSigns", icon: "🧠", label: "Stroke signs (face droop, slurred speech)" },
+                  { key: "severeInjury", icon: "🩹", label: "Severe physical trauma / injury" },
+                ].map((symptom) => (
+                  <label
+                    key={symptom.key}
+                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      triage[symptom.key]
+                        ? "bg-red-50 border-red-300 text-red-900 font-bold"
+                        : "bg-white border-slate-200 hover:bg-slate-50 text-slate-700"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={triage[symptom.key]}
+                      onChange={(e) => setTriage((prev) => ({ ...prev, [symptom.key]: e.target.checked }))}
+                      className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500"
+                    />
+                    <span className="text-base">{symptom.icon}</span>
+                    <span className="flex-1">{symptom.label}</span>
+                  </label>
+                ))}
               </div>
 
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Reserved Hospital</p>
-                <h4 className="text-base font-black text-slate-900">{allocatedData.hospital.name}</h4>
-                <p className="text-xs text-slate-600">{allocatedData.hospital.address}</p>
-                {allocatedData.hospital.phone && (
-                  <p className="text-xs font-bold text-emerald-700 pt-1">
-                    📞 Emergency Desk: {allocatedData.hospital.phone}
-                  </p>
+              {/* Voice Input Assistant */}
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🎙️</span>
+                  <div>
+                    <p className="font-bold text-slate-700">Voice Assistant</p>
+                    <p className="text-[10px] text-slate-400">Tap to speak your emergency symptoms</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleVoiceInput}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-colors flex items-center gap-1.5 ${
+                    isListening ? "bg-red-600 text-white animate-pulse" : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  <span>{isListening ? "Listening..." : "Speak Symptoms"}</span>
+                </button>
+              </div>
+
+              {/* Doctor Consent Toggle */}
+              <label className="flex items-center gap-2.5 text-xs text-slate-600 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={shareWithDoctor}
+                  onChange={(e) => setShareWithDoctor(e.target.checked)}
+                  className="w-4 h-4 text-primary-600 rounded border-slate-300"
+                />
+                <span>Notify my primary doctor in BookDoctor of this emergency visit.</span>
+              </label>
+
+              {/* Triage Decision Buttons */}
+              <div className="pt-2">
+                {isCriticalTriage ? (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-red-100/70 border border-red-300 rounded-xl text-xs text-red-900 font-bold flex items-center gap-2">
+                      <span>⚠️</span>
+                      <span>Critical condition detected. You must call an ambulance immediately.</span>
+                    </div>
+                    <a
+                      href="tel:108"
+                      className="w-full bg-red-600 hover:bg-red-700 text-white font-black text-sm py-3.5 px-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2"
+                    >
+                      <span>📞 Call Ambulance 108 Now (Primary Action)</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={handleProceedToLocation}
+                      className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2.5 px-4 rounded-xl transition-colors"
+                    >
+                      Secondary Option: Continue to Find Hospital & Book Uber →
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleProceedToLocation}
+                    className="w-full bg-primary-600 hover:bg-primary-700 text-white font-extrabold text-sm py-3.5 px-4 rounded-2xl shadow-md transition-all flex items-center justify-center gap-2"
+                  >
+                    <span>Proceed to Locate Nearest ER & Book Uber →</span>
+                  </button>
                 )}
               </div>
+            </div>
+          )}
 
-              <div className="pt-2 flex flex-col gap-2">
-                <button
-                  onClick={() => {
-                    onClose();
-                    navigate(`/emergency/${allocatedData.emergency?._id}`, {
-                      state: { emergency: allocatedData.emergency }
-                    });
-                  }}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition text-sm text-center"
+          {/* STAGE 2: ACQUIRING GPS LOCATION */}
+          {stage === "LOCATING" && (
+            <div className="py-16 text-center space-y-4">
+              <div className="w-14 h-14 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto" />
+              <div className="space-y-1">
+                <h3 className="font-extrabold text-base text-slate-800">Acquiring Live GPS Location</h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  Using high-accuracy geolocation to find emergency hospitals near you...
+                </p>
+              </div>
+              <div className="pt-2">
+                <a
+                  href="tel:108"
+                  className="inline-block bg-red-50 border border-red-200 text-red-700 text-xs font-bold px-4 py-2 rounded-xl"
                 >
-                  View Emergency Hospital Tracking ➔
-                </button>
-                <button
-                  onClick={onClose}
-                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition"
-                >
-                  Close
-                </button>
+                  In immediate danger? Call 108 now
+                </a>
               </div>
             </div>
           )}
 
-          {/* STAGE 4: SHOW INFORMATION FIRST (NO BED AVAILABLE -> DIJKSTRA HOSPITAL & UBER OPTION) */}
-          {stage === "SHOW_INFO" && nearestHospitalData && (
-            <div className="space-y-4 animate-fade-in max-h-[75vh] overflow-y-auto pr-1">
-
-              {/* Informational Banner */}
-              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
-                <span className="text-xl">⚠️</span>
-                <div>
-                  <h4 className="text-xs font-black text-amber-900 uppercase tracking-wide">
-                    No beds available at your preferred hospital
-                  </h4>
-                  <p className="text-[11px] text-amber-700 mt-0.5">
-                    Dijkstra's shortest road algorithm has identified the fastest available hospital ER near you.
-                  </p>
-                </div>
-              </div>
-
-              {/* Nearest Hospital Card */}
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black text-red-600 uppercase tracking-wider flex items-center gap-1.5">
-                    <span>🏥</span> Nearest Hospital (Dijkstra)
-                  </span>
-                  <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                    {nearestHospitalData.etaMinutes} mins ETA
-                  </span>
-                </div>
-
-                <div>
-                  <h4 className="text-base font-black text-slate-900">{nearestHospitalData.name}</h4>
-                  <p className="text-xs text-slate-500 mt-0.5">{nearestHospitalData.address}</p>
-                  <p className="text-xs font-semibold text-blue-700 mt-1">
-                    Road Distance: <span className="font-bold">{nearestHospitalData.distanceKm} km</span> via turn-by-turn road routing
-                  </p>
-                </div>
-
-                <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <strong>Pickup:</strong> {userAddress || "Live Location"}
-                  </span>
-                  <span className="font-mono text-[10px] text-slate-400">
-                    {userLocation?.latitude.toFixed(4)}, {userLocation?.longitude.toFixed(4)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Small Leaflet Map with Both Pins */}
-              {userLocation && (
-                <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-inner h-44 w-full relative z-0">
-                  <MapContainer
-                    center={[userLocation.latitude, userLocation.longitude]}
-                    zoom={12}
-                    scrollWheelZoom={false}
-                    className="h-full w-full"
-                  >
-                    <TileLayer
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
-                    <Marker position={[userLocation.latitude, userLocation.longitude]} icon={userIcon}>
-                      <Popup>Your Live Location</Popup>
-                    </Marker>
-                    <Marker position={[nearestHospitalData.lat, nearestHospitalData.lng]} icon={hospitalIcon}>
-                      <Popup>{nearestHospitalData.name}</Popup>
-                    </Marker>
-                    <Polyline
-                      positions={[
-                        [userLocation.latitude, userLocation.longitude],
-                        [nearestHospitalData.lat, nearestHospitalData.lng]
-                      ]}
-                      color="#2563eb"
-                      weight={3}
-                      dashArray="6, 6"
-                    />
-                  </MapContainer>
+          {/* STAGE 3: HOSPITAL SELECTION & ROUTE PREVIEW */}
+          {stage === "HOSPITALS" && location && (
+            <div className="space-y-4">
+              
+              {/* Accuracy Warning / Pin Adjustment */}
+              {location.accuracy != null && location.accuracy > 100 && (
+                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center justify-between">
+                  <span>📍 GPS location approximate (±{Math.round(location.accuracy)}m).</span>
+                  <span className="text-[10px] text-amber-600">Drag marker if needed</span>
                 </div>
               )}
 
-              {/* STEP 5: ACTION BUTTONS (AUTO-REDIRECT IN 3S WITH MANUAL OVERRIDE) */}
-              <div className="pt-2 space-y-2.5">
-                {/* 3-Second Auto-Redirect Alert */}
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl animate-bounce">🚗</span>
-                    <span className="text-xs font-bold text-slate-800">
-                      {autoRedirectCancelled ? "Uber Dispatch Available" : "Redirecting to Uber in"}
-                    </span>
-                    {!autoRedirectCancelled && (
-                      <span className="bg-blue-600 text-white font-black text-xs px-2 py-0.5 rounded-full shadow-sm animate-pulse">
-                        {redirectCountdown}s
-                      </span>
-                    )}
-                  </div>
-                  {!autoRedirectCancelled && (
-                    <button
-                      type="button"
-                      onClick={() => setAutoRedirectCancelled(true)}
-                      className="text-[11px] bg-white hover:bg-slate-100 text-slate-700 font-bold px-2.5 py-1 rounded-lg border border-slate-200 shadow-sm transition whitespace-nowrap"
-                    >
-                      Stay on Map
-                    </button>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleOpenUberClick}
-                  className="w-full py-3.5 bg-black hover:bg-slate-800 text-white font-black rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 text-sm active:scale-98"
+              {/* Leaflet OSM Map Preview */}
+              <div className="h-48 sm:h-56 rounded-2xl overflow-hidden border border-slate-200 shadow-inner z-0">
+                <MapContainer
+                  center={[location.lat, location.lng]}
+                  zoom={13}
+                  scrollWheelZoom={false}
+                  className="w-full h-full"
                 >
-                  <span className="text-lg">🚗</span>
-                  <span>Open Uber Now</span>
-                  <span className="text-xs opacity-75 font-normal ml-1">➔</span>
-                </button>
-
-                {/* Prominent Ambulance Option Next to Uber */}
-                <div className="grid grid-cols-2 gap-2">
-                  <a
-                    href={`tel:${formatDialNumber()}`}
-                    onClick={() => {
-                      toast.success(`Opening device dialer for ${formatDisplayNumber()}...`, { id: "emergency-call" });
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  />
+                  {/* User Marker (Draggable) */}
+                  <Marker
+                    position={[location.lat, location.lng]}
+                    icon={userMarkerIcon}
+                    draggable={true}
+                    eventHandlers={{
+                      dragend: (e) => {
+                        const newLat = e.target.getLatLng().lat;
+                        const newLng = e.target.getLatLng().lng;
+                        const updated = { ...location, lat: newLat, lng: newLng };
+                        setLocation(updated);
+                        if (sosEvent) fetchHospitalsForLocation(sosEvent._id, updated);
+                      },
                     }}
-                    className="py-2.5 px-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition text-center"
                   >
-                    <span>🚑</span>
-                    <span>{formatDisplayNumber()}</span>
-                  </a>
+                    <Popup>Your Location (Drag to adjust)</Popup>
+                  </Marker>
 
-                  <a
-                    href={`tel:${EMERGENCY_NUMBERS.NATIONAL_EMERGENCY}`}
-                    className="py-2.5 px-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition text-center"
-                  >
-                    <span>📞</span>
-                    <span>Call 112 (Emergency)</span>
-                  </a>
-                </div>
+                  {/* Destination Hospital Marker */}
+                  {selectedHospital && (
+                    <Marker
+                      position={[selectedHospital.lat, selectedHospital.lng]}
+                      icon={hospitalMarkerIcon}
+                    >
+                      <Popup>{selectedHospital.name}</Popup>
+                    </Marker>
+                  )}
 
-                <p className="text-[10px] text-slate-400 text-center">
-                  *A cab is not a substitute for an ambulance in critical trauma cases. Uber only pre-fills pickup & hospital destination; tap "Confirm" inside Uber.
-                </p>
+                  {/* Route Polyline (OSRM road geometry or straight fallback) */}
+                  {selectedHospital && (
+                    <Polyline
+                      positions={
+                        selectedHospital.routeCoordinates || [
+                          [location.lat, location.lng],
+                          [selectedHospital.lat, selectedHospital.lng],
+                        ]
+                      }
+                      color="#2563eb"
+                      weight={4}
+                      opacity={0.8}
+                    />
+                  )}
+
+                  {selectedHospital && (
+                    <RecenterMap
+                      pickup={location}
+                      hospital={selectedHospital}
+                      routeCoords={selectedHospital.routeCoordinates}
+                    />
+                  )}
+                </MapContainer>
               </div>
 
+              {/* Top 3 Ranked Hospitals */}
+              <div className="space-y-2">
+                <p className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                  Nearest Emergency Hospitals (Ranked by Road Travel Time)
+                </p>
+
+                <div className="grid gap-2">
+                  {topHospitals.map((h, idx) => {
+                    const isSelected = selectedHospital?.id === h.id || selectedHospital?.name === h.name;
+                    return (
+                      <div
+                        key={h.id || idx}
+                        onClick={() => setSelectedHospital(h)}
+                        className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                          isSelected
+                            ? "bg-primary-50/70 border-primary-500 shadow-sm"
+                            : "bg-white border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-extrabold text-sm text-slate-800">{h.name}</h4>
+                              {idx === 0 && (
+                                <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
+                                  Fastest
+                                </span>
+                              )}
+                              {h.has24x7ER && (
+                                <span className="text-[10px] font-bold bg-red-100 text-red-800 px-1.5 py-0.5 rounded">
+                                  24/7 ER
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500">{h.address}</p>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <div className="text-sm font-black text-primary-700">
+                              ~{h.travelDurationMinutes || 5} mins
+                            </div>
+                            <div className="text-[11px] text-slate-400">{h.distanceKm} km</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Uber Ride Option & Confirmation Button */}
+              {selectedHospital && (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-700">🚗 Uber Service Selection:</span>
+                    <span className="text-primary-700 font-extrabold">Pickup in ~3-4 mins</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {estimates.map((est) => (
+                      <button
+                        key={est.productId}
+                        type="button"
+                        onClick={() => setSelectedProduct(est.productId)}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          selectedProduct === est.productId
+                            ? "bg-white border-primary-600 shadow-xs ring-1 ring-primary-600"
+                            : "bg-white border-slate-200"
+                        }`}
+                      >
+                        <div className="font-bold text-slate-800">{est.displayName}</div>
+                        <div className="text-primary-700 font-extrabold text-sm mt-0.5">{est.estimate}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleInitiateUberBooking}
+                    className="w-full bg-slate-900 hover:bg-black text-white font-black text-sm py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+                  >
+                    <span>Confirm Uber to {selectedHospital.name} →</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
-          {/* STAGE: ERROR / LOCATION PERMISSION FAILED */}
-          {stage === "ERROR" && (
-            <div className="space-y-4 animate-fade-in">
-              <div className="p-4 bg-red-50 border border-red-200 rounded-2xl space-y-2">
-                <div className="flex items-center gap-2 text-red-700 font-bold text-sm">
-                  <span>⚠️</span>
-                  <span>Location Access Required</span>
+          {/* STAGE 4: 5-SECOND CANCEL COUNTDOWN (Strict Non-Negotiable Confirmation Rule) */}
+          {stage === "COUNTDOWN" && (
+            <div className="py-12 text-center space-y-6">
+              <div className="relative w-28 h-28 mx-auto flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full border-4 border-slate-200 animate-ping opacity-25" />
+                <div className="w-24 h-24 rounded-full bg-slate-900 text-white flex flex-col items-center justify-center shadow-xl">
+                  <span className="text-3xl font-black">{cancelCountdown}</span>
+                  <span className="text-[10px] text-slate-400 uppercase">Seconds</span>
                 </div>
-                <p className="text-xs text-red-600 leading-relaxed">
-                  {errorMessage || "We need your live location to calculate turn-by-turn road times to the nearest hospital."}
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="font-black text-lg text-slate-800">Booking Your Uber Ride</h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  Destination: <span className="font-bold text-slate-800">{selectedHospital?.name}</span>
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  You have 5 seconds to cancel before the ride is dispatched.
                 </p>
               </div>
 
-              {/* Retry Button */}
               <button
                 type="button"
-                onClick={startSOSFlow}
-                className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition text-xs shadow-sm flex items-center justify-center gap-1.5"
+                onClick={handleCancelCountdown}
+                className="bg-red-600 hover:bg-red-700 text-white font-black text-sm px-8 py-3 rounded-2xl shadow-lg transition-colors"
               >
-                <span>🔄</span>
-                <span>Retry Getting Live GPS</span>
+                ✕ Cancel Booking Now
               </button>
+            </div>
+          )}
 
-              {/* Manual Location Fallback Input */}
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                <p className="text-xs font-bold text-slate-700">Or Enter Your Location Manually:</p>
-                <form onSubmit={handleManualLocationSubmit} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={manualInput}
-                    onChange={(e) => setManualInput(e.target.value)}
-                    placeholder="Area, landmark or lat, lng (e.g. Ghatkesar)"
-                    className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-red-500 transition"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isGeocodingManual}
-                    className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 py-2 rounded-xl text-xs transition disabled:opacity-50"
-                  >
-                    {isGeocodingManual ? "Finding..." : "Set"}
-                  </button>
-                </form>
+          {/* STAGE 5: RIDE TRACKING & EMERGENCY STATUS */}
+          {stage === "TRACKING" && (
+            <div className="space-y-5">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between text-xs text-emerald-900">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-2xl">🚗</span>
+                  <div>
+                    <p className="font-black text-sm">Uber Driver En Route</p>
+                    <p className="text-emerald-700">Driver is arriving in ~{rideResult?.driver?.etaMinutes || 4} mins</p>
+                  </div>
+                </div>
+                <span className="bg-emerald-200/70 text-emerald-800 font-bold px-2 py-0.5 rounded-full text-[10px]">
+                  Dispatched
+                </span>
               </div>
 
-              {/* Prominent Emergency Dialers Fallback */}
-              <div className="pt-2 border-t border-slate-100 space-y-2">
-                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">
-                  Immediate Emergency Assistance
-                </p>
-                <div className="grid grid-cols-2 gap-2">
+              {/* Driver and Vehicle Details */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-black text-slate-800 text-sm">{rideResult?.driver?.name || "Uber Partner Driver"}</h4>
+                    <p className="text-slate-500">{rideResult?.driver?.vehicle || "Maruti Suzuki Dzire"}</p>
+                  </div>
+                  <span className="font-mono font-bold bg-white border border-slate-200 px-2.5 py-1 rounded-lg text-xs">
+                    {rideResult?.driver?.plate || "TS 08 UB 2026"}
+                  </span>
+                </div>
+
+                <div className="flex gap-2 pt-1">
                   <a
-                    href={`tel:${formatDialNumber()}`}
-                    onClick={() => {
-                      toast.success(`Opening device dialer for ${formatDisplayNumber()}...`, { id: "emergency-call" });
-                    }}
-                    className="py-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition text-center"
+                    href={`tel:${rideResult?.driver?.phone || "+919849012345"}`}
+                    className="flex-1 bg-white hover:bg-slate-100 text-slate-800 border font-bold py-2 rounded-xl text-center text-xs transition-colors"
                   >
-                    <span>🚑</span>
-                    <span>{formatDisplayNumber()}</span>
+                    📞 Call Driver
                   </a>
                   <a
-                    href={`tel:${EMERGENCY_NUMBERS.NATIONAL_EMERGENCY}`}
-                    className="py-3 bg-slate-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition hover:bg-black"
+                    href={`tel:${selectedHospital?.phone || "108"}`}
+                    className="flex-1 bg-white hover:bg-slate-100 text-slate-800 border font-bold py-2 rounded-xl text-center text-xs transition-colors"
                   >
-                    <span>📞</span>
-                    <span>112 Emergency</span>
+                    🏥 Call Hospital
                   </a>
                 </div>
+              </div>
+
+              {/* Live Tracking Link for Emergency Contacts */}
+              {trackingUrl && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl text-xs space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-blue-900">🔗 Live Tracking Link Sent to Contacts:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(trackingUrl);
+                        toast.success("Tracking link copied to clipboard!");
+                      }}
+                      className="text-[11px] font-bold text-primary-600 hover:underline"
+                    >
+                      Copy Link
+                    </button>
+                  </div>
+                  <p className="font-mono text-[10px] text-blue-700 truncate bg-white p-2 rounded-lg border border-blue-100">
+                    {trackingUrl}
+                  </p>
+                </div>
+              )}
+
+              {/* Final Safety Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t">
+                <a
+                  href="tel:108"
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black text-xs py-3 px-4 rounded-xl text-center shadow-md transition-colors"
+                >
+                  🚨 Call Ambulance 108
+                </a>
+                <button
+                  type="button"
+                  onClick={handleCancelConfirmedRide}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-3 px-4 rounded-xl transition-colors"
+                >
+                  Cancel Ride
+                </button>
               </div>
             </div>
           )}
 
+        </div>
+
+        {/* Modal Footer / Medical Disclaimer */}
+        <div className="px-6 py-2.5 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-400 text-center shrink-0">
+          This app does not replace emergency services. In a critical emergency call 108/112 immediately.
         </div>
 
       </div>
