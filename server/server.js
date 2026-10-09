@@ -36,6 +36,7 @@ import notificationRoutes from "./routes/notificationRoutes.js";
 import documentRoutes    from "./routes/documentRoutes.js";
 import searchRoutes      from "./routes/searchRoutes.js";
 import aiRoutes          from "./routes/aiRoutes.js";
+import prescriptionRoutes from "./routes/prescriptionRoutes.js";
 import { triggerEmergencyCall } from "./controllers/emergencyController.js";
 import { handleOutboundCall, getConnectTwiml } from "./controllers/callController.js";
 
@@ -50,6 +51,7 @@ import { initSocket } from "./socket.js";
 import http from "http";
 import cookieParser from "cookie-parser";
 import { startReminderCron } from "./service/cronService.js";
+import { startRecoveryCron } from "./service/recoveryCronService.js";
 import { validateRazorpayConfig } from "./services/paymentService.js";
 
 dotenv.config();
@@ -186,6 +188,7 @@ const connectDB = async () => {
 if (process.env.NODE_ENV !== "test") {
   connectDB();
   startReminderCron();
+  startRecoveryCron();
 }
 
 // ===============================
@@ -222,6 +225,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/documents",    documentRoutes);
 app.use("/api/search",       searchRoutes);
 app.use("/api/ai",           aiRoutes);
+app.use("/api",              prescriptionRoutes);
 app.post("/api/emergency-call", triggerEmergencyCall);
 
 // Twilio Voice Click-to-Call

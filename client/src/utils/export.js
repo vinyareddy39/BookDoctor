@@ -97,13 +97,17 @@ export const exportPrescriptionToPDF = (record, doctorName) => {
 
   // ── Prescription Table or Text ──
   let finalY = 62;
-  if (Array.isArray(record.medicines) && record.medicines.length > 0) {
-    const tableData = record.medicines.map((m, idx) => [
+  const meds = Array.isArray(record.medications) && record.medications.length > 0 
+    ? record.medications 
+    : (Array.isArray(record.medicines) && record.medicines.length > 0 ? record.medicines : null);
+
+  if (meds) {
+    const tableData = meds.map((m, idx) => [
       idx + 1,
-      m.name,
-      m.dosage || "-",
+      m.drug || m.name || "Medicine",
+      m.strength ? `${m.strength} (${m.dose || m.dosage || "1 dose"})` : (m.dose || m.dosage || "-"),
       m.frequency || "-",
-      m.duration || "-",
+      m.durationDays ? `${m.durationDays} days` : (m.duration || "-"),
       `${m.timing?.replace("_", " ") || ""} ${m.instructions ? `• ${m.instructions}` : ""}`,
     ]);
 

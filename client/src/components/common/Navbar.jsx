@@ -92,6 +92,14 @@ export default function Navbar() {
                   Rx & Care
                 </Link>
                 <Link
+                  to="/recovery-plan"
+                  className={`px-2.5 xl:px-3 py-1.5 rounded-lg text-xs xl:text-sm font-semibold transition-all duration-150 whitespace-nowrap ${
+                    isActive("/recovery-plan") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Recovery Plan
+                </Link>
+                <Link
                   to="/billing"
                   className={`px-2.5 xl:px-3 py-1.5 rounded-lg text-xs xl:text-sm font-semibold transition-all duration-150 whitespace-nowrap ${
                     isActive("/billing") ? "text-primary-600 bg-primary-50" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
@@ -412,9 +420,10 @@ export default function Navbar() {
           ))}
           {isPatient && (
             <>
-              <Link to="/appointments" onClick={() => setMenuOpen(false)} className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">My Appointments</Link>
-              <Link to="/my-records"   onClick={() => setMenuOpen(false)} className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Rx & Care</Link>
-              <Link to="/billing"      onClick={() => setMenuOpen(false)} className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Billing</Link>
+              <Link to="/appointments"  onClick={() => setMenuOpen(false)} className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">My Appointments</Link>
+              <Link to="/my-records"    onClick={() => setMenuOpen(false)} className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Rx & Care</Link>
+              <Link to="/recovery-plan" onClick={() => setMenuOpen(false)} className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Recovery Plan</Link>
+              <Link to="/billing"       onClick={() => setMenuOpen(false)} className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Billing</Link>
               <Link to="/profile"      onClick={() => setMenuOpen(false)} className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Profile</Link>
               <Link to="/messages"     onClick={() => setMenuOpen(false)} className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">Chats</Link>
             </>

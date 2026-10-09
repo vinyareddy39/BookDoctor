@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import { exportPrescriptionToPDF } from "../../utils/export";
 import MedicalTimeline from "../appointment/MedicalTimeline.jsx";
 import ChatWindow from "../chat/ChatWindow.jsx";
 import RescheduleModal from "../appointment/RescheduleModal.jsx";
+import DoctorAdherenceModal from "./DoctorAdherenceModal.jsx";
 
 /**
  * AppointmentsList — Renders the list of doctor appointments with action buttons
@@ -18,33 +19,173 @@ const STATUS_COLORS = {
   completed: "bg-sky-50 text-sky-700 border-sky-200",
 };
 
-function PrescriptionEditor({ appointment, doctorName }) {
-  const [text, setText] = useState(appointment.prescription || "");
+const FREQUENCY_OPTIONS = [
+  { label: "Twice daily (08:00, 20:00)", value: "Twice daily", times: ["08:00", "20:00"] },
+  { label: "Morning (08:00)", value: "Morning", times: ["08:00"] },
+  { label: "Afternoon (13:00)", value: "Afternoon", times: ["13:00"] },
+  { label: "Evening (18:00)", value: "Evening", times: ["18:00"] },
+  { label: "Night (21:00)", value: "Night", times: ["21:00"] },
+  { label: "Thrice daily (08:00, 14:00, 20:00)", value: "Thrice daily", times: ["08:00", "14:00", "20:00"] },
+  { label: "Four times daily", value: "Four times daily", times: ["08:00", "12:00", "16:00", "20:00"] },
+  { label: "As needed (SOS)", value: "As needed", times: ["08:00"] },
+];
+
+function PrescriptionEditor({ appointment, doctorName, onOpenChat }) {
+  const [notes, setNotes] = useState(appointment.prescription || "");
+  const [medications, setMedications] = useState([]);
+  const [prescriptionDoc, setPrescriptionDoc] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [loadingDoc, setLoadingDoc] = useState(true);
+  const [showAdherenceModal, setShowAdherenceModal] = useState(false);
+  const [adherenceStats, setAdherenceStats] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadPrescription = async () => {
+      try {
+        const res = await API.get(`/prescriptions/by-appointment/${appointment._id}`);
+        const p = res.data?.data || res.data;
+        if (p && isMounted) {
+          setPrescriptionDoc(p);
+          if (p.notes) setNotes(p.notes);
+          if (Array.isArray(p.medications) && p.medications.length > 0) {
+            setMedications(p.medications);
+          }
+          if (p.status === "active") {
+            try {
+              const adhRes = await API.get(`/prescriptions/${p._id}/adherence`);
+              if (isMounted) setAdherenceStats(adhRes.data?.data || adhRes.data);
+            } catch (adhErr) {
+              console.debug("Adherence not available yet:", adhErr?.message);
+            }
+          }
+        }
+      } catch (_) {
+        // Fallback to appointment prescription notes
+      } finally {
+        if (isMounted) setLoadingDoc(false);
+      }
+    };
+    loadPrescription();
+    return () => { isMounted = false; };
+  }, [appointment._id]);
+
+  const addMedicationRow = () => {
+    setMedications((prev) => [
+      ...prev,
+      {
+        drug: "",
+        strength: "",
+        dose: "1 tablet",
+        frequency: "Twice daily",
+        times: ["08:00", "20:00"],
+        durationDays: 5,
+        timing: "after_food",
+        instructions: "after food",
+        startDate: new Date().toISOString().split("T")[0],
+      },
+    ]);
+  };
+
+  const removeMedicationRow = (idx) => {
+    setMedications((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateMedication = (idx, field, value) => {
+    setMedications((prev) => {
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], [field]: value };
+      if (field === "frequency") {
+        const match = FREQUENCY_OPTIONS.find((f) => f.value === value);
+        if (match) updated[idx].times = match.times;
+      }
+      return updated;
+    });
+  };
 
   const handleSave = async () => {
+    // Inline validation
+    for (let i = 0; i < medications.length; i++) {
+      const m = medications[i];
+      if (!m.drug || !m.drug.trim()) {
+        toast.error(`Medication #${i + 1}: Drug name is required.`);
+        return;
+      }
+      if (!m.durationDays || Number(m.durationDays) <= 0) {
+        toast.error(`Medication "${m.drug}": Duration must be at least 1 day.`);
+        return;
+      }
+    }
+
     setSaving(true);
     try {
-      await API.patch(`/appointments/${appointment._id}/prescription`, { prescription: text });
-      toast.success("Prescription shared with patient! They can now download the PDF.");
+      const payload = {
+        appointmentId: appointment._id,
+        patientId: appointment.patientId?._id || appointment.patientId,
+        medications,
+        notes,
+      };
+
+      const res = await API.post("/prescriptions", payload);
+      const savedDoc = res.data?.data || res.data;
+      setPrescriptionDoc(savedDoc);
+      toast.success(
+        savedDoc.version > 1
+          ? `Updated recovery plan (v${savedDoc.version}) shared with patient!`
+          : "Prescription & Recovery Plan shared with patient!"
+      );
     } catch (err) {
-      toast.error("Failed to save prescription.");
+      toast.error(err.response?.data?.message || "Failed to save prescription.");
     } finally {
       setSaving(false);
     }
   };
 
   const handleExport = () => {
-    // Export with the CURRENT text in state
-    exportPrescriptionToPDF({ ...appointment, prescription: text }, doctorName);
+    exportPrescriptionToPDF(
+      {
+        ...appointment,
+        prescription: notes,
+        medications,
+      },
+      doctorName
+    );
   };
 
   return (
-    <div className="mt-3 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-bold text-slate-700 block">📝 Prescription / Clinical Notes</label>
+    <div className="mt-3 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-4">
+      {/* Header with Badges & Action Buttons */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <label className="text-xs font-bold text-slate-800 block">📝 Prescription & Clinical Notes</label>
+          
+          {prescriptionDoc?.sharedAt && (
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+              <span>Shared ✓</span>
+              {prescriptionDoc.version > 1 && <span>(v{prescriptionDoc.version})</span>}
+              <span className="font-normal text-slate-500">
+                · {new Date(prescriptionDoc.sharedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            </span>
+          )}
+
+          {adherenceStats && (
+            <button
+              type="button"
+              onClick={() => setShowAdherenceModal(true)}
+              className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100 transition-colors flex items-center gap-1.5"
+            >
+              <span>📊 Plan Active · {adherenceStats.adherenceScore}% Adherence</span>
+              {adherenceStats.hasConsecutiveMissAlert && (
+                <span className="text-rose-600 animate-pulse font-black" title="Consecutive Missed Doses Alert">⚠️</span>
+              )}
+            </button>
+          )}
+        </div>
+
         <div className="flex gap-2">
           <button 
+            type="button"
             onClick={handleSave}
             disabled={saving}
             className="bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded shadow-sm text-xs font-bold transition-colors disabled:opacity-50"
@@ -52,6 +193,7 @@ function PrescriptionEditor({ appointment, doctorName }) {
             {saving ? "Sharing..." : "Save & Share with Patient"}
           </button>
           <button 
+            type="button"
             onClick={handleExport}
             className="bg-white hover:bg-slate-200 text-slate-600 border border-slate-200 px-3 py-1.5 rounded shadow-sm text-xs font-bold transition-colors"
           >
@@ -59,12 +201,168 @@ function PrescriptionEditor({ appointment, doctorName }) {
           </button>
         </div>
       </div>
+
+      {/* Free-text clinical notes */}
       <textarea
-        placeholder="Enter medical prescription, dosage, guidelines..."
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        className="w-full text-sm input p-3 border-slate-200 rounded-lg min-h-[80px]"
+        placeholder="Enter clinical notes, diagnoses, general guidance..."
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        className="w-full text-sm input p-3 border-slate-200 rounded-lg min-h-[70px] bg-white"
       />
+
+      {/* Structured Medications Editor */}
+      <div className="space-y-3 pt-2 border-t border-slate-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-700">💊 Structured Medications (RecoverTrack)</span>
+            <span className="text-[10px] text-slate-400">Optional but recommended for automated adherence scheduling</span>
+          </div>
+          <button
+            type="button"
+            onClick={addMedicationRow}
+            className="text-xs font-bold text-primary-600 hover:text-primary-700 bg-primary-50 hover:bg-primary-100 px-2.5 py-1 rounded transition-colors"
+          >
+            + Add Medication
+          </button>
+        </div>
+
+        {medications.length === 0 ? (
+          <p className="text-xs text-slate-400 italic bg-white p-3 rounded-lg border border-dashed border-slate-200 text-center">
+            No structured medications added yet. Click "+ Add Medication" above to add structured rows for the patient's recovery schedule.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {medications.map((m, idx) => (
+              <div key={idx} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs">
+                  {/* Drug Name */}
+                  <div className="sm:col-span-3">
+                    <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">Drug Name *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Paracetamol"
+                      value={m.drug || m.name || ""}
+                      onChange={(e) => updateMedication(idx, "drug", e.target.value)}
+                      className="w-full input px-2 py-1 text-xs border-slate-200 rounded"
+                    />
+                  </div>
+
+                  {/* Strength */}
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">Strength</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 500 mg"
+                      value={m.strength || ""}
+                      onChange={(e) => updateMedication(idx, "strength", e.target.value)}
+                      className="w-full input px-2 py-1 text-xs border-slate-200 rounded"
+                    />
+                  </div>
+
+                  {/* Dose */}
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">Dose</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 1 tablet"
+                      value={m.dose || m.dosage || "1 tablet"}
+                      onChange={(e) => updateMedication(idx, "dose", e.target.value)}
+                      className="w-full input px-2 py-1 text-xs border-slate-200 rounded"
+                    />
+                  </div>
+
+                  {/* Frequency */}
+                  <div className="sm:col-span-3">
+                    <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">Frequency</label>
+                    <select
+                      value={m.frequency || "Twice daily"}
+                      onChange={(e) => updateMedication(idx, "frequency", e.target.value)}
+                      className="w-full input px-2 py-1 text-xs border-slate-200 rounded"
+                    >
+                      {FREQUENCY_OPTIONS.map((f) => (
+                        <option key={f.value} value={f.value}>{f.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Duration Days */}
+                  <div className="sm:col-span-2 flex items-center gap-1">
+                    <div className="flex-1">
+                      <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">Duration (Days)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={m.durationDays || 5}
+                        onChange={(e) => updateMedication(idx, "durationDays", e.target.value)}
+                        className="w-full input px-2 py-1 text-xs border-slate-200 rounded"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeMedicationRow(idx)}
+                      className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1.5 rounded self-end mb-0.5 transition-colors font-bold text-xs"
+                      title="Remove row"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs pt-1">
+                  {/* Timing */}
+                  <div className="sm:col-span-3">
+                    <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">Timing</label>
+                    <select
+                      value={m.timing || "after_food"}
+                      onChange={(e) => updateMedication(idx, "timing", e.target.value)}
+                      className="w-full input px-2 py-1 text-xs border-slate-200 rounded"
+                    >
+                      <option value="after_food">After Food</option>
+                      <option value="before_food">Before Food</option>
+                      <option value="with_food">With Food</option>
+                      <option value="bedtime">At Bedtime</option>
+                      <option value="as_needed">As Needed (SOS)</option>
+                    </select>
+                  </div>
+
+                  {/* Instructions */}
+                  <div className="sm:col-span-6">
+                    <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">Instructions</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Drink plenty of water"
+                      value={m.instructions || ""}
+                      onChange={(e) => updateMedication(idx, "instructions", e.target.value)}
+                      className="w-full input px-2 py-1 text-xs border-slate-200 rounded"
+                    />
+                  </div>
+
+                  {/* Start Date */}
+                  <div className="sm:col-span-3">
+                    <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">Start Date</label>
+                    <input
+                      type="date"
+                      value={m.startDate ? String(m.startDate).split("T")[0] : new Date().toISOString().split("T")[0]}
+                      onChange={(e) => updateMedication(idx, "startDate", e.target.value)}
+                      className="w-full input px-2 py-1 text-xs border-slate-200 rounded"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Doctor Adherence Modal */}
+      {showAdherenceModal && prescriptionDoc && (
+        <DoctorAdherenceModal
+          prescriptionId={prescriptionDoc._id}
+          patientName={appointment.patientId?.name || "Patient"}
+          onClose={() => setShowAdherenceModal(false)}
+          onOpenChat={onOpenChat}
+        />
+      )}
     </div>
   );
 }
@@ -254,7 +552,11 @@ export default function AppointmentsList({ appts, loading, onStatusUpdate, onPay
 
             {/* Prescription Form for Doctors */}
             {a.status === "completed" && (
-              <PrescriptionEditor appointment={a} doctorName={a.doctorId?.userId?.name || "Doctor"} />
+              <PrescriptionEditor 
+                appointment={a} 
+                doctorName={a.doctorId?.userId?.name || "Doctor"} 
+                onOpenChat={() => setSelectedChatAppt(a)}
+              />
             )}
           </div>
         );
