@@ -330,15 +330,73 @@ sos-ride/
 
 ---
 
+## Platform Comparison
+
+| Capability | Android Native & React Native (Android) | iOS (iPhone / iPad) |
+| :--- | :--- | :--- |
+| **SOS Trigger** | One-tap on large red SOS button | One-tap on large red SOS button |
+| **Cancel Window** | 5-second countdown with visual Cancel button | 5-second countdown with visual Cancel button |
+| **Location Discovery** | High-accuracy GPS (12s timeout, fallback to last known) | High-accuracy GPS via CoreLocation (12s timeout) |
+| **Emergency SMS** | Dispatched before hospital lookup; third SMS on watchdog timeout | Opens pre-filled SMS composer (user taps Send); fallback to Share sheet |
+| **Hospital Discovery** | Google Places + OSM Overpass (ranked by straight-line distance) | Google Places + OSM Overpass (ranked by straight-line distance) |
+| **Uber Integration** | Direct `uber://` deep link execution | Direct `uber://` deep link execution (no App Store bounce) |
+| **Ride Booking** | **Auto-books** via AccessibilityService (detects ride tier & taps Confirm) | **One-tap Confirm**: Apple sandbox prevents UI auto-tap; pre-fills pickup & ER dropoff, user taps Confirm in Uber |
+| **Consent & Payment** | Heads-up vibration alert: *"Uber needs you to tap \<label\>"* | Handled directly by user in Uber interface |
+| **Watchdog Timeout** | 45-second timer displays 108/112 alert screen | 45-second timer displays 108/112 alert screen |
+
+---
+
 ## Limitations and Disclaimer
 
-1. **Third-Party UI Dependency**: This application relies on Android's Accessibility framework to inspect and interact with the Uber user interface. Any significant update to Uber's layout, button phrasing, or DOM tree can interrupt the automated booking flow. Users must remain attentive and be prepared to complete the booking manually or use emergency calling.
-2. **Not Intended for Google Play Store Distribution**: Google Play Developer Policies strictly prohibit the use of the `AccessibilityService` API for automating third-party applications or interacting with apps outside of authorized accessibility and disability-assistive contexts. Apps utilizing accessibility services for ride automation will be rejected or suspended from the Play Store.
-3. **Terms of Service**: Automating interactions within the Uber client application may conflict with Uber's Terms of Service and acceptable use policies regarding automated interface interaction.
-4. **Hospital Data & Emergency Detection**: Hospital distance is ranked using straight-line (great-circle) distance. Emergency department discovery relies entirely on third-party map data (Google Places keyword matching and OpenStreetMap `emergency=yes` tags) and may fail to identify real emergency rooms if map metadata is missing or outdated.
-5. **User Consent Requirements**: Uber interfaces that prompt for terms agreement (e.g., "I agree") or payment method confirmation are intentionally not auto-tapped, requiring explicit manual user input.
-6. **Helpline Number Defaults**: The default emergency numbers embedded in the app (108 for Ambulance and 112 for National Emergency) are **India-specific defaults**. Users deploying in other countries must adjust the dialer URI strings in `SosForegroundService.kt` and `SosViewModel.kt` (e.g. to `911` for the US or `999` for the UK).
-7. **Medical Emergency Disclaimer**: SOS Ride is an auxiliary tool and **not** a licensed emergency medical dispatch system. Commercial rideshares are not equipped with medical equipment, oxygen, or trained paramedics. In life-threatening emergencies (e.g., severe hemorrhage, chest pain, cardiac arrest, difficulty breathing, or stroke), **always dial official emergency medical services (108 in India, 911 in the US, or 112 in the EU) immediately**.
+1. **Platform Differences (Android vs. iOS)**: iOS security architecture and sandbox policies strictly prevent third-party applications from simulating touch events or auto-tapping other apps. While Android automatically selects the ride tier and confirms booking via an Accessibility Service, iOS users must perform one manual tap on "Confirm" in the pre-filled Uber screen.
+2. **Third-Party UI Dependency**: The Android automation relies on Android's Accessibility framework to inspect and interact with the Uber user interface. Any significant update to Uber's layout, button phrasing, or view tree can interrupt the automated booking flow. Users must remain attentive and be prepared to complete the booking manually or use emergency calling.
+3. **Not Intended for Google Play Store Distribution**: Google Play Developer Policies strictly prohibit the use of the `AccessibilityService` API for automating third-party applications or interacting with apps outside of authorized accessibility and disability-assistive contexts. Apps utilizing accessibility services for ride automation will be rejected or suspended from the Play Store.
+4. **Terms of Service**: Automating interactions within the Uber client application may conflict with Uber's Terms of Service and acceptable use policies regarding automated interface interaction.
+5. **Hospital Data & Emergency Detection**: Hospital distance is ranked using straight-line (great-circle) distance. Emergency department discovery relies entirely on third-party map data (Google Places keyword matching and OpenStreetMap `emergency=yes` tags) and may fail to identify real emergency rooms if map metadata is missing or outdated.
+6. **User Incapacitation & Consent Modals**: Uber interfaces that prompt for terms agreement (e.g., "I agree") or payment method confirmation are intentionally not auto-tapped. If the user is incapacitated or unable to interact with their screen, these consent screens will stall the automated booking until the 45-second watchdog expires and displays the 108/112 emergency calling screen.
+7. **Rides Cost Money & Cancellation Fees**: Auto-booked rides incur real charges to the user's saved payment method. Uber's cancellation fee policies apply if a trip is cancelled after driver assignment.
+8. **Helpline Number Defaults**: The default emergency numbers embedded in the app (108 for Ambulance and 112 for National Emergency) are **India-specific defaults**. Users deploying in other countries must adjust the dialer configuration (e.g. to `911` for the US or `999` for the UK).
+9. **Medical Emergency Disclaimer**: SOS Ride is an auxiliary tool and **not** a licensed emergency medical dispatch system. Commercial rideshares are not equipped with medical equipment, oxygen, or trained paramedics. In life-threatening emergencies (e.g., severe hemorrhage, chest pain, cardiac arrest, difficulty breathing, or stroke), **always dial official emergency medical services (108 in India, 911 in the US, or 112 in the EU) immediately**.
+
+---
+
+## Privacy
+
+- **Location Data**: Precise GPS coordinates are acquired solely during an active SOS event and are transmitted only to mapping APIs (Google Places, OpenStreetMap Overpass, and Apple Maps) to locate nearby emergency facilities and populate Uber pickup coordinates. Location data is never sold, shared with advertisers, or tracked when SOS is idle.
+- **Emergency Contacts**: Emergency contacts are stored locally on the user's physical device in local storage / SharedPreferences and start completely empty. Contacts are never uploaded to remote tracking databases.
+- **SMS Privacy**: Phone numbers and SMS message bodies are strictly omitted from application logs. Only contact display names are logged. Standard mobile carrier SMS charges may apply.
+
+---
+
+## Manual Test Checklist
+
+Use this physical testing checklist to verify the SOS Ride flow safely:
+
+1. **Pre-requisites**:
+   - Ensure the official Uber application is installed, logged in, and has an active payment method saved.
+   - Configure **your own phone number** as the only emergency contact to avoid alarming family members during testing.
+2. **Cancel During Countdown**:
+   - Press the SOS button on the home screen.
+   - During the 5-second countdown, tap **"CANCEL SOS (FALSE ALARM)"**.
+   - **Verification**: The countdown aborts immediately; no GPS lock or SMS is sent, and Uber is never launched.
+3. **End-to-End Ride Dispatch**:
+   - Press SOS and allow the 5-second countdown to complete.
+   - **Verification**:
+     - Android: The initial SMS is sent to your number with your live location pin (`https://maps.google.com/?q=...`).
+     - iOS: The SMS composer opens pre-filled with the location link for one-tap sending.
+     - The nearest emergency hospital is located and a second SMS update is dispatched with the hospital name.
+     - The Uber application opens directly with your current location as pickup and the hospital pre-filled as drop-off (with zero App Store redirects).
+4. **Booking Confirmation**:
+   - **Android**: The Accessibility Service selects the preferred ride tier and requests the ride without manual taps. If a consent or surge modal appears, verify that a high-importance notification alerts you: *"Uber needs you to tap \<label\>"*.
+   - **iOS**: Verify the screen displays *"Uber opened. Tap Confirm in Uber to book."* Tap "Confirm" once in Uber.
+5. **Immediate Cancellation**:
+   - Cancel the test ride immediately inside the Uber app once confirmed to prevent driver dispatch and avoid cancellation fees.
+6. **Network & Location Failure (Airplane Mode)**:
+   - Enable Airplane Mode on the device and press SOS.
+   - **Verification**: The 108/112 emergency calling screen appears immediately; Uber does NOT open and no hard-coded coordinates are used.
+7. **Empty Contacts Test**:
+   - Delete all emergency contacts from Settings and trigger SOS.
+   - **Verification**: A warning card is displayed stating SMS alerts will be skipped, but the emergency ride dispatch to the nearest hospital proceeds uninterrupted.
 
 ---
 

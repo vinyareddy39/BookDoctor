@@ -7,16 +7,30 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "uber"
+        ],
+        "NSLocationWhenInUseUsageDescription": "SOS Ride requires high-accuracy GPS coordinates to find the nearest emergency hospital and pre-fill your Uber pickup location.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "SOS Ride requires location access to monitor emergency ride dispatch."
+      }
     },
     "android": {
+      "package": "com.rapidcare.sos",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "SEND_SMS",
+        "CALL_PHONE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

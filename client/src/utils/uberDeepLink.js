@@ -206,15 +206,11 @@ export function openUberRideToHospital(hospital, pickup = null) {
     }
   }
 
+  const finalUrl = (isAndroidOrIOS() && links?.appUrl) ? links.appUrl : webUrl;
+  console.log("[UberDeepLink] Final URL to open:", finalUrl);
+
   if (isAndroidOrIOS()) {
-    if (links?.appUrl) {
-      window.location.href = links.appUrl;
-      setTimeout(() => {
-        if (!document.hidden) window.location.href = webUrl;
-      }, 1500);
-      return true;
-    }
-    window.location.href = webUrl;
+    window.location.href = finalUrl;
   } else {
     window.open(webUrl, "_blank", "noopener,noreferrer");
   }
