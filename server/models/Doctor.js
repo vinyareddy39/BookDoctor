@@ -142,6 +142,26 @@ const doctorSchema = new mongoose.Schema(
       city: { type: String, default: "" },
       state: { type: String, default: "" },
     },
+
+    // ─── Direct Doctor UPI QR / VPA Details ──────────────────────────────────
+    upiId: {
+      type: String,
+      trim: true,
+      default: "", // e.g. "dr.ananya@oksbi"
+    },
+    payeeName: {
+      type: String,
+      trim: true,
+      default: "", // e.g. "Dr. Ananya Sharma"
+    },
+    upiQrImage: {
+      type: String,
+      default: "", // Base64 or URL to QR code image
+    },
+    acceptsDirectUpi: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

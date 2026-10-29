@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">SOS Ride</string>
+    <string name="accessibility_service_name">SOS Ride Uber Automation</string>
+    <string name="accessibility_service_description">Enables SOS Ride to automatically confirm emergency medical cab requests in Uber when the SOS button is triggered.</string>
+    <string name="notification_channel_name">SOS Emergency Service</string>
+    <string name="notification_channel_desc">Active emergency dispatch tracking</string>
+</resources>

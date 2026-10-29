@@ -165,3 +165,33 @@ export const sendReminderEmail = async ({ patientName, patientEmail, doctorName,
   const transporter = getTransporter();
   await transporter.sendMail(mailOptions);
 };
+
+// ─── Generic Multi-Channel Email Sender ──────────────────────────────────
+export const sendEmail = async ({ to, subject, html, text }) => {
+  if (!to || !subject) return { success: false, reason: "Missing recipient or subject" };
+
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    if (process.env.NODE_ENV !== "production") {
+      // Stub logged in dev/test
+    }
+    return { success: true, stub: true };
+  }
+
+  try {
+    const mailOptions = {
+      from: `"BookDoctor" <${process.env.EMAIL_USER}>`,
+      to,
+      subject,
+      html: html || `<p>${text || ""}</p>`,
+      text: text || "",
+    };
+
+    const transporter = getTransporter();
+    const info = await transporter.sendMail(mailOptions);
+    return { success: true, messageId: info.messageId };
+  } catch (err) {
+    console.warn("[EmailService] Send email notice:", err.message);
+    return { success: false, error: err.message };
+  }
+};
+

@@ -62,6 +62,7 @@ const PatientTimeline     = lazy(() => import("./pages/PatientTimeline.jsx"));
 const ReceptionDashboard  = lazy(() => import("./pages/ReceptionDashboard.jsx"));
 const RecoveryPlan        = lazy(() => import("./pages/RecoveryPlan.jsx"));
 const PublicTracking      = lazy(() => import("./pages/PublicTracking.jsx"));
+const NotificationPreferences = lazy(() => import("./pages/NotificationPreferences.jsx"));
 
 // Page loader fallback
 function PageLoader() {
@@ -188,6 +189,7 @@ function App() {
             <Route path="/prescriptions"        element={<AuthRoute><PatientFollowUps /></AuthRoute>} />
             <Route path="/follow-ups"           element={<AuthRoute><PatientFollowUps /></AuthRoute>} />
             <Route path="/recovery-plan"        element={<AuthRoute><RecoveryPlan /></AuthRoute>} />
+            <Route path="/settings/notifications" element={<AuthRoute><NotificationPreferences /></AuthRoute>} />
 
             {/* Admin protected */}
             <Route path="/admin"                 element={<AdminRoute><AdminDashboard /></AdminRoute>} />

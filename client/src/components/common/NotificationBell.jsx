@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import API from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import io from "socket.io-client";
@@ -10,18 +10,20 @@ export default function NotificationBell() {
   const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState([]);
+  const [grouped, setGrouped] = useState({ today: [], earlier: [] });
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Fetch initial notifications
+  // Fetch initial notifications with grouped Today / Earlier
   const fetchNotifications = async () => {
     if (!isLoggedIn) return;
     try {
-      const res = await API.get("/notifications?limit=20");
-      setNotifications(res.data?.data?.notifications || []);
-      setUnreadCount(res.data?.data?.unreadCount || 0);
+      const res = await API.get("/notifications?limit=40");
+      const data = res.data?.data || res.data;
+      setNotifications(data.notifications || []);
+      setGrouped(data.grouped || { today: [], earlier: [] });
+      setUnreadCount(data.unreadCount || 0);
     } catch (err) {
       console.warn("Could not fetch notifications:", err.message);
     }
@@ -42,6 +44,10 @@ export default function NotificationBell() {
 
     socket.on("notification", (newNotif) => {
       setNotifications((prev) => [newNotif, ...prev]);
+      setGrouped((prev) => ({
+        ...prev,
+        today: [newNotif, ...(prev.today || [])],
+      }));
       setUnreadCount((c) => c + 1);
       toast(newNotif.title || "New Notification", {
         icon: "🔔",
@@ -73,11 +79,15 @@ export default function NotificationBell() {
         setNotifications((prev) =>
           prev.map((n) => (n._id === notif._id ? { ...n, isRead: true } : n))
         );
+        setGrouped((prev) => ({
+          today: prev.today.map((n) => (n._id === notif._id ? { ...n, isRead: true } : n)),
+          earlier: prev.earlier.map((n) => (n._id === notif._id ? { ...n, isRead: true } : n)),
+        }));
         setUnreadCount((c) => Math.max(0, c - 1));
       }
       setIsOpen(false);
-      if (notif.link) {
-        navigate(notif.link);
+      if (notif.link || notif.data?.deepLink) {
+        navigate(notif.link || notif.data.deepLink);
       }
     } catch (err) {
       console.warn("Mark read error:", err);
@@ -89,6 +99,10 @@ export default function NotificationBell() {
     try {
       await API.patch("/notifications/read-all");
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setGrouped((prev) => ({
+        today: prev.today.map((n) => ({ ...n, isRead: true })),
+        earlier: prev.earlier.map((n) => ({ ...n, isRead: true })),
+      }));
       setUnreadCount(0);
     } catch (err) {
       toast.error("Failed to mark all as read");
@@ -97,24 +111,39 @@ export default function NotificationBell() {
 
   const getTypeIcon = (type) => {
     switch (type) {
-      case "lab_result_released":
-        return "🧪";
-      case "invoice_issued":
-      case "payment_received":
-        return "💳";
+      case "sos.triggered":
+        return "🚨";
+      case "symptom.red_flag":
+        return "⚠️";
+      case "appointment.rescheduled":
+      case "appointment.booked":
+      case "appointment.reminder":
       case "appointment_booked":
       case "appointment_reminder":
         return "🗓️";
-      case "queue_called":
-        return "⚡";
-      case "follow_up_due":
-        return "📋";
+      case "appointment.cancelled":
+      case "appointment_cancelled":
+        return "❌";
+      case "payment.received":
+      case "payment.marked_offline":
+      case "payment_received":
+      case "invoice_issued":
+        return "💳";
+      case "prescription.shared":
+      case "dose.reminder":
+        return "💊";
+      case "chat.message_received":
+        return "💬";
+      case "lab_result_released":
+        return "🧪";
       default:
         return "🔔";
     }
   };
 
   if (!isLoggedIn) return null;
+
+  const hasItems = grouped.today?.length > 0 || grouped.earlier?.length > 0 || notifications.length > 0;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -145,7 +174,7 @@ export default function NotificationBell() {
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200/90 py-3 z-50 animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-3xl shadow-2xl border border-slate-200/90 py-3 z-50 animate-in fade-in zoom-in-95 duration-150">
           <div className="flex items-center justify-between px-4 pb-2.5 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <h4 className="text-sm font-black text-slate-800">Notifications</h4>
@@ -166,44 +195,76 @@ export default function NotificationBell() {
           </div>
 
           <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
-            {notifications.length === 0 ? (
+            {!hasItems ? (
               <div className="p-6 text-center text-slate-400">
                 <span className="text-2xl block mb-1">🔕</span>
                 <p className="text-xs font-semibold">No notifications right now</p>
               </div>
             ) : (
-              notifications.map((n) => (
-                <div
-                  key={n._id}
-                  onClick={() => handleMarkAsRead(n)}
-                  className={`p-3.5 hover:bg-slate-50 transition cursor-pointer flex gap-3 items-start ${
-                    !n.isRead ? "bg-primary-50/30" : ""
-                  }`}
-                >
-                  <span className="text-lg flex-shrink-0 mt-0.5">{getTypeIcon(n.type)}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <p className={`text-xs ${!n.isRead ? "font-black text-slate-900" : "font-semibold text-slate-700"}`}>
-                        {n.title}
-                      </p>
-                      {!n.isRead && (
-                        <span className="w-2 h-2 rounded-full bg-primary-600 flex-shrink-0"></span>
-                      )}
+              <>
+                {/* TODAY'S GROUP */}
+                {grouped.today?.length > 0 && (
+                  <div>
+                    <div className="bg-slate-50 px-4 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                      Today
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">
-                      {n.message}
-                    </p>
-                    <p className="text-[9px] text-slate-400 mt-1">
-                      {new Date(n.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} •{" "}
-                      {new Date(n.createdAt).toLocaleDateString()}
-                    </p>
+                    {grouped.today.map((n) => renderNotifItem(n))}
                   </div>
-                </div>
-              ))
+                )}
+
+                {/* EARLIER GROUP */}
+                {grouped.earlier?.length > 0 && (
+                  <div>
+                    <div className="bg-slate-50 px-4 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                      Earlier
+                    </div>
+                    {grouped.earlier.map((n) => renderNotifItem(n))}
+                  </div>
+                )}
+              </>
             )}
+          </div>
+
+          {/* Footer with Preferences Deep Link */}
+          <div className="pt-2 px-4 border-t border-slate-100 flex items-center justify-between text-xs">
+            <Link
+              to="/settings/notifications"
+              onClick={() => setIsOpen(false)}
+              className="text-[11px] font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1"
+            >
+              <span>⚙️</span>
+              <span>Preferences</span>
+            </Link>
+            <span className="text-[10px] text-slate-400 italic">Medical Safety: Call 108 in emergencies</span>
           </div>
         </div>
       )}
     </div>
   );
+
+  function renderNotifItem(n) {
+    return (
+      <div
+        key={n._id}
+        onClick={() => handleMarkAsRead(n)}
+        className={`p-3.5 hover:bg-slate-50 transition cursor-pointer flex gap-3 items-start ${
+          !n.isRead ? "bg-primary-50/30" : ""
+        }`}
+      >
+        <span className="text-lg shrink-0 mt-0.5">{getTypeIcon(n.type)}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-1 mb-0.5">
+            <h5 className={`text-xs font-extrabold truncate ${!n.isRead ? "text-slate-900" : "text-slate-700"}`}>
+              {n.title}
+            </h5>
+            <span className="text-[10px] text-slate-400 shrink-0">
+              {new Date(n.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+          <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">{n.message || n.body}</p>
+        </div>
+        {!n.isRead && <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0 mt-2" />}
+      </div>
+    );
+  }
 }

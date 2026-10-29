@@ -39,6 +39,14 @@ function PrescriptionEditor({ appointment, doctorName, onOpenChat }) {
   const [showAdherenceModal, setShowAdherenceModal] = useState(false);
   const [adherenceStats, setAdherenceStats] = useState(null);
 
+  // ── OCR & Handwritten Upload States ──
+  const [isOcrScanning, setIsOcrScanning] = useState(false);
+  const [uploadedAttachment, setUploadedAttachment] = useState(null);
+  const [ocrConfidence, setOcrConfidence] = useState(0);
+  const [rawOcrText, setRawOcrText] = useState("");
+  const [showImageModal, setShowImageModal] = useState(false);
+  const fileInputRef = React.useRef(null);
+
   useEffect(() => {
     let isMounted = true;
     const loadPrescription = async () => {
@@ -50,6 +58,15 @@ function PrescriptionEditor({ appointment, doctorName, onOpenChat }) {
           if (p.notes) setNotes(p.notes);
           if (Array.isArray(p.medications) && p.medications.length > 0) {
             setMedications(p.medications);
+          }
+          if (p.attachmentUrl) {
+            setUploadedAttachment({
+              url: p.attachmentUrl,
+              type: p.attachmentType || "image",
+              name: p.attachmentName || "handwritten_prescription",
+            });
+            if (p.ocrConfidence) setOcrConfidence(p.ocrConfidence);
+            if (p.rawOcrText) setRawOcrText(p.rawOcrText);
           }
           if (p.status === "active") {
             try {
@@ -103,6 +120,85 @@ function PrescriptionEditor({ appointment, doctorName, onOpenChat }) {
     });
   };
 
+  // Doctor uploads handwritten prescription photo or PDF -> runs OCR
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+
+    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg", "application/pdf"];
+    if (!validTypes.includes(file.type.toLowerCase())) {
+      toast.error("Please upload a valid image (JPEG, PNG, WebP) or PDF file.");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("File size exceeds 10 MB limit.");
+      return;
+    }
+
+    setIsOcrScanning(true);
+    const toastId = toast.loading("Scanning handwritten prescription with OCR...");
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("appointmentId", appointment._id);
+    const patientId = appointment.patientId?._id || appointment.patientId;
+    if (patientId) formData.append("patientId", patientId);
+
+    try {
+      const res = await API.post("/prescriptions/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const data = res.data?.data || res.data;
+      toast.dismiss(toastId);
+
+      setUploadedAttachment({
+        url: data.attachmentUrl,
+        type: data.attachmentType || (file.type.includes("pdf") ? "pdf" : "image"),
+        name: data.attachmentName || file.name,
+      });
+
+      if (data.ocrConfidence) setOcrConfidence(data.ocrConfidence);
+      if (data.rawOcrText) {
+        setRawOcrText(data.rawOcrText);
+        setNotes((prev) =>
+          prev && prev.trim()
+            ? `${prev}\n\n[OCR Extracted Notes]:\n${data.rawOcrText}`
+            : data.rawOcrText
+        );
+      }
+
+      if (Array.isArray(data.medications) && data.medications.length > 0) {
+        setMedications((prev) => {
+          const formattedMeds = data.medications.map((m) => ({
+            drug: m.drug || m.name || "",
+            strength: m.strength || "",
+            dose: m.dose || m.dosage || "1 tablet",
+            frequency: m.frequency || "Twice daily",
+            times: m.times || ["08:00", "20:00"],
+            durationDays: m.durationDays || 5,
+            timing: m.timing || "after_food",
+            instructions: m.instructions || "",
+            startDate: new Date().toISOString().split("T")[0],
+            needsReview: m.needsReview || false,
+          }));
+          return [...prev, ...formattedMeds];
+        });
+      }
+
+      toast.success(
+        `OCR complete! Extracted ${data.medications?.length || 0} medication(s) & clinical notes. Review & edit before saving.`
+      );
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error(err.response?.data?.message || "Failed to process prescription via OCR.");
+    } finally {
+      setIsOcrScanning(false);
+    }
+  };
+
   const handleSave = async () => {
     // Inline validation
     for (let i = 0; i < medications.length; i++) {
@@ -124,6 +220,11 @@ function PrescriptionEditor({ appointment, doctorName, onOpenChat }) {
         patientId: appointment.patientId?._id || appointment.patientId,
         medications,
         notes,
+        attachmentUrl: uploadedAttachment?.url,
+        attachmentType: uploadedAttachment?.type,
+        attachmentName: uploadedAttachment?.name,
+        rawOcrText,
+        ocrConfidence,
       };
 
       const res = await API.post("/prescriptions", payload);
@@ -183,11 +284,40 @@ function PrescriptionEditor({ appointment, doctorName, onOpenChat }) {
           )}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap items-center">
+          {/* Hidden File Input for Handwritten Document Upload */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            accept="image/*,application/pdf"
+            className="hidden"
+          />
+
+          {/* OCR Upload Button */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isOcrScanning}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded shadow-sm text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            title="Upload photo or PDF of handwritten prescription to run OCR"
+          >
+            {isOcrScanning ? (
+              <>
+                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Scanning OCR...</span>
+              </>
+            ) : (
+              <>
+                <span>📷 Upload Handwritten / Notes (OCR)</span>
+              </>
+            )}
+          </button>
+
           <button 
             type="button"
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || isOcrScanning}
             className="bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded shadow-sm text-xs font-bold transition-colors disabled:opacity-50"
           >
             {saving ? "Sharing..." : "Save & Share with Patient"}
@@ -201,6 +331,94 @@ function PrescriptionEditor({ appointment, doctorName, onOpenChat }) {
           </button>
         </div>
       </div>
+
+      {/* Uploaded Attachment Banner (if an image or PDF was scanned) */}
+      {uploadedAttachment && (
+        <div className="bg-indigo-50/80 border border-indigo-200 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3">
+            {uploadedAttachment.type === "image" ? (
+              <img
+                src={uploadedAttachment.url}
+                alt="Handwritten prescription"
+                onClick={() => setShowImageModal(true)}
+                className="w-12 h-12 object-cover rounded-lg border border-indigo-200 cursor-pointer hover:opacity-80 transition-opacity shadow-sm"
+                title="Click to view full image"
+              />
+            ) : (
+              <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-lg flex items-center justify-center font-bold text-xs border border-rose-200">
+                PDF
+              </div>
+            )}
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-indigo-950">Handwritten Document Attached</span>
+                {ocrConfidence > 0 && (
+                  <span className="bg-indigo-100 text-indigo-700 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                    {Math.round(ocrConfidence * 100)}% OCR Confidence
+                  </span>
+                )}
+              </div>
+              <p className="text-slate-500 text-[11px] truncate max-w-xs">{uploadedAttachment.name}</p>
+              <p className="text-[10px] text-indigo-700 font-medium">
+                ✨ Extracted text and medication schedules populated below. Review and adjust before sharing.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-center">
+            {uploadedAttachment.type === "image" && (
+              <button
+                type="button"
+                onClick={() => setShowImageModal(true)}
+                className="text-indigo-600 hover:text-indigo-800 font-bold text-xs underline"
+              >
+                View Full Scan
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setUploadedAttachment(null)}
+              className="text-slate-400 hover:text-rose-600 text-xs font-bold ml-2 transition-colors"
+              title="Remove attachment"
+            >
+              ✕ Remove
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Full Image Preview Modal */}
+      {showImageModal && uploadedAttachment?.url && (
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-4 space-y-3 max-h-[90vh] flex flex-col shadow-2xl">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+              <span className="font-bold text-sm text-slate-800">Scanned Handwritten Prescription / Notes</span>
+              <button
+                type="button"
+                onClick={() => setShowImageModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-black text-base"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto flex items-center justify-center bg-slate-100 rounded-xl p-2 min-h-[300px]">
+              <img
+                src={uploadedAttachment.url}
+                alt="Scanned prescription"
+                className="max-h-[70vh] object-contain rounded-lg"
+              />
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowImageModal(false)}
+                className="bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold px-4 py-2 rounded-lg transition-colors"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Free-text clinical notes */}
       <textarea

@@ -33,3 +33,11 @@ id_rsa*
 Thumbs.db
 .vscode/
 .idea/
+
+# Android / Gradle
+.gradle/
+local.properties
+**/build/
+*.apk
+*.aab
+

@@ -234,4 +234,52 @@ describe("RecoverTrack Handwritten Prescription OCR & Multi-Plan Tests", () => {
       expect(sources).toContain("patient_upload");
     });
   });
+
+  describe("5. Doctor Side: Upload Handwritten Prescription / Notes with OCR & Save", () => {
+    it("should process doctor-uploaded handwritten notes and attach them to appointment prescription", async () => {
+      const doctorUser = await User.create({
+        name: "Dr. Ananya Sharma",
+        email: `dr_ananya_${Date.now()}@example.com`,
+        password: "Password123!",
+        role: "doctor",
+        phone: "+919876543299",
+      });
+
+      // 1. Process file through OCR service
+      const ocrResult = await processPrescriptionFile(sampleRxImagePath, "image/jpeg");
+      expect(ocrResult).toBeDefined();
+      expect(ocrResult.rawOcrText).toBeDefined();
+      expect(ocrResult.draftMedications.length).toBeGreaterThan(0);
+
+      // 2. Doctor reviews, edits candidate medications and notes, then saves with attachment
+      const prescription = await Prescription.create({
+        appointmentId: new mongoose.Types.ObjectId(),
+        patientId: testPatient._id,
+        doctorId: doctorUser._id,
+        status: "shared",
+        version: 1,
+        source: "doctor_structured",
+        uploadedBy: "doctor",
+        doctorName: doctorUser.name,
+        notes: `Clinical Assessment from handwritten notes:\n${ocrResult.rawOcrText.substring(0, 80)}`,
+        attachmentUrl: "/uploads/prescriptions/test_amox_rx.jpg",
+        attachmentType: "image",
+        attachmentName: "test_amox_rx.jpg",
+        rawOcrText: ocrResult.rawOcrText,
+        ocrConfidence: ocrResult.ocrConfidence,
+        medications: ocrResult.draftMedications.map((m) => ({
+          ...m,
+          timing: "after_food",
+          instructions: "Take with water",
+        })),
+      });
+
+      expect(prescription._id).toBeDefined();
+      expect(prescription.uploadedBy).toBe("doctor");
+      expect(prescription.attachmentUrl).toBe("/uploads/prescriptions/test_amox_rx.jpg");
+      expect(prescription.rawOcrText).toBe(ocrResult.rawOcrText);
+      expect(prescription.notes).toContain("Clinical Assessment");
+      expect(prescription.status).toBe("shared");
+    });
+  });
 });

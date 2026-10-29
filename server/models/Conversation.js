@@ -30,6 +30,27 @@ const conversationSchema = new mongoose.Schema(
       ref: "Appointment",
       required: false,
     },
+    doctorStatus: {
+      type: String,
+      enum: ["available", "in_consultation", "away"],
+      default: "available",
+    },
+    mutedBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    archivedBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    hasActiveEmergencyAlert: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

@@ -24,7 +24,34 @@ const messageSchema = new mongoose.Schema(
     },
     text: {
       type: String,
-      required: true,
+      default: "",
+    },
+    attachments: [
+      {
+        url: { type: String, required: true },
+        fileType: { type: String, default: "image" },
+        originalName: { type: String, default: "" },
+        sizeBytes: { type: Number, default: 0 },
+      },
+    ],
+    hasRedFlag: {
+      type: Boolean,
+      default: false,
+    },
+    redFlagKeywords: [
+      {
+        type: String,
+      },
+    ],
+    redFlagSeverity: {
+      type: String,
+      enum: ["none", "critical", "warning"],
+      default: "none",
+    },
+    messageType: {
+      type: String,
+      enum: ["text", "image", "document", "prescription_link", "system_alert"],
+      default: "text",
     },
     read: {
       type: Boolean,

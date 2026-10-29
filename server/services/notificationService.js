@@ -1,8 +1,11 @@
 import Notification from "../models/Notification.js";
 import { sendNotificationToUser } from "../socket.js";
+import { dispatchNotification, EVENT_TYPES, TEMPLATES } from "./centralNotificationService.js";
+
+export { dispatchNotification, EVENT_TYPES, TEMPLATES };
 
 /**
- * Creates a persistent notification in DB and emits real-time socket event.
+ * Backwards-compatible createNotification helper
  */
 export const createNotification = async ({
   recipient,
@@ -17,6 +20,21 @@ export const createNotification = async ({
   try {
     if (!recipient) return null;
 
+    // If type corresponds to a central event type, route through central notification service
+    if (Object.values(EVENT_TYPES).includes(type)) {
+      return await dispatchNotification({
+        eventType: type,
+        recipientId: recipient,
+        senderId: sender,
+        variables: { message, title },
+        data: {
+          entityType: referenceModel,
+          entityId: referenceId,
+          deepLink: link,
+        },
+      });
+    }
+
     const notification = await Notification.create({
       recipient,
       sender,
@@ -26,6 +44,8 @@ export const createNotification = async ({
       referenceId,
       referenceModel,
       link,
+      channels: ["in_app"],
+      status: { in_app: "delivered" },
     });
 
     // Real-time dispatch via Socket.io

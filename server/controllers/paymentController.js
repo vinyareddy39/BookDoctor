@@ -3,8 +3,25 @@ import crypto from "crypto";
 import Transaction from "../models/Transaction.js";
 import Appointment from "../models/Appointment.js";
 import Doctor from "../models/Doctor.js";
+import PaymentRecord from "../models/PaymentRecord.js";
+import { recordAudit } from "../middleware/auditLogger.js";
+import { notify, EVENT_TYPES } from "../services/centralNotificationService.js";
 import { triggerDashboardUpdate } from "../socket.js";
 import { getRazorpayClient } from "../services/paymentService.js";
+
+const formatDate = (d) => {
+  if (!d) return "";
+  try {
+    return new Date(d).toLocaleDateString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return String(d);
+  }
+};
 
 // ==========================================
 // 1. CREATE ORDER (With Razorpay Route Split)
@@ -385,18 +402,35 @@ export const razorpayWebhook = async (req, res, next) => {
 
     const event = req.body.event;
     const payload = req.body.payload;
-    console.log(`🔔 [Razorpay Webhook] Verified event received: ${event}`);
+    const eventId =
+      req.headers["x-razorpay-event-id"] ||
+      req.body.event_id ||
+      req.body.id ||
+      (payload?.payment?.entity?.id ? `evt_${payload.payment.entity.id}` : null);
+
+    console.log(`🔔 [Razorpay Webhook] Verified event received: ${event} (EventID: ${eventId})`);
+
+    // ── Idempotency Check on Event ID ──
+    if (eventId) {
+      const existingRecord = await PaymentRecord.findOne({ webhookEventId: eventId });
+      if (existingRecord) {
+        console.log(`ℹ️ [Razorpay Webhook] Webhook event ${eventId} already processed. Skipping duplicate.`);
+        return res.status(200).send("OK (Duplicate event ignored)");
+      }
+    }
 
     // ── Payment & Order Events ──
     if (event === "payment.captured" || event === "payment.authorized" || event === "order.paid") {
       const paymentEntity = payload?.payment?.entity;
       const orderId = paymentEntity?.order_id || payload?.order?.entity?.id;
       const paymentId = paymentEntity?.id;
+      const amountPaise = paymentEntity?.amount || payload?.order?.entity?.amount || 0;
+      const amountRupees = amountPaise > 0 ? amountPaise / 100 : 0;
 
       if (orderId) {
-        // Idempotency: Check if already captured
+        // Idempotency: Check if order already captured
         const existingTx = await Transaction.findOne({ orderId });
-        if (existingTx && existingTx.status === "captured") {
+        if (existingTx && existingTx.status === "captured" && existingTx.paymentId === paymentId) {
           console.log(`ℹ️ [Razorpay Webhook] Order ${orderId} already captured. Skipping redundant write.`);
           return res.status(200).send("OK (Already processed)");
         }
@@ -407,16 +441,113 @@ export const razorpayWebhook = async (req, res, next) => {
           { new: true }
         );
 
-        if (transaction?.appointmentId) {
-          const appt = await Appointment.findById(transaction.appointmentId).populate("doctorId");
-          const isDocActivated = appt?.doctorId?.payoutStatus === "activated" && Boolean(appt?.doctorId?.razorpayAccountId);
-          const targetPayoutStatus = isDocActivated ? "transferred" : "payout_pending";
+        const appointmentId =
+          transaction?.appointmentId ||
+          paymentEntity?.notes?.appointmentId ||
+          payload?.order?.entity?.notes?.appointmentId;
 
-          await Appointment.findByIdAndUpdate(
-            transaction.appointmentId,
-            { paymentStatus: "paid", payoutStatus: targetPayoutStatus }
-          );
-          console.log(`✅ [Razorpay Webhook] Appointment ${transaction.appointmentId} marked paid via webhook.`);
+        if (appointmentId) {
+          const appt = await Appointment.findById(appointmentId)
+            .populate("doctorId")
+            .populate("patientId");
+
+          if (appt) {
+            const finalFee = amountRupees || appt.amount || 0;
+
+            // ── DOUBLE PAYMENT GUARD ──
+            // If already marked paid offline (cash / upi_clinic / card_clinic), flag for refund
+            if (appt.paymentStatus === "paid" && appt.paymentMode !== "online") {
+              console.warn(
+                `⚠️ [Razorpay Webhook] Duplicate payment detected: appt ${appt._id} was already marked paid via ${appt.paymentMode}. Flagging for review/refund.`
+              );
+
+              appt.duplicatePaymentFlag = true;
+              appt.duplicatePaymentReview = {
+                flagged: true,
+                onlinePaymentId: paymentId || "",
+                amount: finalFee,
+                flaggedAt: new Date(),
+                resolved: false,
+                resolution: "",
+              };
+              await appt.save();
+
+              await PaymentRecord.create({
+                appointmentId: appt._id,
+                patientId: appt.patientId?._id || appt.patientId,
+                doctorId: appt.doctorId?._id || appt.doctorId,
+                amount: finalFee,
+                paymentMode: "online",
+                paymentStatus: "paid",
+                source: "gateway",
+                gatewayOrderId: orderId || null,
+                gatewayPaymentId: paymentId || null,
+                webhookEventId: eventId || null,
+                duplicateFlag: true,
+                duplicateDetails: {
+                  detectedAt: new Date(),
+                  reason: `Online payment received after appointment was already marked paid offline via ${appt.paymentMode}.`,
+                  onlinePaymentId: paymentId || "",
+                  amount: finalFee,
+                  refundStatus: "pending_refund",
+                },
+                notes: "Duplicate payment captured online. Needs refund review.",
+                markedRole: "system",
+              });
+
+              const docUserId = appt.doctorId?.userId?._id || appt.doctorId?.userId || appt.doctorId;
+              const patientUserId = appt.patientId?._id || appt.patientId;
+
+              await notify(EVENT_TYPES.PAYMENT_DUPLICATE_REVIEW, [docUserId, patientUserId], {
+                date: formatDate(appt.appointmentDate),
+                amount: finalFee,
+              });
+
+              return res.status(200).send("OK (Flagged as duplicate payment for refund review)");
+            }
+
+            // Normal online payment capture
+            const isDocActivated =
+              appt.doctorId?.payoutStatus === "activated" && Boolean(appt.doctorId?.razorpayAccountId);
+            const targetPayoutStatus = isDocActivated ? "transferred" : "payout_pending";
+
+            appt.paymentStatus = "paid";
+            appt.paymentMode = "online";
+            appt.paymentSource = "gateway";
+            appt.amountPaid = finalFee;
+            appt.amountDue = 0;
+            appt.payoutStatus = targetPayoutStatus;
+            appt.paymentMarkedAt = new Date();
+            await appt.save();
+
+            await PaymentRecord.create({
+              appointmentId: appt._id,
+              patientId: appt.patientId?._id || appt.patientId,
+              doctorId: appt.doctorId?._id || appt.doctorId,
+              amount: finalFee,
+              paymentMode: "online",
+              paymentStatus: "paid",
+              source: "gateway",
+              gatewayOrderId: orderId || null,
+              gatewayPaymentId: paymentId || null,
+              webhookEventId: eventId || null,
+              markedRole: "system",
+              notes: `Online gateway payment captured via Razorpay (Order: ${orderId})`,
+            });
+
+            const docUserId = appt.doctorId?.userId?._id || appt.doctorId?.userId || appt.doctorId;
+            const patientUserId = appt.patientId?._id || appt.patientId;
+
+            await notify(EVENT_TYPES.PAYMENT_PAID, [docUserId, patientUserId], {
+              date: formatDate(appt.appointmentDate),
+              amount: finalFee,
+            });
+
+            if (docUserId) {
+              triggerDashboardUpdate(docUserId, "A consultation payment was captured online");
+            }
+            console.log(`✅ [Razorpay Webhook] Appointment ${appt._id} marked paid online via webhook.`);
+          }
         }
       }
     } else if (event === "payment.failed") {
@@ -747,5 +878,349 @@ export const refundPayment = async (appointmentId) => {
   } catch (err) {
     console.error("[Razorpay Refund Error]", err);
     return false;
+  }
+};
+
+// ==========================================
+// PATH A: ONLINE ORDER FOR APPOINTMENT
+// ==========================================
+export const createAppointmentOnlineOrder = async (req, res, next) => {
+  req.body.appointmentId = req.params.id || req.body.appointmentId;
+  return createOrder(req, res, next);
+};
+
+// ==========================================
+// PATH B: DIRECT DOCTOR UPI (QR / VPA)
+// ==========================================
+export const getDirectUpiDetails = async (req, res, next) => {
+  try {
+    const appointment = await Appointment.findById(req.params.id)
+      .populate({ path: "doctorId", populate: { path: "userId", select: "name" } })
+      .populate("patientId", "name email phone");
+
+    if (!appointment) return req.http.notFound("Appointment not found");
+
+    const doctor = appointment.doctorId;
+    if (!doctor) return req.http.notFound("Doctor profile not found");
+
+    if (!doctor.acceptsDirectUpi || !doctor.upiId) {
+      return req.http.ok({
+        enabled: false,
+        message: "Doctor does not accept direct UPI payments. Please pay online via gateway or at clinic.",
+      });
+    }
+
+    const vpa = doctor.upiId.trim();
+    const payeeName = doctor.payeeName || doctor.userId?.name || "Doctor";
+    const amount = appointment.amount || doctor.consultationFee || 500;
+    const paymentRef = `MED-${appointment._id.toString().slice(-6).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+
+    // Standard NPCI UPI URI Scheme (note contains NO clinical/health details for privacy)
+    const upiUri = `upi://pay?pa=${encodeURIComponent(vpa)}&pn=${encodeURIComponent(payeeName)}&am=${amount}&cu=INR&tn=${encodeURIComponent("Consultation fee")}&tr=${encodeURIComponent(paymentRef)}`;
+
+    return req.http.ok({
+      enabled: true,
+      upiUri,
+      upiId: vpa,
+      payeeName,
+      amount,
+      paymentRef,
+      qrData: upiUri,
+      qrImage: doctor.upiQrImage || null,
+      appointmentId: appointment._id,
+      patientName: appointment.patientId?.name,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const claimDirectUpiPayment = async (req, res, next) => {
+  try {
+    const { utr = "", screenshotUrl = "" } = req.body;
+    const appointment = await Appointment.findById(req.params.id)
+      .populate("patientId", "name email phone")
+      .populate({ path: "doctorId", populate: { path: "userId", select: "name email phone" } });
+
+    if (!appointment) return req.http.notFound("Appointment not found");
+
+    // Guard: Prevent claiming already paid appointments
+    if (appointment.paymentStatus === "paid" && appointment.paymentMode === "online") {
+      return req.http.badRequest("This appointment has already been paid online via payment gateway.");
+    }
+    if (appointment.paymentStatus === "paid") {
+      return req.http.badRequest("This appointment is already marked as paid.");
+    }
+
+    // Guard: Patient authorization check
+    if (
+      req.user.role === "patient" &&
+      String(appointment.patientId?._id || appointment.patientId) !== String(req.user._id)
+    ) {
+      return req.http.forbidden("You can only claim payments for your own appointments.");
+    }
+
+    const cleanUtr = String(utr || "").trim();
+
+    appointment.paymentStatus = "claimed";
+    appointment.paymentMode = "upi_direct";
+    appointment.paymentSource = "direct_upi";
+    appointment.claimedPayment = {
+      claimedAt: new Date(),
+      claimedBy: req.user._id,
+      utr: cleanUtr,
+      screenshotUrl: screenshotUrl || "",
+    };
+    await appointment.save();
+
+    const paymentRecord = await PaymentRecord.create({
+      appointmentId: appointment._id,
+      patientId: appointment.patientId?._id || appointment.patientId,
+      doctorId: appointment.doctorId?._id || appointment.doctorId,
+      amount: appointment.amount,
+      paymentMode: "upi_direct",
+      paymentStatus: "claimed",
+      source: "direct_upi",
+      utr: cleanUtr,
+      screenshotUrl: screenshotUrl || "",
+      claimedAt: new Date(),
+      claimedBy: req.user._id,
+      markedRole: "patient",
+      notes: cleanUtr ? `Patient reported UTR: ${cleanUtr}` : "Patient claimed UPI payment without UTR",
+    });
+
+    recordAudit({
+      userId: req.user._id,
+      role: req.user.role,
+      action: "payment_claimed",
+      resource: "appointment",
+      resourceId: appointment._id,
+      after: { paymentStatus: "claimed", utr: cleanUtr },
+      req,
+    });
+
+    // Notify doctor
+    const docUserId =
+      appointment.doctorId?.userId?._id ||
+      appointment.doctorId?.userId ||
+      appointment.doctorId;
+    if (docUserId) {
+      await notify(EVENT_TYPES.PAYMENT_CLAIMED, docUserId, {
+        actorId: req.user._id,
+        patientName: appointment.patientId?.name || "Patient",
+        amount: appointment.amount,
+        utr: cleanUtr || "None provided",
+      });
+    }
+
+    return req.http.ok(
+      { appointment, paymentRecord },
+      "Payment claim submitted. Status is now 'Payment claimed – awaiting confirmation'."
+    );
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const confirmDirectUpiPayment = async (req, res, next) => {
+  try {
+    const { action, reason = "" } = req.body;
+    if (!["confirm", "reject"].includes(action)) {
+      return req.http.badRequest("Action must be either 'confirm' or 'reject'.");
+    }
+
+    const appointment = await Appointment.findById(req.params.id)
+      .populate("patientId", "name email phone")
+      .populate({ path: "doctorId", populate: { path: "userId", select: "name email phone" } });
+
+    if (!appointment) return req.http.notFound("Appointment not found");
+
+    // Guard: Doctor / staff authorization
+    if (req.user.role === "doctor") {
+      const doctorDoc = await Doctor.findOne({ userId: req.user._id });
+      if (!doctorDoc || String(appointment.doctorId?._id || appointment.doctorId) !== String(doctorDoc._id)) {
+        return req.http.forbidden("You can only confirm payments for your own appointments.");
+      }
+    }
+
+    if (appointment.paymentStatus !== "claimed" && action === "confirm" && appointment.paymentStatus === "paid") {
+      return req.http.badRequest("Appointment is already paid.");
+    }
+
+    let paymentRecord = await PaymentRecord.findOne({
+      appointmentId: appointment._id,
+      paymentStatus: "claimed",
+    }).sort({ createdAt: -1 });
+
+    const patientUserId = appointment.patientId?._id || appointment.patientId;
+
+    if (action === "confirm") {
+      appointment.paymentStatus = "paid";
+      appointment.paymentMode = "upi_direct";
+      appointment.paymentSource = "direct_upi";
+      appointment.amountPaid = appointment.amount;
+      appointment.amountDue = 0;
+      appointment.paymentMarkedBy = req.user._id;
+      appointment.paymentMarkedAt = new Date();
+      await appointment.save();
+
+      if (paymentRecord) {
+        paymentRecord.paymentStatus = "paid";
+        paymentRecord.confirmedBy = req.user._id;
+        paymentRecord.confirmedAt = new Date();
+        await paymentRecord.save();
+      } else {
+        paymentRecord = await PaymentRecord.create({
+          appointmentId: appointment._id,
+          patientId: patientUserId,
+          doctorId: appointment.doctorId?._id || appointment.doctorId,
+          amount: appointment.amount,
+          paymentMode: "upi_direct",
+          paymentStatus: "paid",
+          source: "direct_upi",
+          confirmedBy: req.user._id,
+          confirmedAt: new Date(),
+          markedBy: req.user._id,
+          markedRole: req.user.role,
+        });
+      }
+
+      recordAudit({
+        userId: req.user._id,
+        role: req.user.role,
+        action: "payment_confirmed",
+        resource: "appointment",
+        resourceId: appointment._id,
+        after: { paymentStatus: "paid", paymentMode: "upi_direct" },
+        req,
+      });
+
+      if (patientUserId) {
+        await notify(EVENT_TYPES.PAYMENT_CONFIRMED, patientUserId, {
+          actorId: req.user._id,
+          amount: appointment.amount,
+          date: formatDate(appointment.appointmentDate),
+        });
+      }
+
+      return req.http.ok({ appointment, paymentRecord }, "Direct UPI payment confirmed as Paid · UPI.");
+    } else {
+      // Reject requires a mandatory reason
+      if (!reason || !reason.trim()) {
+        return req.http.badRequest("A mandatory reason is required to reject a payment claim.");
+      }
+
+      appointment.paymentStatus = "unpaid";
+      appointment.paymentMode = "none";
+      appointment.paymentSource = "none";
+      appointment.claimedPayment = null;
+      await appointment.save();
+
+      if (paymentRecord) {
+        paymentRecord.paymentStatus = "void";
+        paymentRecord.rejectionReason = reason.trim();
+        await paymentRecord.save();
+      }
+
+      recordAudit({
+        userId: req.user._id,
+        role: req.user.role,
+        action: "payment_rejected",
+        resource: "appointment",
+        resourceId: appointment._id,
+        after: { paymentStatus: "unpaid", reason: reason.trim() },
+        req,
+      });
+
+      if (patientUserId) {
+        await notify(EVENT_TYPES.PAYMENT_REJECTED, patientUserId, {
+          actorId: req.user._id,
+          amount: appointment.amount,
+          reason: reason.trim(),
+        });
+      }
+
+      return req.http.ok({ appointment, paymentRecord }, "Payment claim rejected and reset to Unpaid.");
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateDoctorUpiProfile = async (req, res, next) => {
+  try {
+    const { upiId, payeeName, upiQrImage, acceptsDirectUpi } = req.body;
+
+    const doctor = await Doctor.findOne({ userId: req.user._id });
+    if (!doctor) {
+      return req.http.notFound("Doctor profile not found.");
+    }
+
+    if (upiId !== undefined) {
+      const trimmedVpa = String(upiId).trim();
+      if (trimmedVpa && !/^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/.test(trimmedVpa)) {
+        return req.http.badRequest("Invalid UPI ID / VPA format. Example: dr.name@bank");
+      }
+      doctor.upiId = trimmedVpa;
+    }
+
+    if (payeeName !== undefined) doctor.payeeName = String(payeeName).trim();
+    if (upiQrImage !== undefined) doctor.upiQrImage = upiQrImage;
+    if (acceptsDirectUpi !== undefined) doctor.acceptsDirectUpi = Boolean(acceptsDirectUpi);
+
+    await doctor.save();
+
+    recordAudit({
+      userId: req.user._id,
+      role: req.user.role,
+      action: "update_upi_profile",
+      resource: "doctor",
+      resourceId: doctor._id,
+      after: {
+        upiId: doctor.upiId,
+        payeeName: doctor.payeeName,
+        acceptsDirectUpi: doctor.acceptsDirectUpi,
+      },
+      req,
+    });
+
+    return req.http.ok(
+      {
+        upiId: doctor.upiId,
+        payeeName: doctor.payeeName,
+        upiQrImage: doctor.upiQrImage,
+        acceptsDirectUpi: doctor.acceptsDirectUpi,
+      },
+      "Doctor UPI profile updated successfully"
+    );
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const sendUnpaidReminder = async (req, res, next) => {
+  try {
+    const appointment = await Appointment.findById(req.params.id)
+      .populate("patientId", "name email phone")
+      .populate("doctorId");
+
+    if (!appointment) return req.http.notFound("Appointment not found");
+
+    if (appointment.paymentStatus === "paid") {
+      return req.http.badRequest("Appointment is already paid.");
+    }
+
+    const patientUserId = appointment.patientId?._id || appointment.patientId;
+    if (patientUserId) {
+      await notify(EVENT_TYPES.PAYMENT_UNPAID_REMINDER, patientUserId, {
+        actorId: req.user._id,
+        amount: appointment.amountDue || appointment.amount,
+        date: formatDate(appointment.appointmentDate),
+      });
+    }
+
+    return req.http.ok(null, "Unpaid reminder dispatched to patient.");
+  } catch (err) {
+    next(err);
   }
 };

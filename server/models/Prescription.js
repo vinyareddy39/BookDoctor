@@ -195,6 +195,14 @@ const prescriptionSchema = new mongoose.Schema(
       type: Date,
       default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // default 30 days
     },
+    endDate: {
+      type: Date,
+      default: null,
+    },
+    refillReminderSent: {
+      type: Boolean,
+      default: false,
+    },
     sharedAt: {
       type: Date,
       default: Date.now,

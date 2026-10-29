@@ -43,6 +43,11 @@ export const saveStructuredPrescription = async (req, res, next) => {
       notes = "",
       generalInstructions = "",
       validUntil,
+      attachmentUrl,
+      attachmentType,
+      attachmentName,
+      rawOcrText,
+      ocrConfidence,
     } = req.body;
 
     let doctorId = await resolveDoctorId(req.user);
@@ -97,7 +102,13 @@ export const saveStructuredPrescription = async (req, res, next) => {
       parentPrescriptionId: parentId,
       version: newVersion,
       status: "shared",
-      source: medsArray.length > 0 ? "doctor_structured" : "manual",
+      source: attachmentUrl ? "ocr" : (medsArray.length > 0 ? "doctor_structured" : "manual"),
+      uploadedBy: req.user.role === "doctor" ? "doctor" : "patient",
+      attachmentUrl: attachmentUrl || undefined,
+      attachmentType: attachmentType || undefined,
+      attachmentName: attachmentName || undefined,
+      rawOcrText: rawOcrText || "",
+      ocrConfidence: ocrConfidence || 0,
       medications: medsArray,
       notes,
       generalInstructions,
@@ -726,12 +737,29 @@ export const uploadHandwrittenPrescription = async (req, res, next) => {
     }
 
     let targetPatientId = req.user._id;
+    let appointmentDoc = null;
+    let doctorId = null;
+
+    if (req.body.appointmentId) {
+      appointmentDoc = await Appointment.findById(req.body.appointmentId);
+      if (appointmentDoc) {
+        targetPatientId = appointmentDoc.patientId;
+        doctorId = appointmentDoc.doctorId;
+      }
+    }
+
+    if (req.user.role === "doctor") {
+      const resolvedDoc = await resolveDoctorId(req.user);
+      if (resolvedDoc) doctorId = resolvedDoc;
+    }
 
     // Caregiver or doctor uploading for a patient
-    if (req.body.patientId && req.body.patientId !== String(req.user._id)) {
-      const access = await checkCaregiverAccess(req.body.patientId, req.user._id);
-      if (!access.allowed && req.user.role !== "doctor" && req.user.role !== "admin") {
-        return req.http.forbidden("Access denied: Not authorized to upload prescription for this patient");
+    if (req.body.patientId && String(req.body.patientId) !== String(req.user._id)) {
+      if (req.user.role !== "doctor" && req.user.role !== "admin") {
+        const access = await checkCaregiverAccess(req.body.patientId, req.user._id);
+        if (!access.allowed) {
+          return req.http.forbidden("Access denied: Not authorized to upload prescription for this patient");
+        }
       }
       targetPatientId = req.body.patientId;
     }
@@ -753,12 +781,14 @@ export const uploadHandwrittenPrescription = async (req, res, next) => {
     // CRITICAL SAFETY RULE: Status is strictly "draft", zero DoseEvents generated until explicit review & confirmation
     const prescription = await Prescription.create({
       patientId: targetPatientId,
+      doctorId: doctorId || null,
+      appointmentId: appointmentDoc?._id || req.body.appointmentId || null,
       status: "draft",
-      source: "patient_upload",
+      source: req.user.role === "doctor" ? "ocr" : "patient_upload",
       uploadedBy: req.user.role === "doctor" ? "doctor" : "patient",
-      doctorName: doctorName.trim(),
+      doctorName: doctorName.trim() || (req.user.role === "doctor" ? req.user.name : ""),
       clinicName: clinicName.trim(),
-      notes: notes.trim(),
+      notes: notes.trim() || ocrResult.rawOcrText,
       attachmentUrl,
       attachmentType: isPdf ? "pdf" : "image",
       attachmentName: req.file.originalname,
