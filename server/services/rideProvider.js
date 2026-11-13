@@ -207,11 +207,27 @@ export class UberApiProvider extends RideProvider {
     ];
     const picked = drivers[Math.floor(Math.random() * drivers.length)];
 
+    // Universal deep link parameters for real Uber app dispatch
+    const dlParams = new URLSearchParams();
+    dlParams.append("action", "setPickup");
+    dlParams.append("pickup[latitude]", String(startLat));
+    dlParams.append("pickup[longitude]", String(startLng));
+    dlParams.append("pickup[nickname]", "My Location");
+    dlParams.append("dropoff[latitude]", String(endLat));
+    dlParams.append("dropoff[longitude]", String(endLng));
+    dlParams.append("dropoff[nickname]", hospitalName);
+
+    const deepLinks = {
+      appUrl: `uber://?${dlParams.toString()}`,
+      webUrl: `https://m.uber.com/ul/?${dlParams.toString()}`,
+    };
+
     return {
       success: true,
       requestId: `ub-req-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
       status: "accepted",
       etaMinutes: 4,
+      deepLinks,
       driver: {
         name: picked.name,
         phone: picked.phone,

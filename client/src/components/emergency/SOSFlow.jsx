@@ -5,6 +5,7 @@ import L from "leaflet";
 import toast from "react-hot-toast";
 import API from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { buildUberLinks } from "../../utils/uberDeepLink";
 
 // Fix Leaflet Default Icon Path issues in Vite
 delete L.Icon.Default.prototype._getIconUrl;
@@ -278,6 +279,9 @@ export default function SOSFlow({ isOpen, onClose }) {
     toast("Uber booking cancelled.", { icon: "ℹ️" });
   };
 
+  // Compute live Uber deep links for real driver dispatch
+  const liveUberLinks = selectedHospital && location ? buildUberLinks(location, selectedHospital) : null;
+
   // STEP 5: Execute Confirmed Booking via RideProvider
   const executeRideConfirmation = async () => {
     if (!sosEvent || !selectedHospital) return;
@@ -297,9 +301,15 @@ export default function SOSFlow({ isOpen, onClose }) {
       setRideResult(data.rideResult);
       setTrackingUrl(data.trackingUrl);
 
-      // If universal deep links returned, open for immediate mobile Uber app handoff
-      if (data.deepLinks?.webUrl && /Mobi|Android|iPhone/i.test(navigator.userAgent)) {
-        window.location.href = data.deepLinks.appUrl || data.deepLinks.webUrl;
+      // If universal deep links returned, open for immediate mobile Uber app handoff to real Uber app
+      const targetDeepLink =
+        data.deepLinks?.appUrl ||
+        data.deepLinks?.webUrl ||
+        liveUberLinks?.appUrl ||
+        liveUberLinks?.webUrl;
+
+      if (targetDeepLink && /Mobi|Android|iPhone/i.test(navigator.userAgent)) {
+        window.location.href = targetDeepLink;
       }
 
       toast.success("Uber ride booked! Emergency contacts and doctor alerted.");
@@ -727,6 +737,18 @@ export default function SOSFlow({ isOpen, onClose }) {
                     🏥 Call Hospital
                   </a>
                 </div>
+
+                {/* Real Uber Dispatch Direct Button */}
+                {(rideResult?.deepLinks || liveUberLinks) && (
+                  <a
+                    href={(rideResult?.deepLinks?.appUrl || rideResult?.deepLinks?.webUrl) || liveUberLinks?.appUrl || liveUberLinks?.webUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full bg-black hover:bg-slate-900 text-white font-extrabold py-3 px-4 rounded-xl text-center text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
+                  >
+                    <span>🚗 Open in Real Uber App (Call Real Driver Now) ↗</span>
+                  </a>
+                )}
               </div>
 
               {/* Live Tracking Link for Emergency Contacts */}
