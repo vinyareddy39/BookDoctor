@@ -61,6 +61,18 @@ dotenv.config();
 // Enforce production gateway security checks on startup
 validateRazorpayConfig();
 
+// Strict Production Validation: APP_ENV=production refuses to start if ALLOW_UBER_SIMULATION is set or UBER_ENV is not production
+if (process.env.APP_ENV === "production") {
+  if (process.env.ALLOW_UBER_SIMULATION && process.env.ALLOW_UBER_SIMULATION !== "false") {
+    console.error("FATAL CONFIG ERROR: ALLOW_UBER_SIMULATION is not permitted when APP_ENV=production.");
+    process.exit(1);
+  }
+  if (process.env.UBER_ENV !== "production") {
+    console.error("FATAL CONFIG ERROR: UBER_ENV must be 'production' when APP_ENV=production.");
+    process.exit(1);
+  }
+}
+
 if (!process.env.UBER_REDIRECT_URI) {
   console.warn(
     "⚠️  CONFIG WARNING: UBER_REDIRECT_URI is not set in server/.env. Uber OAuth will fail until UBER_REDIRECT_URI is set AND saved identically under Redirect URIs in the Uber Developer Dashboard."
@@ -68,9 +80,9 @@ if (!process.env.UBER_REDIRECT_URI) {
 }
 
 if (process.env.ALLOW_UBER_SIMULATION === "true") {
-  if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV === "production" || process.env.APP_ENV === "production") {
     console.error(
-      "🚨 SECURITY WARNING: ALLOW_UBER_SIMULATION=true is set while NODE_ENV=production. Local Uber simulation is FORCED OFF in production."
+      "🚨 SECURITY WARNING: ALLOW_UBER_SIMULATION=true is set in production. Local Uber simulation is FORCED OFF in production."
     );
   } else {
     console.warn(

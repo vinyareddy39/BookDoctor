@@ -18,6 +18,14 @@ export async function resolve(specifier, context, nextResolve) {
     };
   }
 
+  if (specifier === "@react-native-async-storage/async-storage") {
+    return {
+      format: "module",
+      shortCircuit: true,
+      url: new URL("./async-storage-mock.mjs", import.meta.url).href,
+    };
+  }
+
   // Handle extensionless relative imports for TypeScript
   if (specifier.startsWith("./") || specifier.startsWith("../")) {
     const parentURL = context.parentURL;

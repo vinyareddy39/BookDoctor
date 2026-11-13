@@ -36,4 +36,41 @@ export const Share = {
   }
 };
 
-export default { Linking, Platform, Share };
+export const NativeModules = {
+  SosAccessibilityModule: {
+    isAccessibilityServiceEnabled: async () => false,
+    startSosAutoConfirm: async () => true,
+    stopSosAutoConfirm: async () => true,
+    openAccessibilitySettings: async () => true,
+    getCalibrationDump: async () => "[]",
+  }
+};
+
+export class NativeEventEmitter {
+  constructor(module) {
+    this.module = module;
+    this.listeners = new Map();
+  }
+  addListener(event, callback) {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, new Set());
+    }
+    this.listeners.get(event).add(callback);
+    return {
+      remove: () => {
+        this.listeners.get(event)?.delete(callback);
+      }
+    };
+  }
+  emit(event, data) {
+    const handlers = this.listeners.get(event);
+    if (handlers) {
+      for (const h of handlers) h(data);
+    }
+  }
+  removeAllListeners() {
+    this.listeners.clear();
+  }
+}
+
+export default { Linking, Platform, Share, NativeModules, NativeEventEmitter };

@@ -32,6 +32,9 @@
         "CALL_PHONE"
       ]
     },
+    "plugins": [
+      "./plugins/withSosAccessibility"
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     }

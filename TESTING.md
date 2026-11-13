@@ -143,21 +143,114 @@ By default, if no user OAuth token exists in MongoDB (`UberConnection`) AND Uber
 3. To test the **45-second watchdog**, keep the ride in non-accepted/deep-link state and let the 45s timer reach `0`:
    - Verify full-screen **EMERGENCY ALERT (108 / 112)** screen appears, SMS #3 triggers, and the background-Uber warning displays.
 
-### Test 4: Twilio Trial & `expo-sms` Fallback
-1. Add your **Twilio-verified** test number as contact #1 and trigger SOS -> confirm server SMS succeeds.
-2. Add an **unverified** dummy test number (e.g., `+910000000000`) -> server catches Twilio trial error (`21608`) and app automatically opens the device's **SMS compose sheet** (`expo-sms`) with the alert text pre-filled (**do not press Send**).
+### Test 4: Phone-Sent Emergency Messages App Flow (iPhone & Android)
+Emergency alerts are dispatched directly via the phone's native **Messages app** (`expo-sms`) with zero server SMS gateway fees, zero Twilio/WhatsApp dependencies, and zero opt-in requirements:
+1. Ensure at least 1 emergency contact is added in **Contacts** (e.g. your own mobile number).
+2. On Home, tap **SOS**.
+3. **Flow execution:**
+   - 5-second cancel countdown elapses.
+   - GPS acquires current coordinates.
+   - Hospital lookup searches for the nearest emergency hospital (with an 8-second timeout).
+   - Once resolved (or upon 8s timeout), RapidCare SOS opens your phone's native **Messages composer** with:
+     - **Recipients:** All configured contacts (strictly capped at 5).
+     - **Pre-filled message:** `"SOS - I need help. My location: <Google Maps link>. Nearest emergency hospital: <name>"` (or location-only if lookup timed out).
+   - On-screen instruction banner displays: **"👉 Tap Send in Messages to alert your contacts"**.
+4. **Resuming after sending:**
+   - Tap **Send** (or tap Cancel to test dismissal) in your Messages app.
+   - Return to RapidCare SOS.
+   - Verify the emergency flow, booking attempt, and 45-second watchdog **continue uninterrupted** without resetting or restarting.
+5. **Watchdog Failure Update (On-Demand):**
+   - If the 45-second watchdog expires, verify that the failure composer **does NOT open automatically**.
+   - Instead, tap the large orange button: **"✉️ Send Update to Contacts"** to open the composer with `"Ride could not be confirmed. Please call me or send help."`.
+6. **Ride Confirmed Update (On-Demand):**
+   - On the active ride tracker, tap **"📤 Share Ride Details with Contacts"** to open the composer with the driver name, vehicle, license plate, ETA, and live tracking link.
+7. **No SIM / Unavailable Fallback:**
+   - If tested on a device or simulator without a SIM card or Messages app, verify the on-screen fallback card displays the contact numbers, pre-filled alert text, a **"Copy Alert Text"** button, and direct **108 / 112** call buttons.
 
 ### Test 5: Failure & Permission Denial Matrix
 Confirm each scenario ends cleanly on visible **108 / 112** options and **never crashes**:
-1. **Deny Location (GPS):** Turn off Location permission for Expo Go ➔ tap SOS ➔ verify immediate `ALERT_108_112` screen + location-unavailable SMS fallback.
+1. **Deny Location (GPS):** Turn off Location permission for Expo Go ➔ tap SOS ➔ verify immediate `ALERT_108_112` screen + location-unavailable SMS composer.
 2. **Deny Contacts:** Deny Contacts permission in **Contacts** screen ➔ verify clear alert + manual entry still works + SOS continues without crashing.
-3. **Airplane Mode / No Network:** Enable Airplane mode ➔ tap SOS ➔ verify Places & Overpass fail safely (no hardcoded coordinates), `expo-sms` / Share sheet fallback triggers, and `ALERT_108_112` screen renders cleanly.
-4. **Server Unreachable:** Stop the Node server (`Ctrl+C` in Terminal 1) ➔ tap **Settings ➔ Test server connection** (verify exact error shown) ➔ tap **SOS** (verify `expo-sms` fallback + Uber deep-link fallback + 108/112 buttons).
-5. **108 / 112 Dialer Check:** Tap **CALL 108** ➔ verify native dialer opens with `108` ➔ tap **Cancel** immediately.
+3. **Airplane Mode / No Network:** Enable Airplane mode ➔ tap SOS ➔ verify Places & Overpass fail safely (no hardcoded coordinates), Messages composer opens with location-only message, and `ALERT_108_112` screen renders cleanly.
+4. **108 / 112 Dialer Check:** Tap **CALL 108** ➔ verify native dialer opens with `108` ➔ tap **Cancel** immediately.
 
 ---
 
-## Twilio Billing & Abuse Protection
+## 6. Android Accessibility Auto-Confirm Real-Device Testing
+
+### Overview & Architecture
+The unified RapidCare SOS Android app integrates the native `SosAccessibilityService` via an Expo Config Plugin (`plugins/withSosAccessibility.js`) and Kotlin bridge module (`src/native-android/`).
+
+> [!NOTE]
+> **Web Browser vs Native App Difference (Chrome "Continue to Uber?" Prompt):**
+> If you test the web version in Chrome mobile (`doctor-six.vercel.app`), Chrome displays a security banner:
+> `Continue to Uber? This site wants to open the Uber app [Continue]`
+> Web browsers enforce this user prompt by security design before launching an external app.
+> In the native Android app (`rapidcare-sos`), `Linking.openURL("uber://...")` dispatches an Android Intent directly to the Uber app without that browser dialog, allowing the Accessibility Service to monitor Uber immediately.
+
+### A. Prerequisites (Custom Dev Build)
+Because Android Accessibility Services require native manifest registration and system permissions, they run in a custom Expo Dev Build (not standard Expo Go):
+```bash
+cd rapidcare-sos
+npx expo run:android
+```
+*(Or build an APK with `eas build --profile development --platform android`)*
+
+### B. Enabling the Service in Android OS Settings
+1. On your Android phone, go to **Settings ➔ Accessibility ➔ Installed Apps** (or **Downloaded Services** depending on Android version / manufacturer).
+2. Look for **RapidCare SOS Ride Service** (labeled `RapidCare SOS Ride Service`).
+3. Toggle it **ON**.
+4. Android will display a system security dialog explaining that the service can read screen content. Tap **Allow**.
+
+### C. In-App Setup & Disclosure
+1. In RapidCare SOS, tap **Settings**.
+2. Scroll to **🤖 Android Uber Auto-Confirm** (strictly OFF by default).
+3. Toggle the switch ON.
+4. Review the **Accessibility Disclosure Modal**:
+   - Destination hospital verification guarantee.
+   - Fare/surge/terms safety filter.
+   - 45s watchdog timer.
+   - Zero-PII log guarantee.
+   - Instant kill switch.
+5. Tap **I Agree & Enable**.
+6. The card now displays `⚡ AUTO-CONFIRM ARMED` and checks the Android OS service status (`✅ Enabled in Android OS`).
+
+### D. Single Flow Execution Test
+1. Return to the Home screen and tap **SOS**.
+2. **Order of Operations:**
+   - **Step 1: Countdown (5s)** — Allows accidental tap cancellation before any SMS or rides.
+   - **Step 2: SMS #1 (Location pin)** — Dispatched immediately to emergency contacts with exact GPS pin.
+   - **Step 3: Hospital Lookup** — Queries Places / Overpass for nearest emergency hospital.
+   - **Step 4: SMS #2 (Hospital update)** — Dispatched to emergency contacts with ER hospital name.
+   - **Step 5: Dispatch Branch A (Auto-Confirm)** — Since Android has auto-confirm ON and service enabled:
+     - RapidCare arms `SosAccessibilityService` with the target hospital name (e.g. `Apollo Hospital`).
+     - RapidCare launches the official Uber app via native deep link with prefilled pickup and ER dropoff coordinates.
+     - As Uber opens, `SosAccessibilityService` inspects the active window hierarchy.
+     - **Destination Verification**: The service confirms that `Apollo Hospital` is visible in the Uber destination card. If mismatched, it refuses to tap and sets `destination_mismatch`.
+     - **Modal Safety Filter**: If any dialog mentions `surge`, `fare`, `price`, `payment`, `fee`, `cost`, or `terms`, it blocks automatic taps.
+     - If a safe intermediate modal appears (e.g. "Confirm pickup spot" or "Got it"), it taps it.
+     - Once the main ride confirmation button appears (e.g. "Confirm UberGo"), it automatically clicks the button.
+     - **Dual Success Detection**: Success is detected either from screen text (`driver is on the way`, `finding your ride`) OR the server ride status API. Whichever confirms first transitions the app to the active ride tracker.
+
+### E. 45-Second Watchdog Test
+1. Trigger SOS with the phone locked or with Uber unopened.
+2. Wait 45 seconds.
+3. RapidCare SOS will:
+   - Automatically disarm the accessibility service (`stopSosAutoConfirm()`).
+   - Dispatch **SMS #3** (Watchdog alert: "Urgent: Uber ride could not be confirmed automatically. Please check on me immediately.").
+   - Display the high-priority **EMERGENCY 108/112 ALERT** screen with direct one-tap calling buttons.
+
+### F. Instant Kill Switch Test
+1. In Settings under **Android Uber Auto-Confirm**, tap the red **🛑 EMERGENCY KILL SWITCH: DISABLE NOW** button.
+2. Confirm the feature is immediately disarmed and turned OFF.
+
+### G. Calibration Dump Mode (Screen Hierarchy Inspection)
+1. For testing different Uber app versions or regional UI variations, tap **Calibration Dump** in Settings.
+2. This displays the sanitized, zero-PII view hierarchy captured during the last ride attempt, allowing developers to see exact node texts and class names without exposing rider addresses or phone numbers.
+
+---
+
+## 7. Twilio Billing & Abuse Protection
 
 In addition to the server's built-in limits (`SMS_DAILY_CAP=200` global, `SMS_DEVICE_DAILY_CAP=30` per device, `10/hour` per device, max `5` recipients per request):
 - **Set a spending limit in the Twilio Console** before deploying or running live tests (`Twilio Console ➔ Billing ➔ Usage Triggers / Spending Limits`). This protects your account if server credentials are ever misused or rotated late.

@@ -57,6 +57,9 @@ export const EMERGENCY_CONFIG = {
   // Emergency safety warning
   WARNING_TEXT: "In a real emergency call 108/112 directly",
 
+  // Auto-dial 108 policy: OFF by default (displays high-priority 1-tap call button instead of auto-dialing)
+  AUTO_DIAL_108_ON_TIMEOUT: false,
+
   // Countdown & Timeouts
   CANCEL_COUNTDOWN_SECONDS: 5, // Set to 0 to disable countdown
   WATCHDOG_TIMEOUT_SECONDS: 45, // Time allowed for Uber confirmation before fallback alert

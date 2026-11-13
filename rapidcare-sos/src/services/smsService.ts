@@ -1,7 +1,4 @@
-import { Share } from "react-native";
 import * as SMS from "expo-sms";
-import { EMERGENCY_CONFIG, validateApiUrlForDevice } from "../config/emergencyConfig";
-import { ensureDeviceAuthToken, setCachedAuthToken } from "./apiClient";
 
 export interface EmergencyContactInfo {
   id?: string;
@@ -9,12 +6,18 @@ export interface EmergencyContactInfo {
   phone: string;
 }
 
-export interface SmsDispatchResult {
+export interface SmsComposerResult {
   success: boolean;
-  method: "server" | "sms_sheet" | "share" | "skipped";
-  trialUnverified?: boolean;
-  warning?: string;
+  method: "composer" | "unavailable" | "skipped";
+  result?: "sent" | "cancelled" | "unknown";
+  error?: string;
+  recipients?: string[];
+  messageText?: string;
 }
+
+export const MAX_EMERGENCY_CONTACTS = 5;
+const SOS_COOLDOWN_MS = 60000;
+let lastSosCompletedTimestamp = 0;
 
 /**
  * Builds standard Google Maps pin URL
@@ -24,152 +27,176 @@ export function buildLocationPinUrl(latitude: number, longitude: number): string
 }
 
 /**
- * SMS Message Content Generators (configurable via EXPO_PUBLIC_SMS_TEMPLATE_* env vars)
+ * Message 1 Builder:
+ * Sent after hospital lookup finishes (or 8s timeout).
+ * "SOS - I need help. My location: <Google Maps link>. Nearest emergency hospital: <name>"
+ * If hospital is null/unavailable:
+ * "SOS - I need help. My location: <Google Maps link>"
  */
-export function createLocationAlertMessage(latitude: number, longitude: number): string {
+export function createSosCombinedAlertMessage(
+  latitude: number,
+  longitude: number,
+  hospitalName?: string | null
+): string {
   const pin = buildLocationPinUrl(latitude, longitude);
-  return EMERGENCY_CONFIG.SMS_TEMPLATES.LOCATION.replace(/\{\{MAPS_LINK\}\}/g, pin);
+  if (hospitalName && hospitalName.trim().length > 0) {
+    return `SOS - I need help. My location: ${pin}. Nearest emergency hospital: ${hospitalName.trim()}`;
+  }
+  return `SOS - I need help. My location: ${pin}`;
+}
+
+export function createLocationAlertMessage(latitude: number, longitude: number): string {
+  return createSosCombinedAlertMessage(latitude, longitude);
 }
 
 export function createHospitalUpdateMessage(hospitalName: string): string {
-  return EMERGENCY_CONFIG.SMS_TEMPLATES.HOSPITAL.replace(/\{\{HOSPITAL_NAME\}\}/g, hospitalName);
-}
-
-export function createWatchdogFailedMessage(): string {
-  return EMERGENCY_CONFIG.SMS_TEMPLATES.WATCHDOG_FAILED;
-}
-
-export function createLocationUnavailableMessage(): string {
-  return EMERGENCY_CONFIG.SMS_TEMPLATES.LOCATION_UNAVAILABLE;
+  return `Nearest emergency hospital: ${hospitalName.trim()}`;
 }
 
 /**
- * Server API dispatcher with fallback to Expo SMS compose sheet and Share sheet.
- * Handles Twilio trial unverified number errors cleanly by opening expo-sms fallback.
- * Privacy: Logs ONLY contact display names. NEVER logs phone numbers, tokens, or message bodies!
+ * Watchdog Failure Message Builder:
+ * "Ride could not be confirmed. Please call me or send help."
  */
-export async function dispatchEmergencySms(
+export function createWatchdogFailedMessage(): string {
+  return "Ride could not be confirmed. Please call me or send help.";
+}
+
+/**
+ * Ride Confirmed Message Builder:
+ * Carries driver name, vehicle, plate, ETA, and Maps/tracking link.
+ */
+export function createRideConfirmedMessage(details: {
+  driverName?: string | null;
+  vehicleModel?: string | null;
+  licensePlate?: string | null;
+  etaMinutes?: number | null;
+  hospitalName?: string | null;
+  trackingUrl?: string | null;
+}): string {
+  const parts: string[] = ["Emergency Uber ride confirmed."];
+  if (details.hospitalName) {
+    parts.push(`Destination: ${details.hospitalName}.`);
+  }
+  if (details.driverName || details.vehicleModel || details.licensePlate) {
+    const carInfo = [
+      details.driverName ? `Driver: ${details.driverName}` : null,
+      details.vehicleModel || null,
+      details.licensePlate ? `(${details.licensePlate})` : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    parts.push(carInfo);
+  }
+  if (typeof details.etaMinutes === "number" && details.etaMinutes > 0) {
+    parts.push(`ETA: ~${details.etaMinutes} mins.`);
+  }
+  if (details.trackingUrl) {
+    parts.push(`Live tracking: ${details.trackingUrl}`);
+  }
+  return parts.join(" ");
+}
+
+/**
+ * Location Unavailable Message Builder:
+ * Used if GPS fails.
+ */
+export function createLocationUnavailableMessage(): string {
+  return "SOS - location unavailable, please call me";
+}
+
+/**
+ * Checks if SOS is within the 60-second cooldown period.
+ */
+export function isSosInCooldown(): boolean {
+  return Date.now() - lastSosCompletedTimestamp < SOS_COOLDOWN_MS;
+}
+
+/**
+ * Marks an SOS alert completed, starting the 60-second cooldown.
+ */
+export function markSosAlertCompleted(): void {
+  lastSosCompletedTimestamp = Date.now();
+}
+
+/**
+ * Clears the cooldown (e.g. when the user cancels or deliberately re-triggers SOS).
+ */
+export function clearSosCooldown(): void {
+  lastSosCompletedTimestamp = 0;
+}
+
+/**
+ * Opens the native Messages app pre-filled with ALL contacts (capped at 5) and message body.
+ * Privacy: NEVER logs phone numbers or message bodies. Logs only contact count and display names.
+ */
+export async function openEmergencySmsComposer(
   contacts: EmergencyContactInfo[],
-  messageText: string,
-  messageType: "location" | "hospital" | "watchdog_failed" | "location_unavailable" = "location",
-  serverBaseUrl = EMERGENCY_CONFIG.API_URL
-): Promise<SmsDispatchResult> {
+  messageText: string
+): Promise<SmsComposerResult> {
   if (!contacts || contacts.length === 0) {
     console.log("[SmsService] No emergency contacts configured. SMS step cleanly skipped.");
     return { success: true, method: "skipped" };
   }
 
-  // Privacy protection: log contact names only
-  const contactNames = contacts.map((c) => c.name || "Unnamed").join(", ");
-  console.log(`[SmsService] Dispatching emergency alert (${messageType}) to: [${contactNames}]`);
+  // Cap to maximum 5 contacts
+  const cappedContacts = contacts.slice(0, MAX_EMERGENCY_CONTACTS);
+  const phoneNumbers = cappedContacts
+    .map((c) => c.phone?.trim())
+    .filter((p): p is string => Boolean(p && p.length > 0));
 
-  let fallbackWarning: string | undefined;
-  let trialUnverified = false;
-
-  const cleanBaseUrl = (serverBaseUrl || "").trim().replace(/\/+$/, "");
-  const urlValidation = validateApiUrlForDevice(cleanBaseUrl);
-
-  // 1. Primary Attempt: Server-Sent SMS (Twilio or MSG91 via POST /api/sos/alert)
-  if (!urlValidation.valid) {
-    fallbackWarning = urlValidation.error;
-    console.warn("[SmsService] Skipping server SMS due to API URL config notice. Falling back to device SMS.");
-  } else {
-    try {
-      let token = await ensureDeviceAuthToken(cleanBaseUrl);
-      const sendAttempt = async (authToken: string | null) => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
-        try {
-          return await fetch(`${cleanBaseUrl}/api/sos/alert`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-            },
-            body: JSON.stringify({
-              contacts,
-              message: messageText,
-              messageType,
-            }),
-            signal: controller.signal,
-          });
-        } finally {
-          clearTimeout(timeoutId);
-        }
-      };
-
-      let response = await sendAttempt(token);
-      if (response.status === 401) {
-        setCachedAuthToken(null);
-        token = await ensureDeviceAuthToken(cleanBaseUrl);
-        if (token) {
-          response = await sendAttempt(token);
-        }
-      }
-
-      let data: any = null;
-      try {
-        data = await response.json();
-      } catch {
-        data = null;
-      }
-
-      if (response.ok && data?.success && !data?.fallbackRequired) {
-        console.log(`[SmsService] Server SMS provider (${data.provider}) dispatched successfully.`);
-        return { success: true, method: "server" };
-      }
-
-      trialUnverified = Boolean(data?.trialUnverified);
-      fallbackWarning =
-        data?.error ||
-        (trialUnverified
-          ? "Twilio trial account cannot send SMS to unverified numbers. Opened device SMS composer."
-          : `Server SMS unavailable (HTTP ${response.status}). Falling back to device SMS.`);
-
-      console.warn(`[SmsService] Server SMS fallback triggered (status ${response.status}).`);
-    } catch (err: any) {
-      fallbackWarning = `Server SMS unreachable (${err?.message || "network error"}). Falling back to device SMS.`;
-      console.warn("[SmsService] Server SMS endpoint unreachable. Falling back to device SMS composer.");
-    }
+  if (phoneNumbers.length === 0) {
+    console.log("[SmsService] Contacts have no phone numbers. SMS step cleanly skipped.");
+    return { success: true, method: "skipped" };
   }
 
-  // 2. Secondary Fallback: Device SMS compose sheet via expo-sms
+  // Privacy protection: log contact count and names only, NEVER phone numbers or message bodies!
+  const contactNames = cappedContacts.map((c) => c.name || "Contact").join(", ");
+  console.log(`[SmsService] Opening native Messages composer for ${cappedContacts.length} contacts: [${contactNames}]`);
+
   try {
     const isAvailable = await SMS.isAvailableAsync();
-    if (isAvailable) {
-      const phoneNumbers = contacts.map((c) => c.phone).filter(Boolean);
-      await SMS.sendSMSAsync(phoneNumbers, messageText);
+    if (!isAvailable) {
+      console.warn("[SmsService] Native SMS composer is not available on this device.");
       return {
-        success: true,
-        method: "sms_sheet",
-        trialUnverified,
-        warning: fallbackWarning,
+        success: false,
+        method: "unavailable",
+        recipients: phoneNumbers,
+        messageText,
+        error: "Messages app or SIM is unavailable on this device.",
       };
     }
-  } catch (smsErr: any) {
-    console.warn("[SmsService] Expo SMS compose sheet unavailable or denied, falling back to Share sheet.");
-    fallbackWarning = fallbackWarning || "SMS permission/composer unavailable. Using system Share sheet.";
-  }
 
-  // 3. Tertiary Fallback: Native Share Sheet
-  try {
-    await Share.share({
-      message: messageText,
-      title: "EMERGENCY SOS ALERT",
-    });
+    const { result } = await SMS.sendSMSAsync(phoneNumbers, messageText);
     return {
       success: true,
-      method: "share",
-      trialUnverified,
-      warning: fallbackWarning,
+      method: "composer",
+      result,
     };
-  } catch {
-    console.error("[SmsService] All SMS/Share dispatch methods failed.");
+  } catch (err: any) {
+    console.warn("[SmsService] SMS compose error or dismissed:", err?.message || "unknown error");
     return {
       success: false,
-      method: "share",
-      trialUnverified,
-      warning: fallbackWarning || "Unable to send SMS or open Share sheet. Call 108/112 directly.",
+      method: "unavailable",
+      recipients: phoneNumbers,
+      messageText,
+      error: err?.message || "Failed to open Messages app.",
     };
   }
 }
+
+/**
+ * Compatibility wrapper for emergency SMS dispatching (delegates to openEmergencySmsComposer).
+ */
+export async function dispatchEmergencySms(
+  contacts: EmergencyContactInfo[],
+  messageText: string,
+  _messageType = "generic"
+): Promise<{ success: boolean; method: string; warning?: string }> {
+  const res = await openEmergencySmsComposer(contacts, messageText);
+  return {
+    success: res.success,
+    method: res.method === "composer" ? "sms_sheet" : res.method,
+    warning: res.error,
+  };
+}
+

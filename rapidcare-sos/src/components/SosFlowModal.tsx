@@ -10,17 +10,21 @@ import {
   Platform,
   ScrollView,
   Alert,
+  AppState,
 } from "react-native";
 import { EMERGENCY_CONFIG } from "../config/emergencyConfig";
 import CallAmbulanceHeader from "./CallAmbulanceHeader";
 import { getCurrentOrLastKnownLocation, LocationResult } from "../services/locationService";
 import { findNearestEmergencyHospital, HospitalCandidate } from "../services/hospitalService";
 import {
-  dispatchEmergencySms,
-  createLocationAlertMessage,
-  createHospitalUpdateMessage,
+  openEmergencySmsComposer,
+  createSosCombinedAlertMessage,
   createWatchdogFailedMessage,
+  createRideConfirmedMessage,
   createLocationUnavailableMessage,
+  isSosInCooldown,
+  markSosAlertCompleted,
+  clearSosCooldown,
   EmergencyContactInfo,
 } from "../services/smsService";
 import {
@@ -36,11 +40,17 @@ import {
 } from "../services/uberService";
 import { useStore } from "../store/useStore";
 import { setCachedAuthToken, setCachedDeviceId } from "../services/apiClient";
+import {
+  isAccessibilityServiceEnabled,
+  startSosAutoConfirm,
+  stopSosAutoConfirm,
+} from "../services/accessibilityService";
 
 export type SosPhase =
   | "LOCATING_AND_ESTIMATING"
   | "COUNTDOWN"
   | "AUTO_BOOKING"
+  | "ACCESSIBILITY_CONFIRMING"
   | "RIDE_ACTIVE"
   | "DEEP_LINK_FALLBACK"
   | "ALERT_108_112";
@@ -69,15 +79,21 @@ export default function SosFlowModal({
   const uberConnection = useStore((state) => state.uberConnection);
   const deviceId = useStore((state) => state.deviceId);
   const serverAuthToken = useStore((state) => state.serverAuthToken);
+  const autoConfirmEnabled = useStore((state) => state.autoConfirmEnabled);
 
-  const [phase, setPhase] = useState<SosPhase>("LOCATING_AND_ESTIMATING");
+  const [phase, setPhase] = useState<SosPhase>("COUNTDOWN");
   const [countdown, setCountdown] = useState(cancelCountdownSeconds);
   const [watchdogSecondsLeft, setWatchdogSecondsLeft] = useState(
     EMERGENCY_CONFIG.WATCHDOG_TIMEOUT_SECONDS
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
-  const [smsNotice, setSmsNotice] = useState<string | null>(null);
+  const [showComposerInstruction, setShowComposerInstruction] = useState(false);
+  const [copyFallbackData, setCopyFallbackData] = useState<{
+    recipients: string[];
+    messageText: string;
+  } | null>(null);
+  const [copiedNotice, setCopiedNotice] = useState(false);
 
   const [location, setLocation] = useState<LocationResult | null>(null);
   const [hospital, setHospital] = useState<HospitalCandidate | null>(null);
@@ -95,7 +111,17 @@ export default function SosFlowModal({
     onPhaseChange?.(phase);
   }, [phase]);
 
-  // Reset when opened
+  // Handle returning from background (Messages composer / external app)
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        // App returned from background: emergency flow continues uninterrupted
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // Reset and start flow when opened: COUNTDOWN FIRST!
   useEffect(() => {
     if (visible) {
       setCachedDeviceId(deviceId);
@@ -106,19 +132,30 @@ export default function SosFlowModal({
       setWatchdogSecondsLeft(EMERGENCY_CONFIG.WATCHDOG_TIMEOUT_SECONDS);
       setErrorMessage(null);
       setFallbackNotice(null);
-      setSmsNotice(null);
+      setShowComposerInstruction(false);
+      setCopyFallbackData(null);
+      setCopiedNotice(false);
       setLocation(null);
       setHospital(null);
       setEstimate(null);
       setActiveRide(null);
       setRideLiveStatus(null);
 
-      // Start initial discovery & fare estimation
-      initiateDiscoveryAndEstimate();
+      // STEP 1: COUNTDOWN FIRST (Allows abort before any SMS or calls)
+      if (cancelCountdownSeconds > 0) {
+        setPhase("COUNTDOWN");
+        startInitialCountdown();
+      } else {
+        runEmergencyPipeline();
+      }
     } else {
       clearAllTimers();
+      stopSosAutoConfirm();
     }
-    return () => clearAllTimers();
+    return () => {
+      clearAllTimers();
+      stopSosAutoConfirm();
+    };
   }, [visible]);
 
   const clearAllTimers = () => {
@@ -128,14 +165,39 @@ export default function SosFlowModal({
   };
 
   /**
-   * STEP 1: Fast Location & Hospital & Estimate Resolution
-   * Required by Uber: Fare must be visible to the user during the countdown when Uber is connected!
+   * Cancel Countdown Timer (5s)
    */
-  const initiateDiscoveryAndEstimate = async () => {
+  const startInitialCountdown = () => {
+    let timeLeft = cancelCountdownSeconds;
+    setCountdown(timeLeft);
+
+    countdownTimerRef.current = setInterval(() => {
+      timeLeft -= 1;
+      setCountdown(timeLeft);
+
+      if (timeLeft <= 0) {
+        clearInterval(countdownTimerRef.current!);
+        runEmergencyPipeline();
+      }
+    }, 1000);
+  };
+
+  const handleCancelCountdown = () => {
+    clearAllTimers();
+    stopSosAutoConfirm();
+    clearSosCooldown();
+    onClose();
+  };
+
+  /**
+   * STEP 2: Emergency Pipeline
+   * GPS -> Hospital Lookup (max 8s) -> Message 1 in Messages app -> Dispatch Flow
+   */
+  const runEmergencyPipeline = async () => {
     clearAllTimers();
     setPhase("LOCATING_AND_ESTIMATING");
 
-    // 1. Get Location & Street Address
+    // 1. Get High-Accuracy GPS Location
     let currentCoords: LocationResult;
     try {
       if (mockLocation) {
@@ -148,50 +210,70 @@ export default function SosFlowModal({
       setLocation(currentCoords);
     } catch (locErr: any) {
       console.error("[SosFlow] Location failed:", locErr.message);
-      await dispatchEmergencySms(contacts, createLocationUnavailableMessage(), "location_unavailable");
+      const fallbackMsg = createLocationUnavailableMessage();
+      setShowComposerInstruction(true);
+      const compRes = await openEmergencySmsComposer(contacts, fallbackMsg);
+      setShowComposerInstruction(false);
+      if (compRes.method === "unavailable") {
+        setCopyFallbackData({
+          recipients: compRes.recipients || contacts.slice(0, 5).map((c) => c.phone),
+          messageText: compRes.messageText || fallbackMsg,
+        });
+      }
       setErrorMessage("Unable to determine your GPS location (permission denied or unavailable). Please call 108/112 directly.");
       setPhase("ALERT_108_112");
       return;
     }
 
-    // 2. Send SMS #1 (Location pin) BEFORE hospital lookup starts
-    const locationSms = createLocationAlertMessage(currentCoords.latitude, currentCoords.longitude);
-    const sms1Res = await dispatchEmergencySms(contacts, locationSms, "location");
-    if (sms1Res.warning) {
-      setSmsNotice(sms1Res.warning);
-    }
-
-    // 3. Find Hospital (Places -> Overpass)
+    // 2. Hospital Lookup (Google Places -> Overpass fallback, capped at 8 seconds)
     let targetHospital: HospitalCandidate | null = null;
     try {
       if (mockHospital !== undefined) {
         targetHospital = mockHospital;
       } else {
-        targetHospital = await findNearestEmergencyHospital(
+        const hospitalPromise = findNearestEmergencyHospital(
           currentCoords.latitude,
           currentCoords.longitude,
           placesApiKey
         );
+        const timeoutPromise = new Promise<null>((resolve) =>
+          setTimeout(() => resolve(null), 8000)
+        );
+        targetHospital = await Promise.race([hospitalPromise, timeoutPromise]);
       }
     } catch (hospErr: any) {
-      console.warn("[SosFlow] Hospital discovery error:", hospErr.message);
+      console.warn("[SosFlow] Hospital discovery error or timeout:", hospErr?.message);
+    }
+
+    if (targetHospital) {
+      setHospital(targetHospital);
+    }
+
+    // 3. Message 1 (sent as ONE composer after hospital lookup finishes or 8s timeout)
+    const alertMessage = createSosCombinedAlertMessage(
+      currentCoords.latitude,
+      currentCoords.longitude,
+      targetHospital?.name
+    );
+
+    setShowComposerInstruction(true);
+    const composerRes = await openEmergencySmsComposer(contacts, alertMessage);
+    setShowComposerInstruction(false);
+
+    if (composerRes.method === "unavailable") {
+      setCopyFallbackData({
+        recipients: composerRes.recipients || contacts.slice(0, 5).map((c) => c.phone),
+        messageText: composerRes.messageText || alertMessage,
+      });
     }
 
     if (!targetHospital) {
-      setErrorMessage("No verified emergency hospital could be found nearby (Places/Overpass failed or offline). Call 108/112 immediately.");
+      setErrorMessage("No verified emergency hospital could be found nearby (search timed out or unavailable). Call 108/112 immediately.");
       setPhase("ALERT_108_112");
       return;
     }
 
-    setHospital(targetHospital);
-
-    // Send SMS #2 (Hospital update)
-    const sms2Res = await dispatchEmergencySms(contacts, createHospitalUpdateMessage(targetHospital.name), "hospital");
-    if (sms2Res.warning && !sms1Res.warning) {
-      setSmsNotice(sms2Res.warning);
-    }
-
-    // 4. Fetch Uber Fare Estimate ONLY when Uber is connected
+    // 4. Fetch Uber Fare Estimate if Uber is connected
     let est: UberEstimateResponse | null = null;
     if (uberConnection.connected) {
       est = await fetchUberEstimate(
@@ -199,97 +281,80 @@ export default function SosFlowModal({
         { name: targetHospital.name, latitude: targetHospital.latitude, longitude: targetHospital.longitude }
       );
       setEstimate(est);
-    } else {
-      setEstimate(null);
     }
 
-    // 5. Begin 5s Cancel Countdown with Pickup Address, Hospital & Fare status visible
-    setPhase("COUNTDOWN");
-    if (cancelCountdownSeconds > 0) {
-      startCountdownTimer(currentCoords, targetHospital, est);
-    } else {
-      executeAutoBooking(currentCoords, targetHospital, est);
-    }
+    // 5. Execute Dispatch Branch Selection
+    executeDispatchFlow(currentCoords, targetHospital, est);
   };
 
   /**
-   * 5s Cancel Countdown
+   * STEP 3: Dispatch Flow (Branch a, b, or c)
    */
-  const startCountdownTimer = (
+  const executeDispatchFlow = async (
     coords: LocationResult,
     targetHosp: HospitalCandidate,
     estObj: UberEstimateResponse | null
   ) => {
-    let timeLeft = cancelCountdownSeconds;
-    setCountdown(timeLeft);
+    // Check Branch a: Android + auto-confirm enabled + service running
+    const isAndroid = Platform.OS === "android";
+    const serviceOn = await isAccessibilityServiceEnabled();
 
-    countdownTimerRef.current = setInterval(() => {
-      timeLeft -= 1;
-      setCountdown(timeLeft);
-
-      if (timeLeft <= 0) {
-        clearInterval(countdownTimerRef.current!);
-        executeAutoBooking(coords, targetHosp, estObj);
-      }
-    }, 1000);
-  };
-
-  const handleCancelCountdown = () => {
-    clearAllTimers();
-    onClose();
-  };
-
-  /**
-   * STEP 2: Automatic Uber Booking Dispatch (or prefilled deep link fallback if Uber not connected)
-   */
-  const executeAutoBooking = async (
-    coords: LocationResult,
-    targetHosp: HospitalCandidate,
-    estObj: UberEstimateResponse | null
-  ) => {
-    clearAllTimers();
-
-    // If Uber is NOT connected, skip auto-booking API and fall back directly to deep link + 108/112
-    if (!uberConnection.connected) {
-      setFallbackNotice("Uber is not connected. Opening pre-filled Uber deep link — or call 108/112 immediately.");
+    if (isAndroid && autoConfirmEnabled && serviceOn) {
+      // BRANCH A: Deep Link + Accessibility Auto-Confirm
+      setPhase("ACCESSIBILITY_CONFIRMING");
       startWatchdogTimer(targetHosp);
-      await triggerDeepLinkFallback(coords, targetHosp);
+
+      await startSosAutoConfirm(targetHosp.name, targetHosp.address || targetHosp.name);
+      await triggerDeepLink(coords, targetHosp);
+
+      // Dual Success Detection: Start status polling if Uber is connected
+      if (uberConnection.connected) {
+        startStatusPolling(estObj?.fare_id || "active_ride");
+      }
       return;
     }
 
-    setPhase("AUTO_BOOKING");
-    startWatchdogTimer(targetHosp);
+    // BRANCH B: Otherwise (iPhone, or Android with auto-confirm off / service off)
+    if (uberConnection.connected) {
+      setPhase("AUTO_BOOKING");
+      startWatchdogTimer(targetHosp);
 
-    try {
-      const bookRes = await requestUberAutoBooking(
-        { latitude: coords.latitude, longitude: coords.longitude, address: coords.address },
-        { name: targetHosp.name, latitude: targetHosp.latitude, longitude: targetHosp.longitude },
-        estObj?.fare_id || "",
-        estObj?.product_id || "uber-go"
-      );
+      try {
+        const bookRes = await requestUberAutoBooking(
+          { latitude: coords.latitude, longitude: coords.longitude, address: coords.address },
+          { name: targetHosp.name, latitude: targetHosp.latitude, longitude: targetHosp.longitude },
+          estObj?.fare_id || "",
+          estObj?.product_id || "uber-go"
+        );
 
-      if (bookRes.success && bookRes.ride_id) {
-        setActiveRide(bookRes);
-        setPhase("RIDE_ACTIVE");
-        startStatusPolling(bookRes.ride_id);
-        return;
+        if (bookRes.success && bookRes.ride_id) {
+          setActiveRide(bookRes);
+          setPhase("RIDE_ACTIVE");
+          startStatusPolling(bookRes.ride_id);
+          return;
+        }
+
+        // BRANCH C: API booking failed -> Deep Link Fallback
+        setFallbackNotice(
+          bookRes.error ||
+            "Uber auto-booking unavailable or not authorised for this account. Opened Uber app deep link instead."
+        );
+        await triggerDeepLinkFallback(coords, targetHosp);
+      } catch (bookingErr: any) {
+        console.warn("[SosFlow] Booking dispatch error, falling back to deep link:", bookingErr.message);
+        setFallbackNotice("Uber auto-booking failed due to a network/server error. Opened Uber app deep link instead.");
+        await triggerDeepLinkFallback(coords, targetHosp);
       }
-
-      // If API booking reports not authorized ("account not registered as developer") or fails, fall back cleanly
-      setFallbackNotice(
-        bookRes.error ||
-          "Uber auto-booking unavailable or not authorised for this account. Opened Uber app deep link instead."
-      );
-      await triggerDeepLinkFallback(coords, targetHosp);
-    } catch (bookingErr: any) {
-      console.warn("[SosFlow] Booking dispatch error, falling back to deep link:", bookingErr.message);
-      setFallbackNotice("Uber auto-booking failed due to a network/server error. Opened Uber app deep link instead.");
-      await triggerDeepLinkFallback(coords, targetHosp);
+      return;
     }
+
+    // BRANCH C: Uber not connected -> Deep Link Fallback
+    setFallbackNotice("Uber is not connected. Opening pre-filled Uber deep link — or call 108/112 immediately.");
+    startWatchdogTimer(targetHosp);
+    await triggerDeepLinkFallback(coords, targetHosp);
   };
 
-  const triggerDeepLinkFallback = async (coords: LocationResult, targetHosp: HospitalCandidate) => {
-    setPhase("DEEP_LINK_FALLBACK");
+  const triggerDeepLink = async (coords: LocationResult, targetHosp: HospitalCandidate) => {
     try {
       await openUberRide(
         { latitude: coords.latitude, longitude: coords.longitude },
@@ -300,6 +365,11 @@ export default function SosFlowModal({
       setErrorMessage("Could not launch Uber app or browser. Call 108 or 112 immediately.");
       setPhase("ALERT_108_112");
     }
+  };
+
+  const triggerDeepLinkFallback = async (coords: LocationResult, targetHosp: HospitalCandidate) => {
+    setPhase("DEEP_LINK_FALLBACK");
+    await triggerDeepLink(coords, targetHosp);
   };
 
   /**
@@ -315,10 +385,10 @@ export default function SosFlowModal({
 
       if (secondsLeft <= 0) {
         clearInterval(watchdogTimerRef.current!);
-        console.warn("[SosFlow] 45s watchdog expired without ride acceptance!");
+        stopSosAutoConfirm(); // Disarm accessibility
 
-        // Dispatch SMS #3
-        await dispatchEmergencySms(contacts, createWatchdogFailedMessage(), "watchdog_failed");
+        console.warn("[SosFlow] 45s watchdog expired without ride acceptance!");
+        markSosAlertCompleted();
 
         setErrorMessage(
           `Uber ride was not confirmed within ${EMERGENCY_CONFIG.WATCHDOG_TIMEOUT_SECONDS}s. Uber may still match a driver in the background: check the Uber app and cancel any pending trip.`
@@ -377,19 +447,49 @@ export default function SosFlowModal({
         <CallAmbulanceHeader />
 
         <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Instruction banner: Tap Send to alert your contacts */}
+          {showComposerInstruction && (
+            <View style={styles.instructionBanner}>
+              <Text style={styles.instructionBannerText}>
+                👉 Tap Send in Messages to alert your contacts
+              </Text>
+            </View>
+          )}
+
+          {/* Fallback card if Messages app / SIM is unavailable */}
+          {copyFallbackData && (
+            <View style={styles.copyFallbackCard}>
+              <Text style={styles.copyFallbackTitle}>⚠️ Messages App or SIM Unavailable</Text>
+              <Text style={styles.copyFallbackDesc}>
+                Copy this alert to share or contact emergency services directly:
+              </Text>
+              <View style={styles.recipientsBox}>
+                <Text style={styles.recipientsLabel}>Contacts:</Text>
+                <Text style={styles.recipientsList}>{copyFallbackData.recipients.join(", ")}</Text>
+              </View>
+              <View style={styles.messageTextBox}>
+                <Text style={styles.messageContentText}>{copyFallbackData.messageText}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.copyBtn}
+                onPress={() => {
+                  setCopiedNotice(true);
+                  setTimeout(() => setCopiedNotice(false), 3000);
+                }}
+              >
+                <Text style={styles.copyBtnText}>
+                  {copiedNotice ? "✓ Copied to Clipboard" : "📋 Copy Alert Text"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* Contacts Warning if none registered */}
           {(!contacts || contacts.length === 0) && phase !== "ALERT_108_112" && (
             <View style={styles.warningBanner}>
               <Text style={styles.warningBannerText}>
                 ⚠️ No emergency contacts configured. SMS alerts skipped; ride flow continues.
               </Text>
-            </View>
-          )}
-
-          {/* Twilio Trial / SMS Fallback Notice (Never shows phone numbers or SMS bodies) */}
-          {smsNotice && (
-            <View style={styles.warningBanner}>
-              <Text style={styles.warningBannerText}>ℹ️ {smsNotice}</Text>
             </View>
           )}
 
@@ -476,6 +576,33 @@ export default function SosFlowModal({
             </View>
           )}
 
+          {/* ── PHASE: ACCESSIBILITY AUTO-CONFIRMING (BRANCH A) ── */}
+          {phase === "ACCESSIBILITY_CONFIRMING" && (
+            <View style={styles.centerBox}>
+              <View style={styles.hospitalCard}>
+                <Text style={styles.hospitalLabel}>DESTINATION ER HOSPITAL:</Text>
+                <Text style={styles.hospitalName}>{hospital?.name}</Text>
+                {hospital?.address ? (
+                  <Text style={styles.hospitalAddress}>{hospital.address}</Text>
+                ) : null}
+              </View>
+
+              <View style={styles.autoBookingCard}>
+                <ActivityIndicator size="large" color="#007aff" />
+                <Text style={styles.autoBookingTitle}>Automating Uber Ride Confirmation</Text>
+                <Text style={styles.autoBookingSubtext}>
+                  Uber app launched. Verifying destination hospital on screen and confirming Uber Go...
+                </Text>
+              </View>
+
+              <View style={styles.watchdogBox}>
+                <Text style={styles.watchdogText}>
+                  Watchdog timer: {watchdogSecondsLeft}s remaining
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* ── PHASE 4: LIVE RIDE TRACKING SCREEN ── */}
           {phase === "RIDE_ACTIVE" && (() => {
             const effectiveSource = rideLiveStatus?.source || activeRide?.source;
@@ -521,6 +648,42 @@ export default function SosFlowModal({
                     <Text style={styles.routePoint}>🏥 Dropoff: {hospital?.name}</Text>
                     {hospital?.address && <Text style={styles.routeSub}>{hospital.address}</Text>}
                   </View>
+
+                  <TouchableOpacity
+                    style={styles.shareRideBtn}
+                    onPress={async () => {
+                      const vehicleStr = [
+                        rideLiveStatus?.vehicle?.make || activeRide?.vehicle?.make,
+                        rideLiveStatus?.vehicle?.model || activeRide?.vehicle?.model,
+                      ]
+                        .filter(Boolean)
+                        .join(" ");
+
+                      const text = createRideConfirmedMessage({
+                        driverName: rideLiveStatus?.driver?.name || activeRide?.driver?.name,
+                        vehicleModel: vehicleStr || undefined,
+                        licensePlate:
+                          rideLiveStatus?.vehicle?.license_plate ||
+                          activeRide?.vehicle?.license_plate,
+                        etaMinutes: rideLiveStatus?.eta || activeRide?.eta,
+                        hospitalName: hospital?.name,
+                        trackingUrl: activeRide?.ride_id
+                          ? `https://book-doctor-six.vercel.app/track/${activeRide.ride_id}`
+                          : null,
+                      });
+                      setShowComposerInstruction(true);
+                      const res = await openEmergencySmsComposer(contacts, text);
+                      setShowComposerInstruction(false);
+                      if (res.method === "unavailable") {
+                        setCopyFallbackData({
+                          recipients: res.recipients || contacts.slice(0, 5).map((c) => c.phone),
+                          messageText: res.messageText || text,
+                        });
+                      }
+                    }}
+                  >
+                    <Text style={styles.shareRideBtnText}>📤 Share Ride Details with Contacts</Text>
+                  </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.cancelRideBtn}
@@ -578,6 +741,24 @@ export default function SosFlowModal({
                     CALL {EMERGENCY_CONFIG.NATIONAL_EMERGENCY_NUMBER} (NATIONAL EMERGENCY)
                   </Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.sendUpdateBtn}
+                  onPress={async () => {
+                    const text = createWatchdogFailedMessage();
+                    setShowComposerInstruction(true);
+                    const res = await openEmergencySmsComposer(contacts, text);
+                    setShowComposerInstruction(false);
+                    if (res.method === "unavailable") {
+                      setCopyFallbackData({
+                        recipients: res.recipients || contacts.slice(0, 5).map((c) => c.phone),
+                        messageText: res.messageText || text,
+                      });
+                    }
+                  }}
+                >
+                  <Text style={styles.sendUpdateBtnText}>✉️ Send Update to Contacts</Text>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.watchdogBox}>
@@ -616,6 +797,24 @@ export default function SosFlowModal({
                   <Text style={styles.big112Text}>
                     CALL {EMERGENCY_CONFIG.NATIONAL_EMERGENCY_NUMBER} (NATIONAL EMERGENCY)
                   </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.sendUpdateBtn}
+                  onPress={async () => {
+                    const text = createWatchdogFailedMessage();
+                    setShowComposerInstruction(true);
+                    const res = await openEmergencySmsComposer(contacts, text);
+                    setShowComposerInstruction(false);
+                    if (res.method === "unavailable") {
+                      setCopyFallbackData({
+                        recipients: res.recipients || contacts.slice(0, 5).map((c) => c.phone),
+                        messageText: res.messageText || text,
+                      });
+                    }
+                  }}
+                >
+                  <Text style={styles.sendUpdateBtnText}>✉️ Send Update to Contacts</Text>
                 </TouchableOpacity>
               </View>
 
@@ -699,6 +898,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cancelButtonText: { color: "#d32f2f", fontWeight: "bold", fontSize: 14 },
+  autoBookingCard: {
+    backgroundColor: "#1e1e1e",
+    borderColor: "#007aff",
+    borderWidth: 1.5,
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 14,
+    alignItems: "center",
+    width: "100%",
+  },
+  autoBookingTitle: { color: "#90caf9", fontSize: 16, fontWeight: "bold", marginTop: 8 },
+  autoBookingSubtext: { color: "#aaa", fontSize: 12, textAlign: "center", marginTop: 6, lineHeight: 16 },
   watchdogBox: { marginVertical: 12 },
   watchdogText: { color: "#ffa726", fontSize: 13, fontWeight: "600" },
   activeRideCard: {
@@ -794,4 +1005,50 @@ const styles = StyleSheet.create({
   iosCallNote: { color: "#90caf9", fontSize: 11, textAlign: "center", marginBottom: 12 },
   dismissAlertButton: { padding: 12, alignItems: "center" },
   dismissAlertText: { color: "#aaa", fontWeight: "600", fontSize: 13 },
+  instructionBanner: {
+    backgroundColor: "#1565c0",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    marginBottom: 14,
+    alignItems: "center",
+  },
+  instructionBannerText: { color: "#fff", fontWeight: "bold", fontSize: 13, textAlign: "center" },
+  copyFallbackCard: {
+    backgroundColor: "#212121",
+    borderColor: "#e53935",
+    borderWidth: 1.5,
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 16,
+  },
+  copyFallbackTitle: { color: "#ff8a80", fontSize: 14, fontWeight: "bold", marginBottom: 4 },
+  copyFallbackDesc: { color: "#ccc", fontSize: 11, marginBottom: 8 },
+  recipientsBox: { marginBottom: 6 },
+  recipientsLabel: { color: "#888", fontSize: 10, fontWeight: "bold" },
+  recipientsList: { color: "#fff", fontSize: 12, fontWeight: "600" },
+  messageTextBox: { backgroundColor: "#111", padding: 10, borderRadius: 6, marginBottom: 10 },
+  messageContentText: { color: "#81c784", fontSize: 12, lineHeight: 16 },
+  copyBtn: {
+    backgroundColor: "#37474f",
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  copyBtnText: { color: "#fff", fontSize: 12, fontWeight: "bold" },
+  shareRideBtn: {
+    backgroundColor: "#007aff",
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  shareRideBtnText: { color: "#fff", fontWeight: "bold", fontSize: 13 },
+  sendUpdateBtn: {
+    backgroundColor: "#f57c00",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  sendUpdateBtnText: { color: "#fff", fontWeight: "bold", fontSize: 14 },
 });

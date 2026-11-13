@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { User, EmergencyContact } from "../types";
+import type { User, EmergencyContact } from "../types/index";
 import { normalizeToE164 } from "../utils/phoneUtils";
 
 export const MAX_CONTACTS = 5;
@@ -23,6 +23,9 @@ interface AppState {
   serverAuthToken: string | null;
   outboundVoiceCallEnabled: boolean;
   uberConnection: UberConnectionState;
+  autoConfirmEnabled: boolean;
+  autoConfirmDisclosed: boolean;
+  calibrationDump: string;
   setUser: (user: User) => void;
   updateMedicalId: (medicalId: User["medicalId"]) => void;
   addContact: (contact: Omit<EmergencyContact, "id"> & { id?: string }) => { success: boolean; error?: string };
@@ -32,6 +35,10 @@ interface AppState {
   setOutboundVoiceCallEnabled: (enabled: boolean) => void;
   setUberConnection: (connection: Partial<UberConnectionState>) => void;
   disconnectUber: () => void;
+  setAutoConfirmEnabled: (enabled: boolean) => void;
+  setAutoConfirmDisclosed: (disclosed: boolean) => void;
+  setCalibrationDump: (dump: string) => void;
+  emergencyKillSwitch: () => void;
 }
 
 export const useStore = create<AppState>()(
@@ -58,6 +65,9 @@ export const useStore = create<AppState>()(
         expiresAt: null,
         riderName: null,
       },
+      autoConfirmEnabled: false, // Strict requirement: OFF by default
+      autoConfirmDisclosed: false,
+      calibrationDump: "",
       setUser: (user) => set({ user }),
       updateMedicalId: (medicalId) =>
         set((state) => ({
@@ -148,6 +158,12 @@ export const useStore = create<AppState>()(
             riderName: null,
           },
         }),
+      setAutoConfirmEnabled: (enabled) => set({ autoConfirmEnabled: enabled }),
+      setAutoConfirmDisclosed: (disclosed) => set({ autoConfirmDisclosed: disclosed }),
+      setCalibrationDump: (dump) => set({ calibrationDump: dump }),
+      emergencyKillSwitch: () => {
+        set({ autoConfirmEnabled: false });
+      },
     }),
     {
       name: "rapidcare-sos-store-v2",

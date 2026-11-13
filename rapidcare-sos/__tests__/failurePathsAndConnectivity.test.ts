@@ -135,8 +135,8 @@ describe("Failure Paths, Connectivity & Trial Fallbacks", () => {
     });
   });
 
-  describe("3. Twilio Trial Error & SMS Permission / Network Failure Paths", () => {
-    it("Twilio trial unverified error triggers expo-sms fallback without logging phone or message body", async () => {
+  describe("3. Device Messages App Composer & Failure Paths", () => {
+    it("dispatches via expo-sms composer without logging phone or message body", async () => {
       const secretPhone = "+919876543210";
       const secretBody = "SOS - Confidential test alert body";
       const logs: string[] = [];
@@ -146,30 +146,14 @@ describe("Failure Paths, Connectivity & Trial Fallbacks", () => {
       console.log = (...args) => logs.push(args.join(" "));
       console.warn = (...args) => logs.push(args.join(" "));
 
-      globalThis.fetch = async () =>
-        new Response(
-          JSON.stringify({
-            success: false,
-            provider: "Twilio",
-            dispatchedCount: 0,
-            fallbackRequired: true,
-            trialUnverified: true,
-            error: "Twilio trial account can only SMS verified numbers. Opening device SMS composer fallback.",
-          }),
-          { status: 422, headers: { "Content-Type": "application/json" } }
-        );
-
       try {
         const result = await dispatchEmergencySms(
           [{ name: "Emergency Mom", phone: secretPhone }],
-          secretBody,
-          "location",
-          "http://192.168.29.118:5000"
+          secretBody
         );
 
         assert.strictEqual(result.success, true);
         assert.strictEqual(result.method, "sms_sheet");
-        assert.strictEqual(result.trialUnverified, true);
         assert.strictEqual(SMS_MOCK_STATE.calls.length, 1);
         assert.deepStrictEqual(SMS_MOCK_STATE.calls[0].addresses, [secretPhone]);
 
@@ -183,22 +167,16 @@ describe("Failure Paths, Connectivity & Trial Fallbacks", () => {
       }
     });
 
-    it("Failure path: SMS permission denied & server unreachable -> falls back cleanly to Share sheet without crashing", async () => {
-      SMS_MOCK_STATE.shouldThrow = true;
-      globalThis.fetch = async () => {
-        throw new Error("Network request failed");
-      };
+    it("Failure path: SMS composer unavailable -> returns unavailable fallback without throwing", async () => {
+      SMS_MOCK_STATE.available = false;
 
       const res = await dispatchEmergencySms(
         [{ name: "Sister", phone: "+919988776655" }],
-        createLocationUnavailableMessage(),
-        "location_unavailable",
-        "http://192.168.29.118:5000"
+        createLocationUnavailableMessage()
       );
 
-      assert.strictEqual(res.success, true);
-      assert.strictEqual(res.method, "share");
-      assert.strictEqual(Share.sharedItems.length, 1);
+      assert.strictEqual(res.success, false);
+      assert.strictEqual(res.method, "unavailable");
     });
 
     it("Failure path: Contacts denied / empty contacts -> cleanly skips SMS without crashing", async () => {

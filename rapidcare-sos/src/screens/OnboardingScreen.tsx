@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,9 +11,11 @@ import {
   Alert,
   Switch,
   ActivityIndicator,
+  Modal,
+  Platform,
 } from "react-native";
 import { useStore } from "../store/useStore";
-import { User } from "../types";
+import type { User } from "../types/index";
 import { EMERGENCY_CONFIG, isLocalhostUrl } from "../config/emergencyConfig";
 import {
   testServerConnection,
@@ -22,15 +24,25 @@ import {
   setCachedAuthToken,
   ServerConnectionTestResult,
 } from "../services/apiClient";
+import {
+  isAccessibilityServiceEnabled,
+  openAccessibilitySettings,
+  getCalibrationDump,
+} from "../services/accessibilityService";
 
 export default function OnboardingScreen({ navigation }: any) {
   const user = useStore((state) => state.user);
   const deviceId = useStore((state) => state.deviceId);
   const serverAuthToken = useStore((state) => state.serverAuthToken);
   const outboundVoiceCallEnabled = useStore((state) => state.outboundVoiceCallEnabled);
+  const autoConfirmEnabled = useStore((state) => state.autoConfirmEnabled);
+  const autoConfirmDisclosed = useStore((state) => state.autoConfirmDisclosed);
   const setUser = useStore((state) => state.setUser);
   const setServerAuthToken = useStore((state) => state.setServerAuthToken);
   const setOutboundVoiceCallEnabled = useStore((state) => state.setOutboundVoiceCallEnabled);
+  const setAutoConfirmEnabled = useStore((state) => state.setAutoConfirmEnabled);
+  const setAutoConfirmDisclosed = useStore((state) => state.setAutoConfirmDisclosed);
+  const emergencyKillSwitch = useStore((state) => state.emergencyKillSwitch);
   const uberConnection = useStore((state) => state.uberConnection);
   const setUberConnection = useStore((state) => state.setUberConnection);
   const disconnectUber = useStore((state) => state.disconnectUber);
@@ -45,6 +57,18 @@ export default function OnboardingScreen({ navigation }: any) {
   // Server connection check state
   const [testingConn, setTestingConn] = useState(false);
   const [connResult, setConnResult] = useState<ServerConnectionTestResult | null>(null);
+
+  // Accessibility state
+  const [serviceEnabledInOs, setServiceEnabledInOs] = useState(false);
+  const [showDisclosureModal, setShowDisclosureModal] = useState(false);
+  const [showDumpModal, setShowDumpModal] = useState(false);
+  const [calibrationDumpText, setCalibrationDumpText] = useState("");
+
+  useEffect(() => {
+    if (Platform.OS === "android") {
+      isAccessibilityServiceEnabled().then(setServiceEnabledInOs).catch(() => {});
+    }
+  }, []);
 
   const configuredApiUrl = EMERGENCY_CONFIG.API_URL;
   const isLocalWarning = !configuredApiUrl || isLocalhostUrl(configuredApiUrl);
@@ -214,6 +238,167 @@ export default function OnboardingScreen({ navigation }: any) {
           </View>
         </View>
 
+        {/* Android Accessibility Auto-Confirm (OFF by default) */}
+        <View style={styles.accessibilityCard}>
+          <View style={styles.accessibilityHeaderRow}>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <Text style={styles.cardTitle}>🤖 Android Uber Auto-Confirm</Text>
+              <Text style={styles.accessibilityDesc}>
+                Uses Android Accessibility Service to automatically tap "Confirm" inside the official Uber app during an SOS emergency. Strictly OFF by default.
+              </Text>
+            </View>
+            <Switch
+              value={autoConfirmEnabled}
+              onValueChange={(val) => {
+                if (val) {
+                  if (!autoConfirmDisclosed) {
+                    setShowDisclosureModal(true);
+                  } else {
+                    setAutoConfirmEnabled(true);
+                  }
+                } else {
+                  emergencyKillSwitch();
+                }
+              }}
+              accessibilityLabel="Toggle Android Uber auto-confirm"
+            />
+          </View>
+
+          {autoConfirmEnabled && (
+            <View style={styles.accessibilityActiveBox}>
+              <Text style={styles.accessibilityActiveTitle}>⚡ AUTO-CONFIRM ARMED</Text>
+              <Text style={styles.accessibilityActiveDetail}>
+                System Service: {serviceEnabledInOs ? "✅ Enabled in Android OS" : "⚠️ Not Enabled in OS Settings"}
+              </Text>
+
+              <View style={styles.accessibilityBtnRow}>
+                <TouchableOpacity
+                  style={styles.openSettingsBtn}
+                  onPress={async () => {
+                    await openAccessibilitySettings();
+                    const enabled = await isAccessibilityServiceEnabled();
+                    setServiceEnabledInOs(enabled);
+                  }}
+                >
+                  <Text style={styles.openSettingsBtnText}>Open Accessibility Settings</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.dumpBtn}
+                  onPress={async () => {
+                    const dump = await getCalibrationDump();
+                    setCalibrationDumpText(dump || "No calibration events recorded yet.");
+                    setShowDumpModal(true);
+                  }}
+                >
+                  <Text style={styles.dumpBtnText}>Calibration Dump</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Instant Kill Switch */}
+              <TouchableOpacity
+                style={styles.killSwitchBtn}
+                onPress={() => {
+                  emergencyKillSwitch();
+                  Alert.alert("Kill Switch Triggered", "Auto-confirm has been instantly disabled.");
+                }}
+              >
+                <Text style={styles.killSwitchText}>🛑 EMERGENCY KILL SWITCH: DISABLE NOW</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* Accessibility Disclosure Modal */}
+        <Modal
+          visible={showDisclosureModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowDisclosureModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>⚠️ Android Accessibility Disclosure</Text>
+              <ScrollView style={styles.modalScroll}>
+                <Text style={styles.modalTextBold}>
+                  RapidCare SOS requires clear, informed consent before enabling automatic ride confirmation:
+                </Text>
+                <Text style={styles.modalBullet}>
+                  • <Text style={styles.boldText}>Destination Verification:</Text> Before tapping Confirm, the service checks that the screen shows the nearest ER hospital name or address. If mismatched, automation is blocked immediately.
+                </Text>
+                <Text style={styles.modalBullet}>
+                  • <Text style={styles.boldText}>Surge & Fare Protection:</Text> Never confirms dialogs mentioning surge pricing, fares, cost increases, or payment updates.
+                </Text>
+                <Text style={styles.modalBullet}>
+                  • <Text style={styles.boldText}>Watchdog Timer (45s):</Text> If Uber fails to confirm within 45 seconds, the service automatically disarms, alerts emergency contacts, and presents the 108/112 dialer.
+                </Text>
+                <Text style={styles.modalBullet}>
+                  • <Text style={styles.boldText}>Privacy Protection:</Text> Zero personal identifiable information (phone numbers, GPS coordinates) is ever written to logs.
+                </Text>
+                <Text style={styles.modalBullet}>
+                  • <Text style={styles.boldText}>Instant Kill Switch:</Text> You can disable this feature at any moment with one tap.
+                </Text>
+              </ScrollView>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setShowDisclosureModal(false)}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalAgreeBtn}
+                  onPress={async () => {
+                    setAutoConfirmDisclosed(true);
+                    setAutoConfirmEnabled(true);
+                    setShowDisclosureModal(false);
+                    if (Platform.OS === "android") {
+                      const enabled = await isAccessibilityServiceEnabled();
+                      setServiceEnabledInOs(enabled);
+                      if (!enabled) {
+                        Alert.alert(
+                          "Enable RapidCare Service",
+                          "Please enable 'RapidCare SOS Ride Service' under Installed Apps in Android Accessibility settings.",
+                          [
+                            { text: "Later", style: "cancel" },
+                            { text: "Open Settings", onPress: () => openAccessibilitySettings() },
+                          ]
+                        );
+                      }
+                    }
+                  }}
+                >
+                  <Text style={styles.modalAgreeText}>I Agree & Enable</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Calibration Dump Modal */}
+        <Modal
+          visible={showDumpModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowDumpModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>🔍 Calibration Screen Dump</Text>
+              <ScrollView style={styles.dumpScroll}>
+                <Text style={styles.dumpText}>{calibrationDumpText}</Text>
+              </ScrollView>
+              <TouchableOpacity
+                style={styles.modalAgreeBtn}
+                onPress={() => setShowDumpModal(false)}
+              >
+                <Text style={styles.modalAgreeText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
         <Text style={styles.label}>Full Name *</Text>
         <TextInput
           style={styles.input}
@@ -342,6 +527,93 @@ const styles = StyleSheet.create({
   },
   voiceRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   voiceDesc: { fontSize: 12, color: "#555", lineHeight: 16 },
+  accessibilityCard: {
+    backgroundColor: "#f9fbe7",
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#dce775",
+    marginBottom: 20,
+  },
+  accessibilityHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  accessibilityDesc: { fontSize: 12, color: "#555", lineHeight: 16 },
+  accessibilityActiveBox: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#e0e0e0",
+  },
+  accessibilityActiveTitle: {
+    fontSize: 13,
+    fontWeight: "bold",
+    color: "#2e7d32",
+    marginBottom: 4,
+  },
+  accessibilityActiveDetail: {
+    fontSize: 12,
+    color: "#333",
+    marginBottom: 10,
+  },
+  accessibilityBtnRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 10,
+  },
+  openSettingsBtn: {
+    flex: 1,
+    backgroundColor: "#33691e",
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  openSettingsBtnText: { color: "#fff", fontSize: 11, fontWeight: "bold" },
+  dumpBtn: {
+    flex: 1,
+    backgroundColor: "#424242",
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  dumpBtnText: { color: "#fff", fontSize: 11, fontWeight: "bold" },
+  killSwitchBtn: {
+    backgroundColor: "#b71c1c",
+    paddingVertical: 11,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  killSwitchText: { color: "#fff", fontSize: 12, fontWeight: "bold" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 20,
+    width: "100%",
+    maxHeight: "80%",
+  },
+  modalTitle: { fontSize: 18, fontWeight: "bold", color: "#c62828", marginBottom: 12 },
+  modalScroll: { maxHeight: 300, marginBottom: 16 },
+  modalTextBold: { fontSize: 13, fontWeight: "600", color: "#222", marginBottom: 10 },
+  modalBullet: { fontSize: 12, color: "#444", marginBottom: 8, lineHeight: 18 },
+  boldText: { fontWeight: "bold", color: "#111" },
+  modalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 12 },
+  modalCancelBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: "#eee" },
+  modalCancelText: { color: "#444", fontWeight: "600", fontSize: 14 },
+  modalAgreeBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: "#2e7d32" },
+  modalAgreeText: { color: "#fff", fontWeight: "bold", fontSize: 14 },
+  dumpScroll: { maxHeight: 350, backgroundColor: "#212121", padding: 12, borderRadius: 8, marginBottom: 16 },
+  dumpText: { color: "#a5d6a7", fontFamily: "monospace", fontSize: 11 },
   label: { fontSize: 14, fontWeight: "700", marginBottom: 6, color: "#333" },
   input: {
     borderWidth: 1,
