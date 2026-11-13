@@ -80,7 +80,7 @@ export async function searchGooglePlacesHospitals(
           source: "GooglePlaces" as const,
         };
       })
-      .filter((h): h is HospitalCandidate => h !== null);
+      .filter((h: HospitalCandidate | null): h is HospitalCandidate => h !== null);
 
     // Sort strictly by straight-line distance ascending
     return hospitals.sort((a, b) => a.distanceMeters - b.distanceMeters);
@@ -148,7 +148,7 @@ export async function searchOverpassHospitals(
           source: "OpenStreetMap" as const,
         };
       })
-      .filter((h): h is HospitalCandidate => h !== null);
+      .filter((h: HospitalCandidate | null): h is HospitalCandidate => h !== null);
 
     // Sort strictly by straight-line distance ascending
     return hospitals.sort((a, b) => a.distanceMeters - b.distanceMeters);

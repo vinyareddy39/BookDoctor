@@ -20,6 +20,7 @@ export default function ClinicSettingsForm({
   profile,
   onToggle, toggling,
   onSave, saving,
+  onRefreshProfile,
 }) {
   // When Google Calendar syncs, update the form so the user sees the new days/hours immediately
   const handleCalendarSynced = ({ availableDays, availableTime }) => {
@@ -74,7 +75,7 @@ export default function ClinicSettingsForm({
         </div>
 
         {/* ─── Google Calendar Sync Card ─── */}
-        <GoogleCalendarSync profile={profile} onSynced={handleCalendarSynced} />
+        <GoogleCalendarSync profile={profile} onSynced={handleCalendarSynced} onRefreshProfile={onRefreshProfile} />
 
         {/* Time range pickers */}
         <div className="sm:col-span-2 grid grid-cols-2 gap-4">
@@ -134,9 +135,22 @@ export default function ClinicSettingsForm({
 
         <div className="sm:col-span-2">
           <label className="input-label">Google Maps Embed URL</label>
-          <input type="url" value={form.mapUrl} onChange={(e) => setForm((f) => ({ ...f, mapUrl: e.target.value }))} className="input" placeholder="https://www.google.com/maps/embed?pb=..." />
+          <input
+            type="text"
+            value={form.mapUrl}
+            onChange={(e) => {
+              let val = e.target.value.trim();
+              const match = val.match(/src=["']([^"']+)["']/i);
+              if (match && match[1]) {
+                val = match[1].trim();
+              }
+              setForm((f) => ({ ...f, mapUrl: val }));
+            }}
+            className="input"
+            placeholder="https://www.google.com/maps/embed?pb=... or paste <iframe> embed code"
+          />
           <p className="text-[10px] text-slate-400 mt-1">
-            <strong>Note:</strong> Go to Google Maps {'>'} Share {'>'} Embed a map {'>'} Copy the link inside the src="..." attribute. Regular map links will not work.
+            <strong>Note:</strong> In Google Maps: <em>Share ➔ Embed a map ➔ Copy HTML</em>. You can paste the link or the entire embed code here. Patients will see the live map and an &ldquo;Open in Maps&rdquo; navigation button with your clinic address.
           </p>
         </div>
 

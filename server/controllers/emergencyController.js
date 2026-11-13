@@ -624,8 +624,17 @@ export const requestUberRideHandler = async (req, res, next) => {
  */
 export const triggerEmergencyCall = async (req, res, next) => {
   try {
+    if (process.env.ENABLE_OUTBOUND_EMERGENCY_CALL !== "true") {
+      return res.status(200).json({
+        success: false,
+        disabled: true,
+        status: "disabled",
+        message: "Outbound emergency voice calling is disabled by default. Use native device dialer (108/112).",
+      });
+    }
+
     const { to, hospitalName, userAddress } = req.body || {};
-    const destination = to || process.env.EMERGENCY_PHONE_NUMBER || "+919849512453";
+    const destination = to || process.env.EMERGENCY_PHONE_NUMBER;
 
     const call = await makeEmergencyCall({
       to: destination,
@@ -633,25 +642,31 @@ export const triggerEmergencyCall = async (req, res, next) => {
       userAddress
     });
 
+    if (call.disabled) {
+      return res.status(200).json({
+        success: false,
+        disabled: true,
+        status: "disabled",
+        message: "Outbound emergency voice calling is disabled by default.",
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: call.simulated
-        ? `Emergency dispatch alert registered for ${destination}`
-        : "Emergency call initiated successfully via Twilio",
+        ? "Emergency dispatch alert registered in simulation mode"
+        : "Emergency call initiated via Twilio",
       callSid: call.sid,
       status: call.status,
       simulated: call.simulated || false,
-      to: destination
     });
   } catch (error) {
     console.warn("⚠️ Emergency Call Safe Fallback:", error.message);
-    const destination = req.body?.to || process.env.EMERGENCY_PHONE_NUMBER || "+919849512453";
     return res.status(200).json({
       success: true,
       simulated: true,
-      message: `Emergency alert registered. Connecting dispatch to ${destination}.`,
+      message: "Emergency alert registered cleanly in fallback mode.",
       callSid: `fallback_${Date.now()}`,
-      to: destination
     });
   }
 };

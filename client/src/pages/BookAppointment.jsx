@@ -156,22 +156,68 @@ export default function BookAppointment() {
   const timeSlots     = generateTimeSlots(availableTime);
   const todayStr      = new Date().toISOString().split("T")[0];
 
+  // ── Compute Map Embed URL & Direct Google Maps Navigation URL ──
   let mapEmbedUrl = null;
-  if (doctor?.mapUrl) {
-    if (doctor.mapUrl.includes("<iframe") && doctor.mapUrl.includes("src=")) {
-      // If they accidentally pasted the whole embed code, extract the src
-      const match = doctor.mapUrl.match(/src="([^"]+)"/);
-      mapEmbedUrl = match ? match[1] : null;
-    } else if (doctor.mapUrl.includes("google.com/maps/embed")) {
-      // It's a valid embed URL
-      mapEmbedUrl = doctor.mapUrl;
-    } else if (doctor.address) {
-      // Invalid URL pasted (like a regular maps link), fallback to dynamic address search
-      mapEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(doctor.address)}&output=embed`;
+  let directMapUrl = null;
+
+  const rawMapUrl = (doctor?.mapUrl || "").trim();
+  const rawAddress = (doctor?.address || "").trim();
+  const rawClinicName = (doctor?.clinicName || "").trim();
+
+  // 1. If doctor provided an embed iframe snippet or map URL
+  if (rawMapUrl) {
+    let extractedSrc = rawMapUrl;
+    if (rawMapUrl.includes("<iframe") && rawMapUrl.includes("src=")) {
+      const match = rawMapUrl.match(/src=["']([^"']+)["']/i);
+      extractedSrc = match ? match[1].trim() : null;
     }
-  } else if (doctor?.address) {
-    // No map URL provided, fallback to dynamic address search
-    mapEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(doctor.address)}&output=embed`;
+
+    if (extractedSrc) {
+      if (extractedSrc.includes("google.com/maps/embed")) {
+        // Valid Google Maps embed URL for iframe
+        mapEmbedUrl = extractedSrc;
+      } else if (
+        extractedSrc.includes("maps.google.com") ||
+        extractedSrc.includes("google.com/maps") ||
+        extractedSrc.includes("maps.app.goo.gl") ||
+        extractedSrc.includes("goo.gl/maps")
+      ) {
+        // Direct link provided
+        directMapUrl = extractedSrc;
+        if (extractedSrc.includes("/maps?q=")) {
+          mapEmbedUrl = extractedSrc.includes("output=embed")
+            ? extractedSrc
+            : `${extractedSrc}&output=embed`;
+        }
+      }
+    }
+  }
+
+  // 2. Fallback for mapEmbedUrl using the clinic address if no valid embed URL was given
+  if (!mapEmbedUrl && rawAddress) {
+    mapEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(rawAddress)}&output=embed`;
+  }
+
+  // 3. Determine authoritative direct Google Maps link for "Open in Maps"
+  if (!directMapUrl) {
+    if (rawAddress) {
+      directMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(rawAddress)}`;
+    } else if (rawMapUrl && rawMapUrl.includes("google.com/maps/embed")) {
+      // Try to extract place name or coordinates from embed pb string
+      const latMatch = rawMapUrl.match(/!3d([0-9.-]+)/);
+      const lngMatch = rawMapUrl.match(/!2d([0-9.-]+)/);
+      const placeMatch = rawMapUrl.match(/!2s([^!]+)/);
+      if (placeMatch && placeMatch[1]) {
+        try {
+          const decoded = decodeURIComponent(placeMatch[1].replace(/\+/g, " "));
+          directMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(decoded)}`;
+        } catch {
+          directMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeMatch[1])}`;
+        }
+      } else if (latMatch && lngMatch) {
+        directMapUrl = `https://www.google.com/maps/search/?api=1&query=${latMatch[1]},${lngMatch[1]}`;
+      }
+    }
   }
 
   // Day names for display
@@ -289,36 +335,103 @@ export default function BookAppointment() {
                 )}
 
                 {address && (
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Clinic Address</h3>
-                    <p className="text-slate-600 text-sm leading-relaxed flex items-start gap-2">
-                      <span className="text-red-500 mt-0.5 flex-shrink-0">📍</span>
-                      {address}
+                  <div className="bg-slate-50/70 border border-slate-100 rounded-2xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Clinic Address</h3>
+                      {directMapUrl && (
+                        <a
+                          href={directMapUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-bold text-primary-600 hover:text-primary-700 hover:underline group"
+                          title="Open this location in Google Maps"
+                        >
+                          <span>Open in Maps</span>
+                          <span className="text-[13px] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform">↗</span>
+                        </a>
+                      )}
+                    </div>
+                    <p className="text-slate-700 text-sm font-medium leading-relaxed flex items-start gap-2">
+                      <span className="text-red-500 mt-0.5 flex-shrink-0 text-base">📍</span>
+                      <span>{address}</span>
                     </p>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Map Embed */}
-            {mapEmbedUrl && (
-              <div className="card overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
-                  <span className="text-xl">🗺️</span>
-                  <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">Directions & Location</h3>
+            {/* Map Embed & Directions */}
+            {(mapEmbedUrl || directMapUrl) && (
+              <div className="card overflow-hidden shadow-sm border border-slate-100">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🗺️</span>
+                    <div>
+                      <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">Directions & Location</h3>
+                      {clinicName && (
+                        <p className="text-xs text-slate-400 font-medium truncate max-w-xs">{clinicName}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {directMapUrl && (
+                    <a
+                      href={directMapUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95"
+                      title="Open full interactive map and directions in Google Maps"
+                    >
+                      <span>Open in Maps</span>
+                      <span className="text-white/80 font-black">↗</span>
+                    </a>
+                  )}
                 </div>
-                <div className="w-full h-64 bg-slate-100">
-                  <iframe
-                    src={mapEmbedUrl}
-                    width="100%"
-                    height="100%"
-                    style={{ border: 0 }}
-                    allowFullScreen
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    title={`${clinicName || "Clinic"} directions map`}
-                  />
-                </div>
+
+                {mapEmbedUrl ? (
+                  <div className="w-full h-72 bg-slate-100 relative">
+                    <iframe
+                      src={mapEmbedUrl}
+                      width="100%"
+                      height="100%"
+                      style={{ border: 0 }}
+                      allowFullScreen
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                      title={`${clinicName || "Clinic"} directions map`}
+                    />
+                  </div>
+                ) : (
+                  <div className="p-6 text-center bg-slate-50">
+                    <p className="text-xs text-slate-500 mb-3">Live map preview unavailable. Click below to view directions on Google Maps.</p>
+                    {directMapUrl && (
+                      <a
+                        href={directMapUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-xs font-bold rounded-xl hover:bg-primary-700 transition"
+                      >
+                        📍 Open Clinic Location in Google Maps ↗
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {address && (
+                  <div className="px-5 py-3 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                    <span className="truncate mr-3">📍 {address}</span>
+                    {directMapUrl && (
+                      <a
+                        href={directMapUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary-600 font-bold hover:underline flex-shrink-0"
+                      >
+                        Get Directions ↗
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

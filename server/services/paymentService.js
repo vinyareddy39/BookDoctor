@@ -21,9 +21,15 @@ export const validateRazorpayConfig = () => {
       );
     }
     if (!allowTestKeys && !currentKeyId.startsWith("rzp_live_")) {
-      throw new Error(
-        `FATAL [Razorpay Configuration]: In production, RAZORPAY_KEY_ID must start with 'rzp_live_'. Found: '${currentKeyId.slice(0, 9)}...'. If running in a staging environment with test credentials, set RAZORPAY_ALLOW_TEST_KEYS=true.`
-      );
+      if (currentKeyId.startsWith("rzp_test_")) {
+        console.warn(
+          `⚠️ [Razorpay Warning]: Running in production with test keys (${currentKeyId.slice(0, 9)}...). Live transactions will be processed in test mode.`
+        );
+      } else {
+        throw new Error(
+          `FATAL [Razorpay Configuration]: In production, RAZORPAY_KEY_ID must start with 'rzp_live_' or 'rzp_test_'. Found: '${currentKeyId.slice(0, 9)}...'. If running in a staging environment with test credentials, set RAZORPAY_ALLOW_TEST_KEYS=true.`
+        );
+      }
     }
   }
 };

@@ -38,6 +38,7 @@ import searchRoutes      from "./routes/searchRoutes.js";
 import aiRoutes          from "./routes/aiRoutes.js";
 import prescriptionRoutes from "./routes/prescriptionRoutes.js";
 import sosRoutes         from "./routes/sosRoutes.js";
+import uberRoutes        from "./routes/uberRoutes.js";
 import { triggerEmergencyCall } from "./controllers/emergencyController.js";
 import { handleOutboundCall, getConnectTwiml } from "./controllers/callController.js";
 
@@ -59,6 +60,24 @@ dotenv.config();
 
 // Enforce production gateway security checks on startup
 validateRazorpayConfig();
+
+if (!process.env.UBER_REDIRECT_URI) {
+  console.warn(
+    "⚠️  CONFIG WARNING: UBER_REDIRECT_URI is not set in server/.env. Uber OAuth will fail until UBER_REDIRECT_URI is set AND saved identically under Redirect URIs in the Uber Developer Dashboard."
+  );
+}
+
+if (process.env.ALLOW_UBER_SIMULATION === "true") {
+  if (process.env.NODE_ENV === "production") {
+    console.error(
+      "🚨 SECURITY WARNING: ALLOW_UBER_SIMULATION=true is set while NODE_ENV=production. Local Uber simulation is FORCED OFF in production."
+    );
+  } else {
+    console.warn(
+      "⚠️  WARNING: ALLOW_UBER_SIMULATION=true — Uber API calls without a connected user OAuth token will return FAKE SIMULATED rides. Do NOT enable this in production!"
+    );
+  }
+}
 
 if (process.env.NODE_ENV === "production") {
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
@@ -206,6 +225,29 @@ app.get("/health", (req, res) => {
   res.status(200).send("OK");
 });
 
+app.get("/api/health", (req, res) => {
+  const rawUberEnv = (process.env.UBER_ENV || "").trim().toLowerCase();
+  const uberEnv = rawUberEnv === "production" ? "production" : "sandbox";
+  const smsProvider =
+    (process.env.SMS_PROVIDER || "").toUpperCase() === "MSG91" && process.env.MSG91_AUTH_KEY
+      ? "MSG91"
+      : process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER
+        ? "Twilio"
+        : "DevConsole";
+
+  res.status(200).json({
+    success: true,
+    status: "ok",
+    service: "medassist-rapidcare-api",
+    env: process.env.NODE_ENV || "development",
+    uberEnv,
+    uberRedirectConfigured: Boolean(process.env.UBER_REDIRECT_URI),
+    smsProvider,
+    outboundVoiceCallEnabled: process.env.ENABLE_OUTBOUND_EMERGENCY_CALL === "true",
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // ===============================
 // API ROUTES
 // ===============================
@@ -235,6 +277,7 @@ app.use("/api/search",       searchRoutes);
 app.use("/api/ai",           aiRoutes);
 app.use("/api",              prescriptionRoutes);
 app.use("/api/sos",          sosRoutes);
+app.use("/api/uber",         uberRoutes);
 app.post("/api/emergency-call", triggerEmergencyCall);
 
 // Twilio Voice Click-to-Call

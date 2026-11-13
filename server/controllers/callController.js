@@ -90,13 +90,7 @@ export const handleOutboundCall = async (req, res) => {
 
     const twimlUrl = `${publicUrl}/twiml/connect`;
 
-    console.log("==========================================");
-    console.log("📞 [Click-to-Call] Initiating Twilio Outbound Call");
-    console.log(`📤 From (Twilio): ${twilioPhoneNumber}`);
-    console.log(`📥 To (Visitor): ${visitorNumber}`);
-    console.log(`🏢 Forward To (Business): ${businessPhoneNumber}`);
-    console.log(`🌐 TwiML Webhook URL: ${twimlUrl}`);
-    console.log("==========================================");
+    console.log("[Click-to-Call] Initiating Twilio Outbound Call (TwiML webhook configured)");
 
     // Place outbound call via Twilio
     const call = await client.calls.create({

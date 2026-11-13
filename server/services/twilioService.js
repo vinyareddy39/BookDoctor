@@ -12,36 +12,46 @@ const normalizePhoneNumber = (rawNumber) => {
   return cleaned.startsWith("+") ? cleaned : `+${cleaned}`;
 };
 
+export const isOutboundEmergencyCallEnabled = () => {
+  return process.env.ENABLE_OUTBOUND_EMERGENCY_CALL === "true";
+};
+
 /**
  * Twilio Emergency Call Service
- * Initiates an outbound emergency call to the designated response number (+919849512453).
- * If Twilio credentials are not configured or trial limitations apply,
- * gracefully logs and returns simulated dispatch status to prevent blocking emergencies.
+ * Initiates an outbound emergency call to the designated dispatch/response number
+ * (EMERGENCY_PHONE_NUMBER or caller-specified destination, bridged to BUSINESS_PHONE_NUMBER).
+ *
+ * SAFETY GUARD: Disabled by default unless ENABLE_OUTBOUND_EMERGENCY_CALL=true.
  */
-export const makeEmergencyCall = async ({ to, hospitalName, userAddress } = {}) => {
+export const makeEmergencyCall = async ({ to } = {}) => {
+  if (!isOutboundEmergencyCallEnabled()) {
+    console.log("[Twilio Service] Outbound emergency voice call is disabled (ENABLE_OUTBOUND_EMERGENCY_CALL != 'true').");
+    return {
+      sid: null,
+      status: "disabled",
+      disabled: true,
+      simulated: false,
+    };
+  }
+
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const rawFromNumber = process.env.TWILIO_PHONE_NUMBER;
-  const destination = normalizePhoneNumber(to || process.env.EMERGENCY_PHONE_NUMBER || "+919849512453");
+  const destination = normalizePhoneNumber(to || process.env.EMERGENCY_PHONE_NUMBER);
   const fromNumber = normalizePhoneNumber(rawFromNumber);
 
-  // Fallback if credentials or from number not configured
-  if (!accountSid || !authToken || !fromNumber || fromNumber.includes("1234567890")) {
-    console.warn("⚠️ [Twilio Service] Twilio credentials or phone number not fully configured. Using simulated dispatch mode.");
+  if (!destination || !accountSid || !authToken || !fromNumber || fromNumber.includes("1234567890")) {
+    console.warn("[Twilio Service] Outbound call credentials or destination incomplete. Returning simulated status.");
     return {
       sid: `sim_call_${Date.now()}`,
       status: "queued",
       simulated: true,
-      to: destination
     };
   }
 
   const client = twilio(accountSid, authToken);
 
-  console.log("==========================================");
-  console.log("🚨 [Twilio Service] Live emergency call requested");
-  console.log(`📞 Destination: ${destination}`);
-  console.log(`📤 From (Twilio): ${fromNumber}`);
+  console.log("[Twilio Service] Live outbound emergency voice call requested.");
 
   const publicUrl = (
     process.env.PUBLIC_SERVER_URL || "https://bookdoctor-9ns2.onrender.com"
@@ -51,29 +61,23 @@ export const makeEmergencyCall = async ({ to, hospitalName, userAddress } = {}) 
     const call = await client.calls.create({
       from: fromNumber,
       to: destination,
-      url: `${publicUrl}/twiml/connect`
+      url: `${publicUrl}/twiml/connect`,
     });
 
-    console.log(`🆔 Twilio Call SID: ${call.sid}`);
-    console.log(`📊 Status: ${call.status}`);
-    console.log("==========================================");
-
+    console.log(`[Twilio Service] Call created. SID: ${call.sid}, Status: ${call.status}`);
     return call;
   } catch (err) {
-    console.warn("⚠️ [Twilio Service Notice]:", {
+    console.warn("[Twilio Service Notice]:", {
       code: err.code,
       status: err.status,
       message: err.message,
-      moreInfo: err.moreInfo
     });
 
-    // Return safe fallback so emergency flow is never disrupted
     return {
       sid: `fallback_${Date.now()}`,
       status: "queued",
       simulated: true,
-      to: destination,
-      notice: err.message
+      notice: err.message,
     };
   }
 };

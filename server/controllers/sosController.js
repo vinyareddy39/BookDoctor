@@ -446,13 +446,19 @@ export const handleUberWebhook = async (req, res) => {
 
 // 9. UBER OAUTH 2.0 CONNECT URL & CALLBACK
 export const getUberOAuthUrl = (req, res) => {
-  const clientId = process.env.UBER_CLIENT_ID || "DfjKZC3xXnBEObgCRl1ChUSdRJDnjwBP";
-  const redirectUri = process.env.UBER_REDIRECT_URI || "http://localhost:5000/api/uber/oauth/callback";
+  const clientId = process.env.UBER_CLIENT_ID;
+  const redirectUri = process.env.UBER_REDIRECT_URI;
+  if (!clientId || !redirectUri) {
+    return res.status(500).json({
+      success: false,
+      error: "UBER_CLIENT_ID or UBER_REDIRECT_URI is not configured on the server.",
+    });
+  }
   const state = crypto.randomBytes(16).toString("hex");
 
-  const oauthUrl = `https://login.uber.com/oauth/v2/authorize?client_id=${clientId}&response_type=code&scope=request&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
+  const oauthUrl = `https://login.uber.com/oauth/v2/authorize?client_id=${encodeURIComponent(clientId)}&response_type=code&scope=request&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
 
-  return res.json({ success: true, url: oauthUrl });
+  return res.json({ success: true, url: oauthUrl, redirectUri });
 };
 
 export const handleUberOAuthCallback = async (req, res) => {
@@ -464,10 +470,10 @@ export const handleUberOAuthCallback = async (req, res) => {
 
     const clientId = process.env.UBER_CLIENT_ID;
     const clientSecret = process.env.UBER_CLIENT_SECRET;
-    const redirectUri = process.env.UBER_REDIRECT_URI || "http://localhost:5000/api/uber/oauth/callback";
+    const redirectUri = process.env.UBER_REDIRECT_URI;
 
-    if (!clientId || !clientSecret) {
-      return res.status(500).send("Uber credentials not configured on server.");
+    if (!clientId || !clientSecret || !redirectUri) {
+      return res.status(500).send("Uber credentials or UBER_REDIRECT_URI not configured on server.");
     }
 
     const params = new URLSearchParams();

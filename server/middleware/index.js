@@ -62,6 +62,14 @@ export const response = (req, res, next) => {
 };
 
 
+export const isAllowedDeviceRoute = (originalUrl = "") => {
+  const pathOnly = String(originalUrl).split("?")[0].replace(/\/+$/, "");
+  if (pathOnly === "/api/sos/alert") return true;
+  if (pathOnly === "/api/health") return true;
+  if (pathOnly === "/api/uber" || pathOnly.startsWith("/api/uber/")) return true;
+  return false;
+};
+
 // ===============================
 // AUTH MIDDLEWARE (JWT VERIFY)
 // ===============================
@@ -92,6 +100,17 @@ export const auth = async (req, res, next) => {
 
     if (!user) {
       return req.http.unauthorized("User not found");
+    }
+
+    if (decoded.role === "device" || user.role === "device") {
+      if (!isAllowedDeviceRoute(req.originalUrl || req.url)) {
+        return res.status(403).json({
+          success: false,
+          code: "DEVICE_TOKEN_RESTRICTED",
+          message: "Forbidden: device token can only access /api/sos/alert, /api/uber/*, and /api/health.",
+        });
+      }
+      user.role = "device";
     }
 
     req.user = user;

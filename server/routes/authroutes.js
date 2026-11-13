@@ -10,16 +10,29 @@ import {
   getProfile,
   getSessions,
   revokeSession,
-  logoutAll
+  logoutAll,
+  deviceSession,
+  validateDeviceIdMiddleware
 } from "../controllers/authController.js";
 import { auth, validate } from "../middleware/index.js";
-import { authLimiter } from "../middleware/rateLimiter.js";
+import {
+  authLimiter,
+  deviceSessionIpLimiter,
+  deviceSessionIdLimiter,
+} from "../middleware/rateLimiter.js";
 
 const router = express.Router();
 
 // Public auth routes
 router.post("/register", authLimiter, validate(["name", "email", "password", "role"]), register);
 router.post("/login",    authLimiter, validate(["email", "password"]), login);
+router.post(
+  "/device-session",
+  deviceSessionIpLimiter,
+  validateDeviceIdMiddleware,
+  deviceSessionIdLimiter,
+  deviceSession
+);
 
 // Verification and Reset
 router.get("/verify-email/:token", verifyEmail);

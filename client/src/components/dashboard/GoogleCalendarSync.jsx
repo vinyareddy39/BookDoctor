@@ -11,7 +11,7 @@ import toast from "react-hot-toast";
  *  - profile: the current doctor profile object
  *  - onSynced: callback with { availableDays, availableTime } to update parent form state
  */
-export default function GoogleCalendarSync({ profile, onSynced }) {
+export default function GoogleCalendarSync({ profile, onSynced, onRefreshProfile }) {
   const [loading,  setLoading]  = useState(false);
   const [syncing,  setSyncing]  = useState(false);
   const isSynced = !!profile?.googleCalendarSynced;
@@ -20,15 +20,18 @@ export default function GoogleCalendarSync({ profile, onSynced }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const calStatus = params.get("cal");
+    const reason = params.get("reason");
     if (calStatus === "synced") {
       toast.success("🗓️ Google Calendar connected! Your availability has been synced.");
-      // Clean the URL
-      window.history.replaceState({}, "", "/doctor/dashboard");
+      if (onRefreshProfile) onRefreshProfile();
+      window.history.replaceState({}, "", "/doctor/dashboard?tab=profile");
     } else if (calStatus === "error") {
-      toast.error("Failed to connect Google Calendar. Please try again.");
-      window.history.replaceState({}, "", "/doctor/dashboard");
+      toast.error(
+        reason ? `Failed to connect Google Calendar: ${decodeURIComponent(reason)}` : "Failed to connect Google Calendar. Please try again."
+      );
+      window.history.replaceState({}, "", "/doctor/dashboard?tab=profile");
     }
-  }, []);
+  }, [onRefreshProfile]);
 
   // STEP 1: Redirect the doctor to the Google OAuth consent screen
   const handleConnect = async () => {
@@ -40,7 +43,11 @@ export default function GoogleCalendarSync({ profile, onSynced }) {
       // Redirect the browser to Google's OAuth consent screen
       window.location.href = authUrl;
     } catch (err) {
-      toast.error("Could not reach Google. Please check your connection.");
+      const errMsg =
+        err.response?.data?.message ||
+        err.message ||
+        "Could not reach Google. Please check your connection.";
+      toast.error(errMsg);
       setLoading(false);
     }
   };

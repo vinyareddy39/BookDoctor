@@ -11,10 +11,14 @@ import {
   getUberOAuthUrl,
   handleUberOAuthCallback,
 } from "../controllers/sosController.js";
+import { dispatchSosAlert } from "../controllers/sosAlertController.js";
 import { auth } from "../middleware/index.js";
-import { emergencyLimiter } from "../middleware/rateLimiter.js";
+import { emergencyLimiter, smsPerDeviceLimiter } from "../middleware/rateLimiter.js";
 
 const router = express.Router();
+
+// ── Server-sent SMS Alerts Endpoint (max 10/hr per device, max 5 recipients, template-bounded) ──
+router.post("/alert", auth, smsPerDeviceLimiter, dispatchSosAlert);
 
 // ── Patient SOS Emergency Workflow ──
 router.post("/start", emergencyLimiter, auth, startSosEvent);

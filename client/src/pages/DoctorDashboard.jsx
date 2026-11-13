@@ -17,7 +17,11 @@ export default function DoctorDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { socket } = useSocket();
-  const [activeTab, setActiveTab] = useState("analytics");
+  const [activeTab, setActiveTab] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("cal") || params.get("tab") === "profile") return "profile";
+    return "analytics";
+  });
   const [profile, setProfile] = useState(null);
   const [appts, setAppts] = useState([]);
   const [analytics, setAnalytics] = useState([]);
@@ -320,6 +324,7 @@ export default function DoctorDashboard() {
             toggling={toggling}
             onSave={handleSave}
             saving={saving}
+            onRefreshProfile={fetchProfile}
           />
         )}
 

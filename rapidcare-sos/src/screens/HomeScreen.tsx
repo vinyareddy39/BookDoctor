@@ -31,13 +31,22 @@ export default function HomeScreen({ navigation }: any) {
       {/* Top Header */}
       <View style={styles.header}>
         <Text style={styles.welcome}>Hi, {user.name}</Text>
-        <TouchableOpacity
-          onPress={() => navigation.navigate("Contacts")}
-          style={styles.manageButton}
-          accessibilityLabel="Manage Emergency Contacts"
-        >
-          <Text style={styles.link}>Manage Contacts ({contacts.length}/3)</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Onboarding")}
+            style={styles.headerLinkBtn}
+            accessibilityLabel="Settings and Uber Connection"
+          >
+            <Text style={styles.link}>Settings</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Contacts")}
+            style={styles.headerLinkBtn}
+            accessibilityLabel="Manage Emergency Contacts"
+          >
+            <Text style={styles.link}>Contacts ({contacts.length}/{EMERGENCY_CONFIG.MAX_CONTACTS})</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Emergency Notice Banner */}
@@ -108,6 +117,15 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 10,
     alignItems: "center",
+  },
+  headerRight: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+  },
+  headerLinkBtn: {
+    minHeight: 44,
+    justifyContent: "center",
   },
   welcome: {
     fontSize: 20,

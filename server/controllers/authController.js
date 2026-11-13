@@ -442,3 +442,63 @@ export const logoutAll = async (req, res, next) => {
 export const getProfile = async (req, res) => {
   return req.http.ok(req.user, "User profile fetched");
 };
+
+export const DEVICE_ID_REGEX = /^[a-zA-Z0-9_-]{8,64}$/;
+
+export const validateDeviceIdMiddleware = (req, res, next) => {
+  const { deviceId } = req.body || {};
+  if (typeof deviceId !== "string" || !DEVICE_ID_REGEX.test(deviceId.trim())) {
+    return req.http.badRequest(
+      "Invalid deviceId: must be 8-64 alphanumeric, underscore, or hyphen characters."
+    );
+  }
+  req.body.deviceId = deviceId.trim();
+  next();
+};
+
+// DEVICE SESSION (Restricted 'device' role JWT for RapidCare SOS mobile app)
+export const deviceSession = async (req, res, next) => {
+  try {
+    const { deviceId, name } = req.body || {};
+    if (typeof deviceId !== "string" || !DEVICE_ID_REGEX.test(deviceId.trim())) {
+      return req.http.badRequest(
+        "Invalid deviceId: must be 8-64 alphanumeric, underscore, or hyphen characters."
+      );
+    }
+
+    const normalizedDeviceId = deviceId.trim();
+    const digest = crypto.createHash("sha256").update(normalizedDeviceId).digest("hex").slice(0, 24);
+    const email = `sos-${digest}@rapidcare.local`;
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      user = await User.create({
+        name: typeof name === "string" && name.trim() ? name.trim().slice(0, 60) : "RapidCare SOS Device",
+        email,
+        password: crypto.randomBytes(24).toString("hex"),
+        role: "device",
+      });
+    } else if (user.role !== "device") {
+      user.role = "device";
+      await user.save();
+    }
+
+    const accessToken = jwt.sign(
+      { id: user._id, role: "device", scope: "device_sos" },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || "365d" }
+    );
+
+    return res.status(200).json({
+      success: true,
+      accessToken,
+      user: {
+        _id: user._id,
+        name: user.name,
+        role: "device",
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};

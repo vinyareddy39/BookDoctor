@@ -2,7 +2,8 @@ import axios from "axios";
 import { decryptText, encryptText } from "./cryptoService.js";
 import UberConnection from "../models/UberConnection.js";
 
-const IS_SANDBOX = process.env.UBER_SANDBOX !== "false" || process.env.NODE_ENV !== "production";
+const UBER_ENV = (process.env.UBER_ENV || "").trim().toLowerCase() === "production" ? "production" : "sandbox";
+const IS_SANDBOX = UBER_ENV !== "production" && process.env.UBER_SANDBOX !== "false";
 const UBER_API_BASE = IS_SANDBOX
   ? "https://sandbox-api.uber.com/v1.2"
   : "https://api.uber.com/v1.2";
