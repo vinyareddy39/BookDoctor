@@ -733,6 +733,17 @@ export default function SOSFlow({ isOpen, onClose }) {
                 </a>
               )}
 
+              {/* Mobile Web SMS Composer Trigger */}
+              <a
+                href={`sms:?body=${encodeURIComponent(
+                  `SOS - I need help! My location: https://maps.google.com/?q=${location?.lat || 17.4474},${location?.lng || 78.3762}. Nearest hospital: ${selectedHospital?.name || "Hospital"}.${trackingUrl ? ` Tracking: ${trackingUrl}` : ""}`
+                )}`}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3.5 px-4 rounded-2xl text-center text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
+              >
+                <span>✉️</span>
+                <span>Open Messages to Alert Emergency Contacts</span>
+              </a>
+
               {/* Direct Ambulance & Hospital Calling Bar */}
               <div className="flex gap-2">
                 <a
