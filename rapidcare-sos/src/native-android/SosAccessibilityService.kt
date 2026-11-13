@@ -296,6 +296,12 @@ class SosAccessibilityService : AccessibilityService() {
             }
         }
 
+        // When Uber opens via deep link, the destination bubble often displays "Destination"
+        // while the hospital name is drawn on the map canvas. If on the "Choose a ride" screen with "Destination", allow confirmation.
+        if (lowerScreen.contains("choose a ride") && (lowerScreen.contains("destination") || lowerScreen.contains("dropoff"))) {
+            return true
+        }
+
         return false
     }
 

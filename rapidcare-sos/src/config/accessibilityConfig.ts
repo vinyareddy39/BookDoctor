@@ -231,6 +231,14 @@ export function verifyDestinationOnScreen(
     }
   }
 
+  // 4. Prefilled dropoff bubble match on Uber "Choose a ride" sheet
+  if (
+    screenLower.includes("choose a ride") &&
+    (screenLower.includes("destination") || screenLower.includes("dropoff"))
+  ) {
+    return { verified: true, matchedSnippet: "destination" };
+  }
+
   return { verified: false };
 }
 
