@@ -698,57 +698,57 @@ export default function SOSFlow({ isOpen, onClose }) {
           {/* STAGE 5: RIDE TRACKING & EMERGENCY STATUS */}
           {stage === "TRACKING" && (
             <div className="space-y-5">
-              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between text-xs text-emerald-900">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-2xl">🚗</span>
-                  <div>
-                    <p className="font-black text-sm">Uber Driver En Route</p>
-                    <p className="text-emerald-700">Driver is arriving in ~{rideResult?.driver?.etaMinutes || 4} mins</p>
-                  </div>
-                </div>
-                <span className="bg-emerald-200/70 text-emerald-800 font-bold px-2 py-0.5 rounded-full text-[10px]">
-                  Dispatched
-                </span>
-              </div>
-
-              {/* Driver and Vehicle Details */}
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs space-y-3">
+              {/* Honest Handoff Banner: Prevent false hope in medical emergency */}
+              <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 text-xs text-amber-950 space-y-2">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-black text-slate-800 text-sm">{rideResult?.driver?.name || "Uber Partner Driver"}</h4>
-                    <p className="text-slate-500">{rideResult?.driver?.vehicle || "Maruti Suzuki Dzire"}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl animate-bounce">📱</span>
+                    <div>
+                      <p className="font-black text-sm">Confirming Ride in Uber App</p>
+                      <p className="text-amber-800 text-[11px]">
+                        Destination: <span className="font-bold">{selectedHospital?.name}</span>
+                      </p>
+                    </div>
                   </div>
-                  <span className="font-mono font-bold bg-white border border-slate-200 px-2.5 py-1 rounded-lg text-xs">
-                    {rideResult?.driver?.plate || "TS 08 UB 2026"}
+                  <span className="bg-amber-200 text-amber-900 font-extrabold px-2.5 py-1 rounded-full text-[10px] uppercase">
+                    Action Required
                   </span>
                 </div>
+                <p className="text-[11px] text-amber-900 font-medium leading-relaxed">
+                  Your live GPS location and the emergency hospital have been pre-filled into Uber. 
+                  <span className="font-bold"> Please tap below to open Uber and confirm your ride</span> so a real driver is dispatched to your doorstep.
+                </p>
+              </div>
 
-                <div className="flex gap-2 pt-1">
-                  <a
-                    href={`tel:${rideResult?.driver?.phone || "+919849012345"}`}
-                    className="flex-1 bg-white hover:bg-slate-100 text-slate-800 border font-bold py-2 rounded-xl text-center text-xs transition-colors"
-                  >
-                    📞 Call Driver
-                  </a>
-                  <a
-                    href={`tel:${selectedHospital?.phone || "108"}`}
-                    className="flex-1 bg-white hover:bg-slate-100 text-slate-800 border font-bold py-2 rounded-xl text-center text-xs transition-colors"
-                  >
-                    🏥 Call Hospital
-                  </a>
-                </div>
+              {/* Real Uber Dispatch Direct Button */}
+              {(rideResult?.deepLinks || liveUberLinks) && (
+                <a
+                  href={(rideResult?.deepLinks?.appUrl || rideResult?.deepLinks?.webUrl) || liveUberLinks?.appUrl || liveUberLinks?.webUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 px-5 rounded-2xl text-center text-sm flex items-center justify-center gap-2 shadow-xl transition-all active:scale-95"
+                >
+                  <span className="text-lg">🚗</span>
+                  <span>Open Uber App & Confirm Real Driver ↗</span>
+                </a>
+              )}
 
-                {/* Real Uber Dispatch Direct Button */}
-                {(rideResult?.deepLinks || liveUberLinks) && (
-                  <a
-                    href={(rideResult?.deepLinks?.appUrl || rideResult?.deepLinks?.webUrl) || liveUberLinks?.appUrl || liveUberLinks?.webUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full bg-black hover:bg-slate-900 text-white font-extrabold py-3 px-4 rounded-xl text-center text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
-                  >
-                    <span>🚗 Open in Real Uber App (Call Real Driver Now) ↗</span>
-                  </a>
-                )}
+              {/* Direct Ambulance & Hospital Calling Bar */}
+              <div className="flex gap-2">
+                <a
+                  href="tel:108"
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black py-3 rounded-xl text-center text-xs shadow-md transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <span>🚨</span>
+                  <span>Call 108 Ambulance</span>
+                </a>
+                <a
+                  href={`tel:${selectedHospital?.phone || "108"}`}
+                  className="flex-1 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold py-3 rounded-xl text-center text-xs transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <span>🏥</span>
+                  <span>Call Hospital ER</span>
+                </a>
               </div>
 
               {/* Live Tracking Link for Emergency Contacts */}
