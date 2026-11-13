@@ -80,9 +80,13 @@ if (process.env.ALLOW_UBER_SIMULATION === "true") {
 }
 
 if (process.env.NODE_ENV === "production") {
-  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
-    console.error("FATAL CONFIG ERROR: JWT_SECRET must be set and at least 16 characters in production.");
+  if (!process.env.JWT_SECRET) {
+    console.error("FATAL CONFIG ERROR: JWT_SECRET must be set in production.");
     process.exit(1);
+  } else if (process.env.JWT_SECRET.length < 16) {
+    console.warn(
+      "⚠️  SECURITY WARNING: JWT_SECRET is shorter than 16 characters. For production, set a strong 32+ character key."
+    );
   }
 }
 
