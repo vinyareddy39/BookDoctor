@@ -82,6 +82,16 @@ export default function Profile() {
 
   const handleUpdate = async (e) => {
     e.preventDefault();
+
+    // Validate Emergency Contact Number (10 digits domestic or 10-15 with country code)
+    if (emergencyContact && emergencyContact.trim()) {
+      const digits = emergencyContact.replace(/\D/g, "");
+      if (digits.length < 10 || digits.length > 15) {
+        toast.error("Please enter a valid 10-digit emergency contact number (or 10-15 digits with country code).");
+        return;
+      }
+    }
+
     setLoading(true);
 
     const payload = {
@@ -132,7 +142,7 @@ export default function Profile() {
   }
 
   return (
-    <div className="min-h-screen bg-surface py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-surface py-12 px-4 sm:px-6 lg:px-8 pb-[max(120px,calc(120px+env(safe-area-inset-bottom)))]">
       <div className="max-w-4xl mx-auto">
         <form onSubmit={handleUpdate} className="space-y-8 animate-fade-in-up">
           
@@ -311,14 +321,17 @@ export default function Profile() {
 
                 {/* Emergency Contact */}
                 <div className="sm:col-span-2">
-                  <label className="input-label">Emergency Contact Details</label>
+                  <label className="input-label">Emergency Contact Phone Number</label>
                   <input
-                    type="text"
+                    type="tel"
                     value={emergencyContact}
                     onChange={(e) => setEmergencyContact(e.target.value)}
                     className="input"
-                    placeholder="Name & contact number of family member/friend"
+                    placeholder="E.g. 9876543210 or +91 98765 43210"
                   />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Used by the floating SOS button to pre-fill emergency SMS alerts. Enter 10 digits or with country code.
+                  </p>
                 </div>
 
               </div>

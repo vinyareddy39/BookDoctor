@@ -17,6 +17,16 @@ export const updateProfile = async (req, res, next) => {
   try {
     const { name, phone, dob, gender, bloodGroup, emergencyContact, profilePicture } = req.body;
 
+    // Validate emergency contact format if provided
+    if (emergencyContact !== undefined && emergencyContact !== null && String(emergencyContact).trim() !== "") {
+      const digits = String(emergencyContact).replace(/\D/g, "");
+      if (digits.length < 10 || digits.length > 15) {
+        return req.http.badRequest(
+          "Invalid emergency contact number. Please enter a valid 10-digit number or 10-15 digits with country code."
+        );
+      }
+    }
+
     const user = await User.findByIdAndUpdate(
       req.user._id,
       { name, phone, dob, gender, bloodGroup, emergencyContact, profilePicture },
